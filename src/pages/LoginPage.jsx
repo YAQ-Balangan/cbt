@@ -35,7 +35,7 @@ const LoginPage = () => {
       {/* Form Card */}
       <div className="w-full max-w-md bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-slate-200/50 relative z-10 border border-slate-50">
         <div className="flex flex-col items-center mb-10 text-center">
-          <div className="w-20 h-20 bg-sky-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-indigo-200 mb-6 transform -rotate-6 hover:rotate-0 transition-transform duration-300">
+          <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-indigo-200 mb-6 transform -rotate-6 hover:rotate-0 transition-transform duration-300">
             <ShieldCheck
               size={40}
               className="rotate-6 hover:rotate-0 transition-transform duration-300"
