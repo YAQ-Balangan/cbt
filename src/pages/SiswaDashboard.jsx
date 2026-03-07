@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
   BarChart3,
@@ -15,7 +16,6 @@ import {
   ArrowLeft,
   ClipboardCheck,
   RefreshCw,
-  AlertCircle,
   Timer,
   CheckCircle2,
   BookOpen,
@@ -23,12 +23,35 @@ import {
   Award,
   Target,
   ShieldAlert,
+  Sparkles,
+  AlertTriangle,
+  Info,
+  Maximize,
 } from "lucide-react";
 import { AuthContext } from "../context/AuthContext";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
 
+// ==========================================
+// ANIMASI FRAMER MOTION
+// ==========================================
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 },
+  },
+};
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 15 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+};
+
+// ==========================================
+// HELPER BACA DATA
+// ==========================================
 const getVal = (obj, keyName) => {
   if (!obj) return "";
   if (obj[keyName] !== undefined && obj[keyName] !== "") return obj[keyName];
@@ -37,8 +60,8 @@ const getVal = (obj, keyName) => {
   return foundKey ? obj[foundKey] : "";
 };
 
-const KKM_SCORE = 75;
-const MAX_CHEAT_WARNINGS = 3; // 🔴 Maksimal 3x curang, ke-4 langsung diusir
+const KKM_SCORE = 75; // Sesuaikan jika perlu
+const MAX_CHEAT_WARNINGS = 3;
 
 const SiswaDashboard = () => {
   const { user } = useContext(AuthContext);
@@ -63,7 +86,27 @@ const SiswaDashboard = () => {
   const [cheatWarnings, setCheatWarnings] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 🌟 REFS UNTUK MENCEGAH BUG CLOSURE PADA TIMER
+  // STATE FORCE FULLSCREEN BARRIER
+  const [requireFullscreen, setRequireFullscreen] = useState(false);
+
+  // STATE CUSTOM ALERT
+  const [customAlert, setCustomAlert] = useState({
+    isOpen: false,
+    type: "info",
+    title: "",
+    message: "",
+    onConfirm: null,
+  });
+
+  const showAlert = useCallback((type, title, message, onConfirm = null) => {
+    setCustomAlert({ isOpen: true, type, title, message, onConfirm });
+  }, []);
+
+  const closeAlert = useCallback(() => {
+    setCustomAlert((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  // REFS UNTUK MENCEGAH BUG CLOSURE
   const activeExamRef = useRef(activeExam);
   const answersRef = useRef(answers);
   const soalDataRef = useRef(soalData);
@@ -186,18 +229,29 @@ const SiswaDashboard = () => {
     const inputToken = tokens[examId]?.toUpperCase() || "";
     const realToken = String(examToken || "").toUpperCase();
 
-    if (!inputToken) return alert("Silakan masukkan TOKEN terlebih dahulu!");
+    if (!inputToken)
+      return showAlert(
+        "warning",
+        "Token Diperlukan",
+        "Silakan masukkan TOKEN ujian terlebih dahulu!",
+      );
     if (inputToken !== realToken)
-      return alert("❌ TOKEN SALAH! Silakan cek kembali token ujian Anda.");
+      return showAlert(
+        "danger",
+        "Akses Ditolak",
+        "TOKEN SALAH! Silakan periksa kembali token ujian Anda.",
+      );
 
     setActiveExam(exam);
     setLoadingSoal(true);
+    setRequireFullscreen(false);
 
+    // Otomatis Fullscreen saat mulai
     const elem = document.documentElement;
     if (elem.requestFullscreen) {
       elem
         .requestFullscreen()
-        .catch(() => console.log("Fullscreen auto diblokir browser"));
+        .catch(() => console.log("Fullscreen diblokir otomatis oleh browser"));
     }
 
     try {
@@ -225,6 +279,7 @@ const SiswaDashboard = () => {
         return false;
       });
 
+      // Acak urutan soal
       const shuffledSoal = filterSoal.sort(() => Math.random() - 0.5);
       setSoalData(shuffledSoal);
 
@@ -243,7 +298,11 @@ const SiswaDashboard = () => {
 
       setCurrentSoalIndex(0);
     } catch (error) {
-      alert("❌ Gagal memuat soal: " + error.message);
+      showAlert(
+        "danger",
+        "Kesalahan Server",
+        "Gagal memuat soal: " + error.message,
+      );
       setActiveExam(null);
     } finally {
       setLoadingSoal(false);
@@ -251,97 +310,120 @@ const SiswaDashboard = () => {
   };
 
   // ==========================================
-  // 3. KALKULASI SKOR & SUBMIT KE DATABASE
+  // 3. KALKULASI SKOR & SUBMIT (REVISI DATA BENAR/SALAH)
   // ==========================================
-  const handleEndExam = async (isForced = false, isCheating = false) => {
-    if (isSubmittingRef.current) return;
-    if (
-      !isForced &&
-      !window.confirm(
-        "Yakin ingin mengakhiri ujian? Jawaban yang sudah dikirim tidak bisa diubah lagi!",
-      )
-    )
-      return;
-
+  const executeEndExam = async (isForced, isCheating) => {
     setIsSubmitting(true);
 
-    let totalPoinDiperoleh = 0;
-    let totalPoinMaksimal = 0;
+    let skorSiswa = 0;
+    let benarCount = 0;
 
-    // Tarik referensi data terbaru agar tidak terjadi bug saat di force submit
     const currentAnswers = answersRef.current;
     const currentSoalData = soalDataRef.current;
+    const totalSoal = currentSoalData.length;
 
     currentSoalData.forEach((soal) => {
       const poin = parseFloat(getVal(soal, "Poin")) || 2;
-      totalPoinMaksimal += poin;
+      const idSoal = String(getVal(soal, "id")).trim();
+      const jawabanSiswa = currentAnswers[idSoal];
+      const jawabanBenar = String(getVal(soal, "Jawaban_Benar"))
+        .toUpperCase()
+        .trim();
 
-      const jawabanSiswa = currentAnswers[getVal(soal, "id")];
-      const jawabanBenar = String(getVal(soal, "Jawaban_Benar")).toUpperCase();
-
-      if (jawabanSiswa === jawabanBenar) {
-        totalPoinDiperoleh += poin;
+      if (
+        jawabanSiswa &&
+        String(jawabanSiswa).toUpperCase().trim() === jawabanBenar
+      ) {
+        skorSiswa += poin;
+        benarCount++;
       }
     });
 
-    // 🌟 THE MAGIC: Jika curang, NILAI TIDAK NOL, tapi seadanya yang terjawab
-    let finalScore =
-      totalPoinMaksimal > 0
-        ? (totalPoinDiperoleh / totalPoinMaksimal) * 100
-        : 0;
-    finalScore = Math.round(finalScore);
+    let finalScore = Number(skorSiswa.toFixed(2));
+    let salahCount = totalSoal - benarCount;
 
     try {
       if (document.fullscreenElement)
         document.exitFullscreen().catch((e) => console.log(e));
 
-      // BACA DATABASE MENCARI ID TERAKHIR LALU + 1
       const allNilai = (await api.read("Nilai")) || [];
       let maxId = 0;
       if (allNilai && allNilai.length > 0) {
         allNilai.forEach((n) => {
           const currentId = parseInt(getVal(n, "ID"));
-          if (!isNaN(currentId) && currentId > maxId) {
-            maxId = currentId;
-          }
+          if (!isNaN(currentId) && currentId > maxId) maxId = currentId;
         });
       }
       const nextId = maxId + 1;
 
-      // POST NILAI
+      // POST NILAI DENGAN TAMBAHAN BENAR, SALAH, TOTAL SOAL
       await api.create("Nilai", {
         id: nextId,
         nama_siswa: getVal(user, "Nama"),
         kelas: getVal(user, "Kelas"),
         mapel: getVal(activeExamRef.current, "Mapel"),
         skor: finalScore,
+        benar: benarCount,
+        salah: salahCount,
+        total_soal: totalSoal,
         status: isCheating ? "Diskualifikasi (Curang)" : "Selesai",
       });
 
-      // BERSIHKAN LOCALSTORAGE
       const sessionKey = `cbt_session_${getVal(user, "Username")}_${getVal(activeExamRef.current, "ID")}`;
       localStorage.removeItem(sessionKey);
 
-      // Hapus status sedang submit agar jika ujian lagi tidak nge-bug
       setIsSubmitting(false);
-
-      if (isCheating)
-        alert(
-          "⛔ UJIAN DIHENTIKAN PAKSA!\nJawaban Anda dikirim secara otomatis seadanya karena telah melanggar aturan.",
-        );
-      else if (isForced)
-        alert("Waktu habis! Jawaban Anda telah dikirim otomatis.");
-      else
-        alert("✅ Ujian berhasil disubmit! Silakan periksa menu Hasil Ujian.");
-
       setActiveExam(null);
       setAnswers({});
       setCurrentSoalIndex(0);
       setCheatWarnings(0);
+      setRequireFullscreen(false);
       setActiveTab("nilai");
+
+      if (isCheating) {
+        showAlert(
+          "danger",
+          "UJIAN DIHENTIKAN PAKSA!",
+          "Jawaban Anda dikirim secara otomatis seadanya karena telah melanggar aturan.",
+        );
+      } else if (isForced) {
+        showAlert(
+          "info",
+          "Waktu Habis!",
+          "Waktu ujian Anda telah habis. Jawaban dikirim otomatis.",
+        );
+      } else {
+        showAlert(
+          "success",
+          "Ujian Selesai",
+          "Berhasil disubmit! Silakan periksa nilai Anda.",
+        );
+      }
     } catch (err) {
-      alert("❌ Terjadi kesalahan saat mengirim jawaban: " + err.message);
+      showAlert(
+        "danger",
+        "Gagal Mengirim",
+        "Terjadi kesalahan saat mengirim jawaban: " + err.message,
+      );
       setIsSubmitting(false);
+    }
+  };
+
+  const handleEndExamClick = (isForced = false, isCheating = false) => {
+    if (isSubmittingRef.current) return;
+
+    if (!isForced && !isCheating) {
+      showAlert(
+        "confirm",
+        "Selesai Mengerjakan?",
+        "Yakin ingin mengakhiri ujian? Jawaban yang sudah dikirim tidak dapat diubah lagi.",
+        () => {
+          closeAlert();
+          executeEndExam(false, false);
+        },
+      );
+    } else {
+      executeEndExam(isForced, isCheating);
     }
   };
 
@@ -357,16 +439,12 @@ const SiswaDashboard = () => {
         const sessionKey = `cbt_session_${getVal(user, "Username")}_${getVal(activeExam, "ID")}`;
         localStorage.setItem(
           sessionKey,
-          JSON.stringify({
-            answers,
-            timeLeft: newTime,
-            cheatWarnings,
-          }),
+          JSON.stringify({ answers, timeLeft: newTime, cheatWarnings }),
         );
 
         if (newTime <= 0) {
           clearInterval(timerId);
-          handleEndExam(true, false);
+          handleEndExamClick(true, false);
         }
         return newTime;
       });
@@ -385,71 +463,85 @@ const SiswaDashboard = () => {
   };
 
   // ==========================================
-  // 🔴 5. LOGIKA ANTI-CHEAT MAXIMUM SECURITY
+  // 5. LOGIKA ANTI-CHEAT & FORCE FULLSCREEN
   // ==========================================
-  const handleCheatDetected = useCallback((reason) => {
-    if (!activeExamRef.current || isSubmittingRef.current || isAlerting.current)
-      return;
+  const handleCheatDetected = useCallback(
+    (reason) => {
+      if (
+        !activeExamRef.current ||
+        isSubmittingRef.current ||
+        isAlerting.current
+      )
+        return;
 
-    isAlerting.current = true;
+      isAlerting.current = true;
 
-    setCheatWarnings((prev) => {
-      const currentWarns = prev + 1;
+      setCheatWarnings((prev) => {
+        const currentWarns = prev + 1;
+        if (currentWarns >= MAX_CHEAT_WARNINGS) {
+          closeAlert();
+          showAlert(
+            "danger",
+            `PELANGGARAN FATAL (${currentWarns}/${MAX_CHEAT_WARNINGS})`,
+            `Sistem Mendeteksi: ${reason}.\n\nBatas toleransi habis! Ujian Anda dihentikan paksa sekarang juga.`,
+          );
+          executeEndExam(true, true);
+        } else {
+          showAlert(
+            "warning",
+            `PERINGATAN KECURANGAN (${currentWarns}/${MAX_CHEAT_WARNINGS})`,
+            `Sistem Mendeteksi: ${reason}.\n\nJangan ulangi! Jika melampaui batas toleransi, ujian akan dihentikan paksa.`,
+          );
+        }
 
-      if (currentWarns >= MAX_CHEAT_WARNINGS) {
-        alert(
-          `⚠️ PELANGGARAN FATAL (${currentWarns}/${MAX_CHEAT_WARNINGS}) ⚠️\n\nSistem Mendeteksi: ${reason}.\n\nBatas toleransi habis! Ujian Anda dihentikan paksa sekarang juga.`,
-        );
-        handleEndExam(true, true);
-      } else {
-        alert(
-          `⚠️ PERINGATAN KECURANGAN (${currentWarns}/${MAX_CHEAT_WARNINGS}) ⚠️\n\nSistem Mendeteksi: ${reason}.\n\nJangan ulangi! Jika melampaui batas toleransi, ujian akan dihentikan paksa.`,
-        );
-      }
-
-      setTimeout(() => {
-        isAlerting.current = false;
-      }, 2000);
-      return currentWarns;
-    });
-  }, []);
+        setTimeout(() => {
+          isAlerting.current = false;
+        }, 3000);
+        return currentWarns;
+      });
+    },
+    [showAlert],
+  );
 
   useEffect(() => {
     if (!activeExam || isSubmitting) return;
     const outOfTabTimer = { current: null };
 
-    // 1. Deteksi Jika Siswa Minimize Browser / Pindah Tab WA
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // Jangan beri alert saat pindah agar timer tidak tertahan. Mulai 5 Detik.
         outOfTabTimer.current = setTimeout(() => {
-          handleEndExam(true, true);
-          alert(
-            "⛔ WAKTU HABIS DI LUAR UJIAN! ⛔\nAnda meninggalkan halaman lebih dari 5 detik. Ujian dikumpulkan paksa apa adanya.",
+          executeEndExam(true, true);
+          showAlert(
+            "danger",
+            "WAKTU HABIS DI LUAR UJIAN!",
+            "Anda meninggalkan halaman lebih dari 5 detik. Ujian dikumpulkan paksa.",
           );
         }, 5000);
       } else {
-        // Jika kembali sebelum 5 detik, batalkan timer eksekusi mati.
         if (outOfTabTimer.current) {
           clearTimeout(outOfTabTimer.current);
           outOfTabTimer.current = null;
         }
-        // Berikan Peringatan / Strike karena sudah terbukti keluar.
         handleCheatDetected("Meninggalkan Aplikasi / Membuka Tab Lain");
       }
     };
 
-    // 2. Deteksi Layar Belah / Notifikasi
     const handleBlur = () => {
       handleCheatDetected(
         "Layar tidak fokus (Membuka Notifikasi / Layar Belah)",
       );
     };
 
-    // 3. Deteksi Keluar Fullscreen
+    // MENDETEKSI KELUAR FULLSCREEN & MEMBLOKIR LAYAR
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement)
+      if (
+        !document.fullscreenElement &&
+        activeExamRef.current &&
+        !isSubmittingRef.current
+      ) {
+        setRequireFullscreen(true);
         handleCheatDetected("Keluar dari Mode Layar Penuh");
+      }
     };
 
     const preventAction = (e) => e.preventDefault();
@@ -497,48 +589,118 @@ const SiswaDashboard = () => {
     };
   }, [activeExam, isSubmitting, handleCheatDetected]);
 
+  // FUNGSI UNTUK KEMBALI FULLSCREEN DARI BLOKIRAN
+  const reenterFullscreen = () => {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+      elem
+        .requestFullscreen()
+        .then(() => {
+          setRequireFullscreen(false);
+        })
+        .catch((err) => {
+          showAlert(
+            "warning",
+            "Gagal Fullscreen",
+            "Silakan klik tombol kembali atau izinkan fullscreen di browser Anda.",
+          );
+        });
+    }
+  };
+
   // ==========================================
-  // 🟢 RENDER RUANG UJIAN (EXAM ROOM)
+  // 🟢 RENDER RUANG UJIAN (EXAM ENGINE) SOLID & AMBIENT
   // ==========================================
   if (activeExam) {
+    // 🔴 LAYER PENGHALANG JIKA KELUAR FULLSCREEN
+    if (requireFullscreen) {
+      return (
+        <div className="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center text-white px-6 text-center">
+          <AlertTriangle
+            size={80}
+            className="text-amber-500 mb-6 animate-pulse drop-shadow-lg"
+          />
+          <h2 className="text-3xl md:text-4xl font-black mb-3 tracking-tight">
+            Layar Penuh Terputus!
+          </h2>
+          <p className="text-slate-300 text-sm md:text-base mb-10 max-w-lg leading-relaxed">
+            Ujian ini mewajibkan mode layar penuh untuk mencegah kecurangan.
+            Sistem telah mencatat aktivitas ini sebagai peringatan. Anda tidak
+            dapat melihat soal sebelum kembali.
+          </p>
+          <button
+            onClick={reenterFullscreen}
+            className="flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 active:scale-95 uppercase tracking-widest"
+          >
+            <Maximize size={20} /> Lanjutkan Ujian
+          </button>
+        </div>
+      );
+    }
+
     const examMapel = getVal(activeExam, "Mapel");
     const currentSoal = soalData[currentSoalIndex];
-    const currentSoalId = getVal(currentSoal, "id");
+    const currentSoalId = String(getVal(currentSoal, "id")).trim();
     const answeredCount = Object.keys(answers).length;
+    const progressPercent =
+      soalData.length > 0 ? (answeredCount / soalData.length) * 100 : 0;
 
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col font-sans select-none">
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm px-4 md:px-8 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="p-2 bg-indigo-600 text-white rounded-lg shadow-md hidden md:block">
+      <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none relative overflow-hidden">
+        {/* CSS AMBIENT BACKGROUND & ANIMATED BLOBS */}
+        <style type="text/css">{`
+          @keyframes blob {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+          }
+          .animate-blob { animation: blob 7s infinite; }
+          .animation-delay-2000 { animation-delay: 2s; }
+          .animation-delay-4000 { animation-delay: 4s; }
+          .exam-ambient-bg {
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9, #e2e8f0);
+          }
+        `}</style>
+
+        {/* Background Ambient Elements */}
+        <div className="absolute inset-0 exam-ambient-bg z-0"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-emerald-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob z-0"></div>
+        <div className="absolute top-[20%] right-[-10%] w-96 h-96 bg-teal-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000 z-0"></div>
+        <div className="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-slate-300/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000 z-0"></div>
+
+        {/* HEADER GLASSMORPHISM */}
+        <header className="bg-white/70 backdrop-blur-xl border-b border-white/50 sticky top-0 z-50 shadow-sm px-4 py-3 flex justify-between items-center relative">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl shadow-md hidden md:block">
               <ClipboardCheck size={20} />
             </div>
             <div>
-              <h1 className="text-lg md:text-xl font-black text-slate-800 uppercase tracking-tighter">
+              <h1 className="text-base md:text-lg font-black text-slate-800 uppercase tracking-tighter leading-tight">
                 {examMapel}
               </h1>
-              <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-1">
                 {getVal(user, "Nama")}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {cheatWarnings > 0 && (
-              <div className="hidden md:flex items-center gap-2 bg-red-100 text-red-600 px-3 py-1.5 rounded-lg text-[10px] font-black border border-red-200 animate-pulse">
+              <div className="hidden md:flex items-center gap-1.5 bg-red-100 text-red-600 px-3 py-1.5 rounded-lg text-[10px] font-black border border-red-200 animate-pulse shadow-sm">
                 <ShieldAlert size={14} /> PELANGGARAN: {cheatWarnings}/
                 {MAX_CHEAT_WARNINGS}
               </div>
             )}
             <div
-              className={`flex items-center gap-3 px-4 py-2 rounded-xl border shadow-sm ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-slate-800 text-white border-slate-900"}`}
+              className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border shadow-sm backdrop-blur-md transition-colors ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-slate-800/90 text-white border-slate-700"}`}
             >
               <Timer size={18} />
               <div className="flex flex-col">
-                <span className="text-[8px] font-black uppercase tracking-widest leading-none mb-0.5 opacity-80">
+                <span className="text-[8px] font-black uppercase tracking-widest leading-none mb-[2px] opacity-80">
                   Sisa Waktu
                 </span>
-                <span className="font-black text-lg md:text-xl leading-none">
+                <span className="font-black text-sm md:text-base leading-none tracking-wider">
                   {formatTime(timeLeft)}
                 </span>
               </div>
@@ -546,64 +708,64 @@ const SiswaDashboard = () => {
           </div>
         </header>
 
-        <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 lg:p-8">
+        {/* MAIN CONTENT AREA: SOLID FIXED LAYOUT UNTUK LAPTOP */}
+        <main className="flex-1 w-full max-w-7xl mx-auto p-3 md:p-5 flex flex-col justify-center animate-fade-in z-10 relative">
           {loadingSoal ? (
-            <div className="py-32 text-center flex flex-col items-center">
+            <div className="flex flex-col items-center justify-center h-full m-auto">
               <RefreshCw
-                className="animate-spin text-indigo-500 mb-4"
-                size={40}
+                className="animate-spin text-emerald-500 mb-4 drop-shadow-md"
+                size={48}
               />
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter drop-shadow-sm">
                 Menyiapkan Naskah Soal...
               </h2>
             </div>
           ) : (
-            <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-              <div className="flex-1 space-y-4 md:space-y-6">
-                {getVal(currentSoal, "Wacana") && (
-                  <div className="p-5 md:p-8 bg-amber-50 border border-amber-200 rounded-3xl relative shadow-sm animate-fade-in mt-4">
-                    <div className="absolute -top-3 left-6 bg-amber-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5 shadow-md">
-                      <BookOpen size={14} /> Teks Cerita / Wacana
-                    </div>
-                    <p className="font-semibold text-amber-900 leading-relaxed text-sm md:text-base whitespace-pre-wrap mt-1">
-                      {getVal(currentSoal, "Wacana")}
-                    </p>
-                  </div>
-                )}
-
-                <Card className="p-5 md:p-8 border-t-8 border-t-indigo-600 shadow-xl shadow-slate-200/50 bg-white min-h-[300px] flex flex-col relative">
-                  {isSubmitting && (
-                    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-2xl">
-                      <RefreshCw
-                        size={40}
-                        className="animate-spin text-indigo-600 mb-4"
-                      />
-                      <p className="font-black text-slate-800">
-                        MENGIRIM JAWABAN...
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
-                    <span className="bg-slate-900 text-white font-black px-4 py-1.5 rounded-lg text-sm shadow-md">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 w-full h-[calc(100vh-100px)] lg:h-[calc(100vh-120px)] min-h-[500px]">
+              {/* KOLOM KIRI: SOAL (SOLID & SCROLL INSIDE) */}
+              <div className="lg:col-span-8 flex flex-col h-full bg-white/80 backdrop-blur-2xl border border-white rounded-[2rem] shadow-xl overflow-hidden">
+                {/* Header Soal */}
+                <div className="px-6 py-4 border-b border-slate-200/60 bg-white/40 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <span className="bg-slate-800 text-white font-black px-4 py-1.5 rounded-lg text-sm shadow-md">
                       SOAL NO. {currentSoalIndex + 1}
                     </span>
                     {getVal(currentSoal, "Poin") && (
-                      <span className="bg-indigo-50 text-indigo-600 font-black px-3 py-1.5 rounded-lg text-[10px] border border-indigo-100">
+                      <span className="bg-emerald-100 text-emerald-700 font-bold px-3 py-1.5 rounded-lg text-xs border border-emerald-200">
                         {getVal(currentSoal, "Poin")} POIN
                       </span>
                     )}
                   </div>
+                  {isSubmitting && (
+                    <span className="text-xs font-bold text-emerald-600 animate-pulse flex items-center gap-2">
+                      <RefreshCw size={14} className="animate-spin" />{" "}
+                      Mengirim...
+                    </span>
+                  )}
+                </div>
 
-                  <p className="font-bold text-slate-800 leading-relaxed text-base md:text-lg mb-8 whitespace-pre-wrap flex-1">
+                {/* Body Soal (Scrollable Area) */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8 flex flex-col">
+                  {getVal(currentSoal, "Wacana") && (
+                    <div className="p-5 bg-amber-50/70 border border-amber-200/80 rounded-2xl relative shadow-sm mb-6">
+                      <div className="absolute -top-3 left-5 bg-gradient-to-r from-amber-500 to-amber-600 text-white px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest shadow-md">
+                        Informasi Teks
+                      </div>
+                      <p className="font-medium text-slate-700 leading-relaxed text-sm md:text-[15px] whitespace-pre-wrap mt-1">
+                        {getVal(currentSoal, "Wacana")}
+                      </p>
+                    </div>
+                  )}
+
+                  <p className="font-bold text-slate-800 leading-relaxed text-base md:text-lg mb-6 whitespace-pre-wrap flex-1">
                     {getVal(currentSoal, "Pertanyaan")}
                   </p>
 
                   {getVal(currentSoal, "Link_Gambar") && (
-                    <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-lg pointer-events-none">
+                    <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-md pointer-events-none">
                       <img
                         src={getVal(currentSoal, "Link_Gambar")}
-                        alt="Gambar Pendukung"
+                        alt="Pendukung"
                         className="w-full object-contain"
                       />
                     </div>
@@ -621,15 +783,15 @@ const SiswaDashboard = () => {
                           onClick={() =>
                             setAnswers({ ...answers, [currentSoalId]: opt })
                           }
-                          className={`w-full text-left px-5 py-3 md:py-4 rounded-2xl border-2 flex items-start gap-4 transition-all group ${isSelected ? "border-indigo-600 bg-indigo-50 shadow-md" : "border-slate-100 bg-white hover:border-indigo-300"}`}
+                          className={`w-full text-left px-5 py-3 md:py-4 rounded-2xl border-2 transition-all flex items-start gap-4 group ${isSelected ? "border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-500/20" : "border-slate-100 bg-white/60 hover:bg-white hover:border-emerald-300"}`}
                         >
                           <span
-                            className={`font-black text-lg w-8 h-8 flex items-center justify-center rounded-lg shrink-0 transition-colors ${isSelected ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-700"}`}
+                            className={`font-black text-sm md:text-base w-8 h-8 flex items-center justify-center rounded-xl shrink-0 transition-all ${isSelected ? "bg-emerald-500 text-white shadow-md scale-110" : "bg-slate-100 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-700"}`}
                           >
                             {opt}
                           </span>
                           <span
-                            className={`text-sm md:text-base font-bold pt-0.5 leading-relaxed ${isSelected ? "text-indigo-900" : "text-slate-700"}`}
+                            className={`text-sm md:text-base font-medium pt-1 leading-snug whitespace-pre-wrap ${isSelected ? "text-emerald-900 font-bold" : "text-slate-700"}`}
                           >
                             {optText}
                           </span>
@@ -637,18 +799,19 @@ const SiswaDashboard = () => {
                       );
                     })}
                   </div>
-                </Card>
+                </div>
 
-                <div className="flex justify-between items-center bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                {/* Footer Soal (Navigasi Kiri/Kanan) */}
+                <div className="px-6 py-4 border-t border-slate-200/60 bg-white/40 flex justify-between items-center shrink-0">
                   <button
                     onClick={() =>
                       setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
                     }
                     disabled={currentSoalIndex === 0}
-                    className="px-4 py-3 md:px-6 bg-slate-100 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-xs md:text-sm hover:bg-slate-200 disabled:opacity-50 flex items-center gap-2 transition-all"
+                    className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 flex items-center gap-2 transition-all shadow-sm"
                   >
                     <ArrowLeft size={16} />{" "}
-                    <span className="hidden md:block">Sebelumnya</span>
+                    <span className="hidden sm:block">Sebelumnya</span>
                   </button>
                   <button
                     onClick={() =>
@@ -657,35 +820,58 @@ const SiswaDashboard = () => {
                       )
                     }
                     disabled={currentSoalIndex === soalData.length - 1}
-                    className="px-4 py-3 md:px-6 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:translate-y-0 uppercase tracking-widest text-xs md:text-sm flex items-center gap-2 disabled:opacity-50 transition-all"
+                    className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-95 uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-40 transition-all"
                   >
-                    <span className="hidden md:block">Selanjutnya</span>{" "}
+                    <span className="hidden sm:block">Selanjutnya</span>{" "}
                     <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
 
-              <div className="w-full lg:w-80 shrink-0">
-                <Card className="p-5 md:p-6 sticky top-24 border-none shadow-xl shadow-slate-200/50 bg-white">
-                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-between">
-                    <span>Navigasi Soal</span>
-                    <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-bold text-[10px]">
-                      {answeredCount} / {soalData.length} Terjawab
+              {/* KOLOM KANAN: NAVIGASI NOMOR (SOLID & SCROLL INSIDE) */}
+              <div className="lg:col-span-4 flex flex-col h-full bg-white/80 backdrop-blur-2xl border border-white rounded-[2rem] shadow-xl overflow-hidden">
+                <div className="p-6 border-b border-slate-200/60 bg-white/40 shrink-0">
+                  <div className="flex justify-between items-end mb-2">
+                    <span className="text-xs font-black uppercase text-slate-500 tracking-widest">
+                      Progress
                     </span>
-                  </h3>
+                    <span className="text-sm font-black text-emerald-600">
+                      {Math.round(progressPercent)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden shadow-inner">
+                    <div
+                      className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full transition-all duration-500 ease-out rounded-full"
+                      style={{ width: `${progressPercent}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-[11px] font-bold text-slate-400 mt-2 text-center uppercase tracking-widest">
+                    Terjawab {answeredCount} dari {soalData.length} Soal
+                  </p>
+                </div>
 
-                  <div className="grid grid-cols-5 gap-2 max-h-[30vh] lg:max-h-[50vh] overflow-y-auto pr-2 pb-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-5 content-start">
+                  <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-5 gap-2.5">
                     {soalData.map((s, idx) => {
                       const isCurrent = idx === currentSoalIndex;
-                      const hasAnswered = !!answers[getVal(s, "id")];
+                      const sId = String(getVal(s, "id")).trim();
+                      const hasAnswered = !!answers[sId];
 
                       return (
                         <button
                           key={idx}
                           onClick={() => setCurrentSoalIndex(idx)}
-                          className={`aspect-square flex items-center justify-center rounded-xl font-black text-xs md:text-sm border-2 transition-all hover:scale-105 
-                            ${isCurrent ? "border-slate-800 scale-110 shadow-md ring-4 ring-slate-100" : ""} 
-                            ${hasAnswered ? (isCurrent ? "bg-emerald-500 text-white border-emerald-600" : "bg-emerald-500 text-white border-emerald-500") : isCurrent ? "bg-white text-slate-800" : "bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-300"}
+                          className={`aspect-square flex items-center justify-center rounded-xl font-bold text-sm transition-all duration-200 border-2 
+                            ${isCurrent ? "scale-110 shadow-lg ring-4 ring-slate-800/10 z-10 border-slate-800" : "hover:scale-105 border-transparent"} 
+                            ${
+                              hasAnswered
+                                ? isCurrent
+                                  ? "bg-emerald-500 text-white"
+                                  : "bg-emerald-500 text-white shadow-md border-emerald-600"
+                                : isCurrent
+                                  ? "bg-slate-800 text-white"
+                                  : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm"
+                            }
                           `}
                         >
                           {idx + 1}
@@ -693,26 +879,88 @@ const SiswaDashboard = () => {
                       );
                     })}
                   </div>
+                </div>
 
-                  <div className="mt-6 pt-4 border-t border-slate-100">
-                    <button
-                      onClick={() => handleEndExam(false, false)}
-                      disabled={isSubmitting}
-                      className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl shadow-xl active:translate-y-0 transition-all uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-70"
-                    >
-                      {isSubmitting ? (
-                        <RefreshCw size={20} className="animate-spin" />
-                      ) : (
-                        <CheckCircle2 size={20} />
-                      )}
-                      {isSubmitting ? "Mengirim..." : "Selesai Ujian"}
-                    </button>
-                  </div>
-                </Card>
+                <div className="p-5 border-t border-slate-200/60 bg-white/40 shrink-0">
+                  <button
+                    onClick={() => handleEndExamClick(false, false)}
+                    disabled={isSubmitting}
+                    className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-xl shadow-xl shadow-slate-900/20 active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 disabled:opacity-70"
+                  >
+                    {isSubmitting ? (
+                      <RefreshCw size={20} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={20} />
+                    )}
+                    {isSubmitting ? "Menyimpan..." : "Kumpulkan Ujian"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </main>
+
+        {/* MODAL CUSTOM ALERT DI DALAM UJIAN (Z-INDEX SUPER TINGGI) */}
+        <AnimatePresence>
+          {customAlert.isOpen && (
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              >
+                <Card className="w-full max-w-md p-8 shadow-2xl border border-white/20 rounded-[2rem] bg-white/95 backdrop-blur-xl text-center flex flex-col items-center">
+                  <div
+                    className={`p-4 rounded-2xl mb-5 shadow-inner ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500" : customAlert.type === "success" ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"}`}
+                  >
+                    {customAlert.type === "success" ? (
+                      <CheckCircle2 size={48} />
+                    ) : customAlert.type === "info" ? (
+                      <Info size={48} />
+                    ) : (
+                      <AlertTriangle size={48} />
+                    )}
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">
+                    {customAlert.title}
+                  </h3>
+                  <p className="text-sm text-slate-600 mb-8 font-medium px-2 leading-relaxed whitespace-pre-wrap">
+                    {customAlert.message}
+                  </p>
+                  <div className="flex gap-3 w-full">
+                    {customAlert.type === "confirm" ? (
+                      <>
+                        <button
+                          onClick={closeAlert}
+                          className="flex-1 py-3.5 px-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm uppercase tracking-widest"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={
+                            customAlert.onConfirm
+                              ? customAlert.onConfirm
+                              : closeAlert
+                          }
+                          className={`flex-1 py-3.5 px-4 rounded-xl font-bold text-white shadow-lg transition-all text-sm uppercase tracking-widest bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-emerald-500/30`}
+                        >
+                          Ya, Kumpulkan
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={closeAlert}
+                        className={`w-full py-3.5 px-4 rounded-xl font-bold text-white shadow-lg text-sm uppercase tracking-widest transition-all ${customAlert.type === "danger" ? "bg-gradient-to-r from-red-500 to-red-600 shadow-red-500/30" : "bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-emerald-500/30"}`}
+                      >
+                        Mengerti
+                      </button>
+                    )}
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -729,51 +977,93 @@ const SiswaDashboard = () => {
       active={activeTab}
       setActive={setActiveTab}
     >
+      <style type="text/css">{`
+        @keyframes gradientBG {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .header-live-bg {
+          background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa);
+          background-size: 400% 400%;
+          animation: gradientBG 15s ease infinite;
+        }
+      `}</style>
+
       {activeTab === "home" && (
-        <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
-          <div className="p-8 md:p-10 bg-indigo-950 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-            <div className="relative z-10">
-              <h2 className="text-3xl md:text-4xl font-black mb-2 tracking-tighter">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          className="max-w-5xl mx-auto space-y-6 pb-24"
+        >
+          <motion.header
+            variants={fadeUp}
+            className="relative flex flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 gap-4 overflow-hidden header-live-bg z-0"
+          >
+            <motion.div
+              animate={{
+                x: [0, 60, -30, 0],
+                y: [0, -40, 50, 0],
+                rotate: [0, 180, 360],
+              }}
+              transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+              className="absolute -top-20 -left-10 w-72 h-72 bg-white/40 rounded-[40%] backdrop-blur-md -z-10"
+            />
+            <motion.div
+              animate={{
+                x: [0, -50, 40, 0],
+                y: [0, 60, -20, 0],
+                rotate: [360, 180, 0],
+              }}
+              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+              className="absolute -bottom-20 right-10 w-80 h-80 bg-emerald-100/40 rounded-[35%] backdrop-blur-md -z-10"
+            />
+
+            <div className="z-10">
+              <h2 className="text-3xl md:text-4xl font-black mb-1.5 tracking-tighter text-slate-800 drop-shadow-sm">
                 Halo, {getVal(user, "Nama")?.split(" ")[0] || "Siswa"}!
               </h2>
-              <p className="text-indigo-300 font-bold italic mb-8">
-                Pilih jadwal ujian di bawah untuk memulai.
+              <p className="text-slate-600 font-bold flex items-center gap-2 text-sm">
+                <Sparkles size={16} className="text-emerald-500" /> Pilih jadwal
+                ujian di bawah untuk memulai.
               </p>
-              <div className="flex gap-4">
-                <div className="bg-white/10 px-6 py-3 rounded-2xl border border-white/10 text-center backdrop-blur-sm">
-                  <p className="text-[10px] font-black uppercase text-indigo-400">
-                    Kelas Anda
-                  </p>
-                  <p className="font-black text-xl">{userKelas || "-"}</p>
-                </div>
-              </div>
             </div>
-            <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-indigo-600/30 rounded-full blur-3xl z-0"></div>
-          </div>
 
-          <div className="space-y-4">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-3 px-2 uppercase tracking-tight">
-              <ClipboardCheck className="text-indigo-600" /> Daftar Ujian
-              Tersedia
+            <div className="z-10 bg-white/80 px-6 py-3 rounded-2xl border border-white/60 text-center backdrop-blur-sm shadow-sm w-full md:w-auto">
+              <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest mb-0.5">
+                Kelas Anda
+              </p>
+              <p className="font-black text-xl text-slate-800 leading-none">
+                {userKelas || "-"}
+              </p>
+            </div>
+          </motion.header>
+
+          <motion.div variants={fadeUp} className="space-y-4">
+            <h3 className="text-lg font-black text-slate-800 flex items-center gap-2.5 px-2 uppercase tracking-tight">
+              <ClipboardCheck className="text-emerald-600" size={20} /> Daftar
+              Ujian Tersedia
             </h3>
 
             {loading ? (
-              <div className="py-20 text-center">
+              <div className="py-16 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
                 <RefreshCw
-                  className="animate-spin mx-auto text-indigo-500 mb-2"
-                  size={32}
+                  className="animate-spin mx-auto text-emerald-500 mb-3"
+                  size={28}
                 />
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                   Mencari Jadwal...
                 </p>
               </div>
             ) : errorMsg ? (
-              <div className="p-8 text-center bg-red-50 rounded-[2rem] border border-red-100 text-red-600 font-bold">
+              <div className="p-6 text-center bg-red-50 rounded-[2rem] border border-red-100 text-red-600 font-bold shadow-sm text-sm">
                 {errorMsg}
               </div>
             ) : exams.length === 0 ? (
-              <div className="p-10 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
-                <p className="text-slate-500 font-bold">
+              <div className="p-12 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm flex flex-col items-center">
+                <Calendar size={40} className="text-slate-200 mb-3" />
+                <p className="text-slate-500 font-bold text-base">
                   Belum ada jadwal ujian untuk kelasmu saat ini.
                 </p>
               </div>
@@ -787,45 +1077,45 @@ const SiswaDashboard = () => {
                 return (
                   <Card
                     key={examId || examMapel}
-                    className={`p-6 flex flex-col md:flex-row items-center justify-between gap-6 border-l-[10px] transition-all hover:shadow-xl ${isAktif ? "border-l-emerald-500" : "border-l-slate-200 opacity-80"}`}
+                    className={`p-5 flex flex-col md:flex-row items-center justify-between gap-5 border-l-[8px] rounded-[1.5rem] transition-all hover:shadow-lg hover:-translate-y-1 ${isAktif ? "border-l-emerald-500" : "border-l-slate-200 opacity-80"}`}
                   >
                     <div className="flex-1 text-center md:text-left w-full">
                       <Badge type={isAktif ? "Aktif" : examStatusRaw} />
-                      <h4 className="text-2xl font-black text-slate-900 mt-2 uppercase tracking-tight">
+                      <h4 className="text-xl font-black text-slate-900 mt-2 uppercase tracking-tight">
                         {examMapel}
                       </h4>
-                      <div className="flex justify-center md:justify-start gap-4 mt-3 text-xs font-bold text-slate-500">
-                        <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                          <Clock size={14} className="text-blue-500" />{" "}
+                      <div className="flex justify-center md:justify-start gap-3 mt-3 text-[11px] font-bold text-slate-500">
+                        <span className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
+                          <Clock size={12} className="text-emerald-500" />{" "}
                           {getVal(ex, "Durasi_Menit") || "90"} Menit
                         </span>
-                        <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                          <Calendar size={14} className="text-amber-500" />{" "}
+                        <span className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
+                          <Calendar size={12} className="text-amber-500" />{" "}
                           {getVal(ex, "Tanggal") || "Hari ini"}
                         </span>
                       </div>
                     </div>
 
                     {isAktif ? (
-                      <div className="flex items-center gap-3 w-full md:w-auto">
+                      <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
                         <input
                           type="text"
                           value={tokens[examId] || ""}
                           onChange={(e) =>
                             setTokens({ ...tokens, [examId]: e.target.value })
                           }
-                          className="w-full md:w-32 p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-center font-black tracking-widest uppercase outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-800"
+                          className="w-full md:w-36 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-center font-black tracking-widest uppercase outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-800 text-sm"
                           placeholder="TOKEN"
                         />
                         <button
                           onClick={() => handleStartExam(ex)}
-                          className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 py-4 rounded-2xl shadow-xl shadow-indigo-200 hover:-translate-y-1 active:translate-y-0 transition-all uppercase tracking-widest"
+                          className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-black px-6 py-3.5 rounded-xl shadow-md shadow-emerald-500/30 active:scale-95 transition-all uppercase tracking-widest text-sm"
                         >
                           MULAI
                         </button>
                       </div>
                     ) : (
-                      <div className="w-full md:w-auto bg-slate-100 text-slate-400 font-black px-8 py-4 rounded-2xl flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]">
+                      <div className="w-full md:w-auto bg-slate-100 text-slate-400 font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2 uppercase tracking-widest text-[11px]">
                         <Lock size={14} /> {examStatusRaw}
                       </div>
                     )}
@@ -833,97 +1123,198 @@ const SiswaDashboard = () => {
                 );
               })
             )}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
 
       {activeTab === "nilai" && (
-        <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-          <div className="flex items-center justify-between px-2 mb-2">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          className="max-w-5xl mx-auto space-y-6 pb-24"
+        >
+          <motion.div
+            variants={fadeUp}
+            className="flex items-center justify-between px-2 mb-2"
+          >
             <div>
-              <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-                <Award className="text-emerald-500" /> Riwayat Nilai
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2.5">
+                <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg">
+                  <Award size={20} />
+                </div>{" "}
+                Riwayat Nilai
               </h2>
-              <p className="text-sm font-bold text-slate-400">
-                Evaluasi pencapaian belajarmu di sini.
+              <p className="text-xs font-bold text-slate-400 mt-1">
+                Evaluasi pencapaian hasil belajarmu di sini.
               </p>
             </div>
-          </div>
+          </motion.div>
 
           {loading ? (
-            <div className="py-20 text-center">
+            <motion.div
+              variants={fadeUp}
+              className="py-16 text-center bg-white rounded-[2rem] shadow-sm border border-slate-100"
+            >
               <RefreshCw
-                className="animate-spin mx-auto text-emerald-500 mb-2"
-                size={32}
+                className="animate-spin mx-auto text-emerald-500 mb-3"
+                size={28}
               />
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                 Menarik Data Nilai...
               </p>
-            </div>
+            </motion.div>
           ) : myResults.length === 0 ? (
-            <div className="p-10 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm flex flex-col items-center">
-              <Target size={48} className="text-slate-200 mb-4" />
-              <h3 className="text-lg font-black text-slate-700">
+            <motion.div
+              variants={fadeUp}
+              className="p-12 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm flex flex-col items-center"
+            >
+              <Target size={40} className="text-slate-200 mb-3" />
+              <h3 className="text-base font-black text-slate-700">
                 Belum Ada Riwayat Ujian
               </h3>
-              <p className="text-slate-500 font-medium mt-1">
+              <p className="text-slate-500 font-medium text-sm mt-1">
                 Nilai kamu akan muncul di sini setelah menyelesaikan ujian.
               </p>
-            </div>
+            </motion.div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <motion.div
+              variants={fadeUp}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4"
+            >
               {myResults.map((res, idx) => {
                 const mapel = getVal(res, "Mapel") || "Ujian";
                 const skor = parseFloat(getVal(res, "Skor")) || 0;
                 const status = getVal(res, "Status") || "Selesai";
-                const isPassed = skor >= KKM_SCORE;
                 const isDiskualifikasi = status
                   .toLowerCase()
                   .includes("diskualifikasi");
 
+                const benarCount = getVal(res, "Benar");
+                const salahCount = getVal(res, "Salah");
+                const totalCount = getVal(res, "Total_Soal");
+
                 return (
                   <Card
                     key={idx}
-                    className={`p-6 flex flex-col relative overflow-hidden group hover:shadow-xl hover:-translate-y-1 transition-all border ${isDiskualifikasi ? "border-red-200 bg-red-50/50" : "border-slate-100"}`}
+                    className={`p-5 flex flex-col rounded-[1.5rem] relative overflow-hidden group hover:shadow-lg hover:-translate-y-1 transition-all border ${isDiskualifikasi ? "border-red-200 bg-red-50/50" : "border-slate-100 bg-white"}`}
                   >
-                    <div className="flex justify-between items-start mb-4 relative z-10">
-                      <div className="bg-white/80 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase text-slate-500 tracking-widest border border-slate-100">
+                    <div className="flex justify-between items-start mb-5 relative z-10">
+                      <div className="bg-slate-50 px-2.5 py-1 rounded-md text-[10px] font-black uppercase text-slate-500 tracking-widest border border-slate-200">
                         {mapel}
                       </div>
                       <Badge type={isDiskualifikasi ? "Draft" : status} />
                     </div>
 
-                    <div className="mt-auto relative z-10">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                        Nilai Akhir
-                      </p>
-                      <div className="flex items-end gap-3">
+                    <div className="mt-auto relative z-10 flex flex-col">
+                      <div className="flex items-end gap-2 mb-4">
                         <span
-                          className={`text-5xl font-black tracking-tighter leading-none ${isDiskualifikasi ? "text-red-600" : isPassed ? "text-emerald-500" : "text-amber-500"}`}
+                          className={`text-5xl font-black tracking-tighter leading-none ${isDiskualifikasi ? "text-red-600" : "text-emerald-500"}`}
                         >
                           {skor}
                         </span>
-                        <span className="text-sm font-bold text-slate-400 pb-1">
-                          / 100
+                        <span className="text-xs font-bold text-slate-400 pb-1.5 uppercase tracking-widest">
+                          Total Poin
                         </span>
                       </div>
-                      <p
-                        className={`mt-3 text-xs font-bold px-3 py-1.5 rounded-lg inline-block ${isDiskualifikasi ? "bg-red-100 text-red-700" : isPassed ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}
-                      >
-                        {isDiskualifikasi
-                          ? "⛔ Didiskualifikasi"
-                          : isPassed
-                            ? "✅ Tuntas (Lulus KKM)"
-                            : "⚠️ Butuh Remedial"}
-                      </p>
+
+                      {/* INFO STATISTIK BENAR SALAH */}
+                      <div className="grid grid-cols-3 gap-2 mt-2 pt-4 border-t border-slate-100">
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-center">
+                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                            Total Soal
+                          </p>
+                          <p className="text-lg font-black text-slate-700">
+                            {totalCount !== "" ? totalCount : "-"}
+                          </p>
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center">
+                          <p className="text-[9px] font-black uppercase text-emerald-600/80 tracking-widest">
+                            Benar
+                          </p>
+                          <p className="text-lg font-black text-emerald-600">
+                            {benarCount !== "" ? benarCount : "-"}
+                          </p>
+                        </div>
+                        <div className="bg-red-50 border border-red-100 rounded-xl p-2 text-center">
+                          <p className="text-[9px] font-black uppercase text-red-500/80 tracking-widest">
+                            Salah/Kosong
+                          </p>
+                          <p className="text-lg font-black text-red-500">
+                            {salahCount !== "" ? salahCount : "-"}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </Card>
                 );
               })}
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       )}
+
+      {/* MODAL LOBBY ALERT */}
+      <AnimatePresence>
+        {customAlert.isOpen && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+            >
+              <Card className="w-full max-w-sm p-8 shadow-2xl border-0 rounded-[2rem] bg-white text-center flex flex-col items-center">
+                <div
+                  className={`p-4 rounded-2xl mb-4 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500" : customAlert.type === "success" ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"}`}
+                >
+                  {customAlert.type === "success" ? (
+                    <CheckCircle2 size={40} />
+                  ) : customAlert.type === "info" ? (
+                    <Info size={40} />
+                  ) : (
+                    <AlertTriangle size={40} />
+                  )}
+                </div>
+                <h3 className="text-xl font-black text-slate-800 mb-2 leading-tight">
+                  {customAlert.title}
+                </h3>
+                <p className="text-sm text-slate-500 mb-6 font-medium px-2 leading-relaxed whitespace-pre-wrap">
+                  {customAlert.message}
+                </p>
+                <div className="flex gap-3 w-full">
+                  {customAlert.type === "confirm" ? (
+                    <>
+                      <button
+                        onClick={closeAlert}
+                        className="flex-1 py-3 px-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm uppercase tracking-widest"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        onClick={
+                          customAlert.onConfirm
+                            ? customAlert.onConfirm
+                            : closeAlert
+                        }
+                        className={`flex-1 py-3 px-4 rounded-xl font-bold text-white shadow-lg transition-all text-sm uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30`}
+                      >
+                        Ya, Lanjutkan
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={closeAlert}
+                      className={`w-full py-3 px-4 rounded-xl font-bold text-white shadow-lg text-sm uppercase tracking-widest transition-all ${customAlert.type === "danger" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"}`}
+                    >
+                      Mengerti
+                    </button>
+                  )}
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </Dashboard>
   );
 };
