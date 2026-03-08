@@ -13,10 +13,9 @@ import {
   X,
   Save,
   ShieldCheck,
-  Filter,
-  ArrowUpDown,
   ChevronUp,
   ChevronDown,
+  ArrowUpDown,
   Check,
   AlertTriangle,
   Info,
@@ -29,14 +28,39 @@ import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
 
 // ==========================================
+// HELPER: FORMAT TANGGAL
+// ==========================================
+const formatTanggal = (isoString) => {
+  if (!isoString) return "-";
+  if (
+    typeof isoString === "string" &&
+    isoString.includes("T") &&
+    isoString.includes("Z")
+  ) {
+    try {
+      const d = new Date(isoString);
+      return d
+        .toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+        .replace(/\./g, ":");
+    } catch (e) {
+      return isoString;
+    }
+  }
+  return isoString;
+};
+
+// ==========================================
 // ANIMASI FRAMER MOTION
 // ==========================================
 const staggerContainer = {
   hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 },
-  },
+  visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
 };
 
 const fadeUp = {
@@ -77,19 +101,19 @@ const PremiumSelect = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-3 text-sm bg-white border transition-all rounded-xl outline-none shadow-sm
+        className={`w-full flex items-center justify-between p-2.5 md:p-3 text-sm bg-white border transition-all rounded-lg md:rounded-xl outline-none shadow-sm min-h-[40px] md:min-h-[46px]
           ${disabled ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "border-slate-200 text-slate-700 focus:border-emerald-500 hover:border-emerald-400 cursor-pointer"}
         `}
       >
         <span
-          className={`flex items-center gap-2 truncate ${!selectedOption ? "text-slate-400" : "font-semibold"}`}
+          className={`flex items-center gap-2 line-clamp-2 text-left break-words ${!selectedOption ? "text-slate-400" : "font-semibold"}`}
         >
-          {icon && <span className="text-emerald-600">{icon}</span>}
+          {icon && <span className="text-emerald-600 shrink-0">{icon}</span>}
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <ChevronDown
           size={16}
-          className={`text-slate-400 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180 text-emerald-600" : ""}`}
+          className={`text-slate-400 shrink-0 ml-2 transition-transform duration-300 ${isOpen ? "rotate-180 text-emerald-600" : ""}`}
         />
       </button>
 
@@ -99,7 +123,7 @@ const PremiumSelect = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1"
+            className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl max-h-52 md:max-h-60 overflow-y-auto py-1"
           >
             {options.map((opt, index) => {
               const isSelected = String(opt.value) === String(value);
@@ -111,11 +135,13 @@ const PremiumSelect = ({
                     onChange(opt.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors text-left
+                  className={`w-full flex items-center justify-between px-3 md:px-4 py-2.5 md:py-3 text-sm transition-colors text-left
                     ${isSelected ? "bg-emerald-50 text-emerald-800 font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-emerald-700 font-medium"}
                   `}
                 >
-                  <span className="truncate">{opt.label}</span>
+                  <span className="whitespace-normal break-words pr-2">
+                    {opt.label}
+                  </span>
                   {isSelected && (
                     <Check
                       size={16}
@@ -133,7 +159,7 @@ const PremiumSelect = ({
 };
 
 // ==========================================
-// 1.B KOMPONEN PREMIUM MULTI-SELECT CHECKBOX (UNTUK KELAS/JURUSAN)
+// 1.B KOMPONEN PREMIUM MULTI-SELECT CHECKBOX
 // ==========================================
 const PremiumMultiSelect = ({
   value,
@@ -154,7 +180,6 @@ const PremiumMultiSelect = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Parse value string ("X MIPA 1, XI IPS") menjadi array
   const selectedArray = value
     ? String(value)
         .split(",")
@@ -178,12 +203,12 @@ const PremiumMultiSelect = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-3 text-sm bg-white border transition-all rounded-xl outline-none shadow-sm
+        className={`w-full flex items-center justify-between p-2.5 md:p-3 text-sm bg-white border transition-all rounded-lg md:rounded-xl outline-none shadow-sm min-h-[40px] md:min-h-[46px]
           ${disabled ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "border-slate-200 text-slate-700 focus:border-emerald-500 hover:border-emerald-400 cursor-pointer"}
         `}
       >
         <span
-          className={`truncate ${selectedArray.length === 0 ? "text-slate-400" : "font-semibold"}`}
+          className={`line-clamp-2 text-left break-words pr-2 ${selectedArray.length === 0 ? "text-slate-400" : "font-semibold"}`}
         >
           {selectedArray.length === 0
             ? placeholder
@@ -203,7 +228,7 @@ const PremiumMultiSelect = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute z-50 w-full md:w-80 mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl flex flex-col max-h-72 overflow-hidden"
+            className="absolute z-50 w-full md:w-80 mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl flex flex-col max-h-64 md:max-h-72 overflow-hidden max-w-[90vw]"
           >
             <div className="p-2 border-b border-slate-100 bg-slate-50 sticky top-0 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2">
@@ -221,7 +246,6 @@ const PremiumMultiSelect = ({
             </div>
             <div className="overflow-y-auto p-2 scrollbar-hide flex flex-col gap-1">
               {options.map((opt, index) => {
-                // Divider/Label if option is marked as label
                 if (opt.isLabel) {
                   return (
                     <div
@@ -237,17 +261,19 @@ const PremiumMultiSelect = ({
                   <div
                     key={index}
                     onClick={() => toggleOption(opt.value)}
-                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all ${isSelected ? "bg-emerald-50 text-emerald-700 font-bold" : "hover:bg-slate-50 text-slate-600 font-medium"}`}
+                    className={`flex items-center gap-3 p-2 md:p-2.5 rounded-lg cursor-pointer transition-all ${isSelected ? "bg-emerald-50 text-emerald-700 font-bold" : "hover:bg-slate-50 text-slate-600 font-medium"}`}
                   >
                     {isSelected ? (
                       <CheckSquare
-                        size={18}
+                        size={16}
                         className="text-emerald-500 shrink-0"
                       />
                     ) : (
-                      <Square size={18} className="text-slate-300 shrink-0" />
+                      <Square size={16} className="text-slate-300 shrink-0" />
                     )}
-                    <span className="text-sm truncate">{opt.label}</span>
+                    <span className="text-xs md:text-sm whitespace-normal break-words leading-tight">
+                      {opt.label}
+                    </span>
                   </div>
                 );
               })}
@@ -361,7 +387,7 @@ const TAB_CONFIG = {
       { key: "mapel", label: "Mata Pelajaran", type: "text", required: true },
       {
         key: "kelas",
-        label: "Target Peserta Ujian (Bisa Lebih Dari 1)",
+        label: "Target Peserta Ujian",
         type: "multi-select",
         options: OPSI_KELAS_LENGKAP,
         required: true,
@@ -488,6 +514,7 @@ const AdminDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({});
   const [isEdit, setIsEdit] = useState(false);
+  const [originalId, setOriginalId] = useState(null); // REVISI: Track ID original untuk edit
 
   const currentConfig = TAB_CONFIG[tab];
 
@@ -573,7 +600,8 @@ const AdminDashboard = () => {
       }
     }
 
-    if (!isEdit) {
+    // REVISI: Cek duplikat data. Jika Tambah Baru ATAU jika Edit tapi ID nya diubah.
+    if (!isEdit || (isEdit && String(originalId) !== String(formData.id))) {
       const isDuplicate = data.some(
         (item) => String(item.id) === String(formData.id),
       );
@@ -592,7 +620,8 @@ const AdminDashboard = () => {
 
     setIsSaving(true);
     try {
-      if (isEdit) await api.update(currentConfig.sheet, formData.id, formData);
+      // REVISI: Jika isEdit, pastikan update() mengincar originalId
+      if (isEdit) await api.update(currentConfig.sheet, originalId, formData);
       else await api.create(currentConfig.sheet, formData);
       setIsModalOpen(false);
       await fetchData(false);
@@ -614,6 +643,7 @@ const AdminDashboard = () => {
 
   const openEditModal = (item) => {
     setIsEdit(true);
+    setOriginalId(item.id); // REVISI: Catat ID asli sebelum diedit
     setFormData(item);
     setIsModalOpen(true);
   };
@@ -670,15 +700,24 @@ const AdminDashboard = () => {
       .sort();
   };
 
+  const getPrimaryName = (item) => {
+    return (
+      item.nama ||
+      item.nama_ujian ||
+      item.nama_mapel ||
+      item.kunci ||
+      "Tanpa Nama"
+    );
+  };
+
   return (
     <Dashboard menu={MENU_ITEMS} active={tab} setActive={setTab}>
       <motion.div
         variants={staggerContainer}
         initial="hidden"
         animate="visible"
-        className="space-y-6 max-w-7xl mx-auto"
+        className="space-y-6 max-w-7xl mx-auto pb-20"
       >
-        {/* INJEKSI CSS UNTUK ANIMASI BACKGROUND HEADER SEPERTI GURU DASHBOARD */}
         <style type="text/css">{`
           @keyframes gradientBG {
             0% { background-position: 0% 50%; }
@@ -692,12 +731,11 @@ const AdminDashboard = () => {
           }
         `}</style>
 
-        {/* HEADER ELEGAN (GLASSMORPHISM & ANIMATED BG) */}
+        {/* HEADER ELEGAN */}
         <motion.header
           variants={fadeUp}
           className="relative flex flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 gap-4 overflow-hidden header-live-bg z-0"
         >
-          {/* Efek Lingkaran Melayang di Belakang */}
           <motion.div
             animate={{
               x: [0, 60, -30, 0],
@@ -756,12 +794,13 @@ const AdminDashboard = () => {
           </div>
           <div className="leading-relaxed pt-0.5">
             <strong className="text-slate-800 font-black tracking-wide block mb-1">
-              Manajemen Data Pusat
+              Manajemen Data Responsif
             </strong>
-            Tabel di bawah mendukung fitur <b>Double Sticky</b>. Anda dapat
-            menggeser tabel ke kanan tanpa takut kehilangan konteks ID dan Nama.
-            Form input kelas juga telah mendukung pemilihan ganda (Multi-Select
-            Checkbox).
+            Tampilan tabel akan menyesuaikan secara otomatis. Di layar besar,
+            tabel berfungsi penuh dengan fitur <b>Double Sticky</b>. Namun jika
+            dibuka melalui HP, tampilan akan otomatis berubah menjadi gaya
+            **Kartu (Banking Style)**. ID Sistem kini terbuka bebas untuk
+            diedit.
           </div>
         </motion.div>
 
@@ -803,8 +842,8 @@ const AdminDashboard = () => {
                 />
               </div>
 
-              <div className="flex items-start md:items-center gap-3 w-full md:w-auto min-w-0">
-                <div className="grid grid-cols-2 md:flex md:flex-wrap items-center gap-2 flex-1 min-w-0">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-3 w-full md:w-auto min-w-0">
                   {currentConfig.columns.some((c) => c.key === "kelas") && (
                     <div className="w-full md:w-40">
                       <PremiumSelect
@@ -846,32 +885,33 @@ const AdminDashboard = () => {
 
                 <button
                   onClick={() => fetchData(false)}
-                  className="p-3.5 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
+                  className="w-full md:w-auto flex justify-center items-center gap-2 p-3.5 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
                   title="Sinkronkan Ulang"
                 >
                   <RefreshCw
                     size={18}
                     className={loading || isSyncing ? "animate-spin" : ""}
                   />
+                  <span className="md:hidden font-bold text-sm">
+                    Refresh Data
+                  </span>
                 </button>
               </div>
             </div>
           </Card>
         </motion.div>
 
-        {/* TABEL DATA (DOUBLE STICKY SCROLL) */}
+        {/* TAMPILAN DATA (RESPONSIVE) */}
         <motion.div variants={fadeUp}>
-          <Card className="border border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem] overflow-hidden relative">
+          {/* DESKTOP VIEW */}
+          <Card className="hidden md:block border border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem] overflow-hidden relative">
             <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
               <table className="w-full text-left text-sm whitespace-nowrap border-collapse">
-                {/* z-index diturunkan jadi 20 agar tidak menembus overlay menu mobile */}
                 <thead className="sticky top-0 z-20 shadow-sm">
                   <tr>
                     {currentConfig.columns.map((col, index) => {
-                      // LOGIKA DOUBLE STICKY HEADER
                       const isID = index === 0;
                       const isName = index === 1;
-                      // z-index diturunkan dari 50 ke 30
                       const stickyStyle = isID
                         ? {
                             position: "sticky",
@@ -892,11 +932,7 @@ const AdminDashboard = () => {
                         <th
                           key={col.key}
                           style={stickyStyle}
-                          className={`px-6 py-5 transition-colors font-bold text-xs uppercase tracking-wider text-slate-500 bg-slate-50 border-b-2 border-slate-200
-                            ${col.sortable ? "cursor-pointer hover:bg-slate-100" : ""}
-                            ${isID ? "border-r border-slate-200" : ""}
-                            ${isName ? "border-r border-slate-200 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}
-                          `}
+                          className={`px-6 py-5 transition-colors font-bold text-xs uppercase tracking-wider text-slate-500 bg-slate-50 border-b-2 border-slate-200 ${col.sortable ? "cursor-pointer hover:bg-slate-100" : ""} ${isID ? "border-r border-slate-200" : ""} ${isName ? "border-r border-slate-200 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}
                           onClick={() => col.sortable && handleSort(col.key)}
                         >
                           <div className="flex items-center gap-2">
@@ -970,10 +1006,8 @@ const AdminDashboard = () => {
                         className="hover:bg-emerald-50/40 transition-colors group bg-white"
                       >
                         {currentConfig.columns.map((col, index) => {
-                          // LOGIKA DOUBLE STICKY BODY
                           const isID = index === 0;
                           const isName = index === 1;
-                          // z-index diturunkan dari 20 ke 10
                           const stickyStyle = isID
                             ? {
                                 position: "sticky",
@@ -994,10 +1028,7 @@ const AdminDashboard = () => {
                             <td
                               key={col.key}
                               style={stickyStyle}
-                              className={`px-6 py-4 font-semibold text-slate-700
-                                ${isID ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 transition-colors" : ""}
-                                ${isName ? "bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors" : ""}
-                              `}
+                              className={`px-6 py-4 font-semibold text-slate-700 ${isID ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 transition-colors" : ""} ${isName ? "bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors" : ""}`}
                             >
                               {col.key === "role" || col.key === "status" ? (
                                 <Badge type={item[col.key]} />
@@ -1008,6 +1039,10 @@ const AdminDashboard = () => {
                               ) : isName ? (
                                 <span className="font-black text-slate-800">
                                   {item[col.key]}
+                                </span>
+                              ) : col.key === "tanggal" ? (
+                                <span className="text-slate-600 font-medium tracking-wide">
+                                  {formatTanggal(item[col.key])}
                                 </span>
                               ) : (
                                 item[col.key] || (
@@ -1040,6 +1075,94 @@ const AdminDashboard = () => {
               </table>
             </div>
           </Card>
+
+          {/* MOBILE VIEW */}
+          <div className="md:hidden flex flex-col gap-4">
+            {loading ? (
+              <div className="py-20 text-center bg-white rounded-2xl border border-slate-200">
+                <RefreshCw
+                  className="animate-spin mx-auto text-emerald-500 mb-4"
+                  size={32}
+                />
+                <span className="font-bold text-slate-400 text-sm tracking-widest uppercase">
+                  Memuat Data...
+                </span>
+              </div>
+            ) : processedData.length === 0 ? (
+              <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
+                {data.length === 0
+                  ? "Belum ada data di dalam sistem."
+                  : "Pencarian tidak menemukan hasil."}
+              </div>
+            ) : (
+              processedData.map((item, i) => (
+                <Card
+                  key={item.id || i}
+                  className="p-5 bg-white border border-slate-200 shadow-sm rounded-2xl relative overflow-hidden"
+                >
+                  <div className="flex justify-between items-start gap-3 mb-4 pb-4 border-b border-slate-100">
+                    <span className="font-black text-slate-800 text-[17px] leading-tight line-clamp-2">
+                      {getPrimaryName(item)}
+                    </span>
+                    <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 shrink-0">
+                      #{item.id}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 mb-5">
+                    {currentConfig.columns.map((col) => {
+                      const isPrimaryName =
+                        col.key === "id" ||
+                        col.key === "nama" ||
+                        col.key === "nama_ujian" ||
+                        col.key === "nama_mapel" ||
+                        col.key === "kunci";
+                      if (isPrimaryName) return null;
+
+                      return (
+                        <div
+                          key={col.key}
+                          className="flex justify-between items-center gap-4 text-sm"
+                        >
+                          <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wider shrink-0">
+                            {col.label}
+                          </span>
+                          <div className="text-right font-semibold text-slate-700 truncate max-w-[65%]">
+                            {col.key === "role" || col.key === "status" ? (
+                              <Badge type={item[col.key]} />
+                            ) : col.key === "tanggal" ? (
+                              <span className="tracking-wide text-[13px]">
+                                {formatTanggal(item[col.key])}
+                              </span>
+                            ) : (
+                              item[col.key] || (
+                                <span className="text-slate-300">-</span>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t border-slate-100">
+                    <button
+                      onClick={() => openEditModal(item)}
+                      className="flex-1 py-3 bg-amber-50 text-amber-600 border border-amber-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-amber-100 transition-colors"
+                    >
+                      <Edit size={16} /> Edit
+                    </button>
+                    <button
+                      onClick={() => confirmDelete(item.id)}
+                      className="flex-1 py-3 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-red-100 transition-colors"
+                    >
+                      <Trash2 size={16} /> Hapus
+                    </button>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
         </motion.div>
 
         {/* MODAL FORM TAMBAH/EDIT */}
@@ -1050,51 +1173,56 @@ const AdminDashboard = () => {
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-2xl"
+                className="w-full max-w-2xl my-auto"
               >
-                <Card className="p-6 md:p-8 shadow-2xl border-0 rounded-[2rem] my-auto bg-white">
-                  <div className="flex justify-between items-center mb-6 pb-5 border-b border-slate-100">
+                <Card className="p-4 md:p-8 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white">
+                  <div className="flex justify-between items-center mb-4 md:mb-6 pb-3 md:pb-5 border-b border-slate-100">
                     <div>
-                      <h3 className="text-2xl font-black text-slate-800 tracking-tight">
+                      <h3 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight">
                         {isEdit ? "Perbarui Data" : "Tambah Data"}
                       </h3>
-                      <p className="text-emerald-600 font-bold text-sm uppercase tracking-widest mt-1">
+                      <p className="text-emerald-600 font-bold text-[10px] md:text-xs uppercase tracking-widest mt-0.5 md:mt-1">
                         Modul {currentConfig.title.split(" ")[0]}
                       </p>
                     </div>
                     <button
                       onClick={() => setIsModalOpen(false)}
                       disabled={isSaving}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50 bg-slate-50 border border-slate-100"
+                      className="p-1.5 md:p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors disabled:opacity-50 bg-slate-50 border border-slate-100"
                     >
-                      <X size={24} />
+                      <X size={20} className="md:w-6 md:h-6" />
                     </button>
                   </div>
 
-                  <form onSubmit={handleSave} className="space-y-5">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">
-                        ID Sistem {isEdit ? "(Terkunci)" : "(Bisa Diedit)"}
+                  <form
+                    onSubmit={handleSave}
+                    className="space-y-3 md:space-y-5"
+                  >
+                    <div className="space-y-1 md:space-y-2">
+                      {/* REVISI: Label diubah jadi "(Bisa Diedit)" tanpa memperhitungkan isEdit */}
+                      <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">
+                        ID Sistem (Bisa Diedit)
                       </label>
                       <input
                         type="number"
-                        className={`w-full p-3.5 text-base rounded-xl font-bold outline-none transition-all shadow-sm ${isEdit || isSaving ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800 hover:border-emerald-300"}`}
+                        // REVISI: disabled sekarang hanya mengandalkan isSaving, tidak lagi terkunci oleh isEdit
+                        className={`w-full p-2.5 md:p-3.5 text-sm md:text-base rounded-lg md:rounded-xl font-bold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800 hover:border-emerald-300"}`}
                         value={formData.id}
                         onChange={(e) =>
                           setFormData({ ...formData, id: e.target.value })
                         }
-                        disabled={isEdit || isSaving}
+                        disabled={isSaving}
                         required
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
                       {currentConfig.form.map((field) => (
-                        <div key={field.key} className="space-y-2">
-                          <label className="text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">
+                        <div key={field.key} className="space-y-1 md:space-y-2">
+                          <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-500 ml-1 flex flex-wrap">
                             {field.label}{" "}
                             {field.required && (
-                              <span className="text-red-500">*</span>
+                              <span className="text-red-500 ml-1">*</span>
                             )}
                           </label>
 
@@ -1108,7 +1236,7 @@ const AdminDashboard = () => {
                                 label: opt,
                                 value: opt,
                               }))}
-                              placeholder={`Pilih ${field.label}...`}
+                              placeholder={`Pilih ${field.label.split(" ")[0]}...`}
                               disabled={isSaving}
                             />
                           ) : field.type === "multi-select" ? (
@@ -1125,8 +1253,8 @@ const AdminDashboard = () => {
                             <input
                               type={field.type}
                               disabled={isSaving}
-                              placeholder={`Ketik ${field.label.toLowerCase()}...`}
-                              className={`w-full p-3.5 text-sm rounded-xl font-semibold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800 hover:border-emerald-300"}`}
+                              placeholder={`Ketik di sini...`}
+                              className={`w-full p-2.5 md:p-3.5 text-xs md:text-sm rounded-lg md:rounded-xl font-semibold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800 hover:border-emerald-300"}`}
                               value={formData[field.key] || ""}
                               onChange={(e) =>
                                 setFormData({
@@ -1140,16 +1268,16 @@ const AdminDashboard = () => {
                       ))}
                     </div>
 
-                    <div className="pt-6 mt-4">
+                    <div className="pt-4 md:pt-6 mt-2 md:mt-4">
                       <button
                         type="submit"
                         disabled={isSaving}
-                        className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black text-base py-4 rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed border border-amber-400 uppercase tracking-widest"
+                        className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black text-sm md:text-base py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed border border-amber-400 uppercase tracking-widest"
                       >
                         {isSaving ? (
-                          <RefreshCw size={20} className="animate-spin" />
+                          <RefreshCw size={18} className="animate-spin" />
                         ) : (
-                          <Save size={20} />
+                          <Save size={18} />
                         )}
                         {isSaving
                           ? "Menyimpan Ke Server..."
@@ -1172,30 +1300,30 @@ const AdminDashboard = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
               >
-                <Card className="w-full max-w-sm p-8 shadow-2xl border-0 rounded-[2rem] bg-white text-center flex flex-col items-center">
+                <Card className="w-full max-w-sm p-6 md:p-8 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white text-center flex flex-col items-center">
                   <div
-                    className={`p-5 rounded-[1.5rem] mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500 shadow-inner" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500 shadow-inner" : "bg-emerald-50 text-emerald-500 shadow-inner"}`}
+                    className={`p-4 md:p-5 rounded-[1.5rem] mb-4 md:mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500 shadow-inner" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500 shadow-inner" : "bg-emerald-50 text-emerald-500 shadow-inner"}`}
                   >
                     {customAlert.type === "danger" ||
                     customAlert.type === "confirm" ? (
-                      <AlertTriangle size={40} />
+                      <AlertTriangle size={36} className="md:w-10 md:h-10" />
                     ) : customAlert.type === "warning" ? (
-                      <AlertTriangle size={40} />
+                      <AlertTriangle size={36} className="md:w-10 md:h-10" />
                     ) : (
-                      <Info size={40} />
+                      <Info size={36} className="md:w-10 md:h-10" />
                     )}
                   </div>
-                  <h3 className="text-2xl font-black text-slate-800 mb-2">
+                  <h3 className="text-xl md:text-2xl font-black text-slate-800 mb-2">
                     {customAlert.title}
                   </h3>
-                  <p className="text-sm text-slate-500 mb-8 font-semibold px-2 leading-relaxed">
+                  <p className="text-xs md:text-sm text-slate-500 mb-6 md:mb-8 font-semibold px-2 leading-relaxed">
                     {customAlert.message}
                   </p>
-                  <div className="flex gap-3 w-full">
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
                     {customAlert.type === "confirm" && (
                       <button
                         onClick={closeAlert}
-                        className="flex-1 py-3 px-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm"
+                        className="w-full py-3 px-4 bg-slate-100 text-slate-600 rounded-lg md:rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm order-2 sm:order-1"
                       >
                         Batal
                       </button>
@@ -1206,7 +1334,7 @@ const AdminDashboard = () => {
                           ? customAlert.onConfirm
                           : closeAlert
                       }
-                      className={`flex-1 py-3 px-4 rounded-xl font-bold text-white shadow-lg transition-all text-sm ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : customAlert.type === "warning" ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/30" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"}`}
+                      className={`w-full py-3 px-4 rounded-lg md:rounded-xl font-bold text-white shadow-lg transition-all text-sm order-1 sm:order-2 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : customAlert.type === "warning" ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/30" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"}`}
                     >
                       {customAlert.type === "confirm"
                         ? "Ya, Hapus"

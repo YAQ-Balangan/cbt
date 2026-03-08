@@ -112,19 +112,19 @@ const PremiumSelect = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-3.5 text-sm bg-white border transition-all rounded-xl outline-none shadow-sm
+        className={`w-full flex items-center justify-between p-2.5 md:p-3.5 text-sm bg-white border transition-all rounded-lg md:rounded-xl outline-none shadow-sm min-h-[40px] md:min-h-[48px]
           ${disabled ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "border-slate-200 text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 hover:border-emerald-400 cursor-pointer"}
         `}
       >
         <span
-          className={`flex items-center gap-2 truncate ${!selectedOption ? "text-slate-400 font-medium" : "font-bold"}`}
+          className={`flex items-center gap-2 line-clamp-2 text-left break-words ${!selectedOption ? "text-slate-400 font-medium" : "font-bold"}`}
         >
-          {icon && <span className="text-emerald-600">{icon}</span>}
+          {icon && <span className="text-emerald-600 shrink-0">{icon}</span>}
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <ChevronDown
           size={16}
-          className={`text-slate-400 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180 text-emerald-600" : ""}`}
+          className={`text-slate-400 shrink-0 ml-2 transition-transform duration-300 ${isOpen ? "rotate-180 text-emerald-600" : ""}`}
         />
       </button>
 
@@ -134,7 +134,7 @@ const PremiumSelect = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1 scrollbar-thin"
+            className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl max-h-52 md:max-h-60 overflow-y-auto py-1 scrollbar-thin"
           >
             {options.map((opt, index) => {
               const isSelected = String(opt.value) === String(value);
@@ -146,11 +146,11 @@ const PremiumSelect = ({
                     onChange(opt.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors text-left
+                  className={`w-full flex items-center justify-between px-3 md:px-4 py-2.5 md:py-3 text-sm transition-colors text-left
                     ${isSelected ? "bg-emerald-50 text-emerald-800 font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-emerald-700 font-medium"}
                   `}
                 >
-                  <span className="truncate">{opt.label}</span>
+                  <span className="whitespace-normal break-words pr-2">{opt.label}</span>
                   {isSelected && (
                     <Check
                       size={16}
@@ -212,12 +212,12 @@ const PremiumMultiSelect = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-3.5 text-sm bg-white border transition-all rounded-xl outline-none shadow-sm
+        className={`w-full flex items-center justify-between p-2.5 md:p-3.5 text-sm bg-white border transition-all rounded-lg md:rounded-xl outline-none shadow-sm min-h-[40px] md:min-h-[48px]
           ${disabled ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "border-slate-200 text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 hover:border-emerald-400 cursor-pointer"}
         `}
       >
         <span
-          className={`truncate ${selectedArray.length === 0 ? "text-slate-400 font-medium" : "font-bold"}`}
+          className={`line-clamp-2 text-left break-words pr-2 ${selectedArray.length === 0 ? "text-slate-400 font-medium" : "font-bold"}`}
         >
           {selectedArray.length === 0
             ? placeholder
@@ -237,7 +237,7 @@ const PremiumMultiSelect = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute z-50 w-full md:w-80 mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl flex flex-col max-h-72 overflow-hidden"
+            className="absolute z-50 w-full md:w-80 mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl flex flex-col max-h-64 md:max-h-72 overflow-hidden max-w-[90vw]"
           >
             <div className="p-2 border-b border-slate-100 bg-slate-50 sticky top-0 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2">
@@ -270,17 +270,17 @@ const PremiumMultiSelect = ({
                   <div
                     key={index}
                     onClick={() => toggleOption(opt.value)}
-                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all ${isSelected ? "bg-emerald-50 text-emerald-700 font-bold" : "hover:bg-slate-50 text-slate-600 font-medium"}`}
+                    className={`flex items-center gap-3 p-2 md:p-2.5 rounded-lg cursor-pointer transition-all ${isSelected ? "bg-emerald-50 text-emerald-700 font-bold" : "hover:bg-slate-50 text-slate-600 font-medium"}`}
                   >
                     {isSelected ? (
                       <CheckSquare
-                        size={18}
+                        size={16}
                         className="text-emerald-500 shrink-0"
                       />
                     ) : (
-                      <Square size={18} className="text-slate-300 shrink-0" />
+                      <Square size={16} className="text-slate-300 shrink-0" />
                     )}
-                    <span className="text-sm truncate">{opt.label}</span>
+                    <span className="text-xs md:text-sm whitespace-normal break-words leading-tight">{opt.label}</span>
                   </div>
                 );
               })}
@@ -358,8 +358,8 @@ const TAB_CONFIG = {
       { key: "nama_siswa", label: "Nama Siswa" },
       { key: "kelas", label: "Kelas" },
       { key: "mapel", label: "Mata Pelajaran" },
-      { key: "benar", label: "Benar" }, // KOLOM BARU DITAMBAHKAN
-      { key: "salah", label: "Salah" }, // KOLOM BARU DITAMBAHKAN
+      { key: "benar", label: "Benar" },
+      { key: "salah", label: "Salah" },
       { key: "skor", label: "Nilai / Poin" },
       { key: "status", label: "Status" },
     ],
@@ -546,11 +546,9 @@ const GuruDashboard = () => {
         setLoading(true);
         setIsDeletingBulk(true);
         try {
-          // Hanya menghapus data yang sedang difilter/tampil (processedData)
           for (let item of processedData) {
             await api.delete(currentConfig.sheet, item.id);
           }
-          // Update lokal
           const deletedIds = processedData.map((item) => item.id);
           setData((prev) =>
             prev.filter((item) => !deletedIds.includes(item.id)),
@@ -643,7 +641,6 @@ const GuruDashboard = () => {
     setOriginalId(item.id);
     setFormData({
       ...item,
-      // Terapkan formatter agar jika ditarik, tidak muncul format tanggal ISO
       poin: formatPoinDisplay(item.poin),
     });
     setIsModalOpen(true);
@@ -882,8 +879,8 @@ const GuruDashboard = () => {
             key={`wacana-header-${s.id}`}
             className="mt-8 mb-2 w-full relative z-0"
           >
-            <div className="p-6 md:p-8 bg-blue-50/80 border border-blue-200 rounded-[2rem] relative shadow-sm">
-              <div className="absolute -top-3.5 left-6 bg-linear-to-r from-blue-600 to-blue-500 text-white px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-md border border-blue-400">
+            <div className="p-4 md:p-8 bg-blue-50/80 border border-blue-200 rounded-[1.5rem] md:rounded-[2rem] relative shadow-sm">
+              <div className="absolute -top-3.5 left-6 bg-linear-to-r from-blue-600 to-blue-500 text-white px-3 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-md border border-blue-400">
                 <BookOpen size={14} /> WACANA TERIKAT PADA {bundleCount} SOAL
               </div>
               <p className="font-medium text-slate-700 leading-relaxed text-sm md:text-base whitespace-pre-wrap mt-2">
@@ -905,9 +902,9 @@ const GuruDashboard = () => {
       elements.push(
         <Card
           key={`soal-${s.id}`}
-          className={`p-6 md:p-8 border-t-[6px] transition-all relative group overflow-hidden bg-white rounded-[2rem] z-10 w-full ${isSelected ? "border-t-red-500 ring-4 ring-red-500/10 shadow-lg" : s.wacana ? "border-t-blue-500" : "border-t-emerald-500"}`}
+          className={`p-5 md:p-8 border-t-[6px] transition-all relative group overflow-hidden bg-white rounded-[1.5rem] md:rounded-[2rem] z-10 w-full ${isSelected ? "border-t-red-500 ring-4 ring-red-500/10 shadow-lg" : s.wacana ? "border-t-blue-500" : "border-t-emerald-500"}`}
         >
-          <div className="absolute top-6 left-6 z-10">
+          <div className="absolute top-4 left-4 md:top-6 md:left-6 z-10">
             <button
               onClick={() => toggleSelect(s.id)}
               className={`flex items-center justify-center p-1.5 rounded-lg transition-all ${isSelected ? "bg-red-50 text-red-500" : "bg-slate-50 text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 border border-slate-200"}`}
@@ -916,46 +913,46 @@ const GuruDashboard = () => {
             </button>
           </div>
 
-          <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* REVISI MOBILE: Tombol aksi selalu terlihat di HP, hanya disembunyikan pakai group-hover di Desktop */}
+          <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => handleDuplicate(s)}
-              className="p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+              className="p-1.5 md:p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
               title="Duplikat Soal Ini"
             >
               <Copy size={16} />
             </button>
             <button
               onClick={() => openEditModal(s)}
-              className="p-2 bg-white border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all shadow-sm"
+              className="p-1.5 md:p-2 bg-white border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all shadow-sm"
               title="Edit Soal"
             >
               <Edit size={16} />
             </button>
             <button
               onClick={() => handleDelete(s.id)}
-              className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"
+              className="p-1.5 md:p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"
               title="Hapus Soal"
             >
               <Trash2 size={16} />
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2 items-center mb-6 pl-12 pr-32">
+          <div className="flex flex-wrap gap-2 items-center mb-6 pl-10 pr-24 md:pl-12 md:pr-32">
             <span
-              className={`font-bold px-3 py-1.5 rounded-md text-[10px] uppercase border ${isSelected ? "bg-red-50 border-red-200 text-red-600" : "bg-slate-100 border-slate-200 text-slate-500"}`}
+              className={`font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border ${isSelected ? "bg-red-50 border-red-200 text-red-600" : "bg-slate-100 border-slate-200 text-slate-500"}`}
             >
               #{s.id}
             </span>
-            <span className="bg-amber-50 text-amber-700 font-bold px-3 py-1.5 rounded-md text-[10px] uppercase border border-amber-200 flex items-center gap-1">
-              {/* PENERAPAN HELPER UNTUK TAMPILAN POIN DESIMAL AMAN */}
+            <span className="bg-amber-50 text-amber-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-amber-200 flex items-center gap-1">
               <Target size={12} /> {formatPoinDisplay(s.poin)} POIN
             </span>
-            <span className="bg-emerald-50 text-emerald-700 font-bold px-3 py-1.5 rounded-md text-[10px] uppercase border border-emerald-200">
+            <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-emerald-200">
               {s.mapel} | {s.kelas}
             </span>
             {s.wacana && (
               <span
-                className="bg-blue-50 text-blue-700 font-bold px-3 py-1.5 rounded-md text-[10px] uppercase border border-blue-200 flex items-center gap-1"
+                className="bg-blue-50 text-blue-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-blue-200 flex items-center gap-1"
                 title="Aman untuk diacak, wacana melekat secara mandiri pada soal ini."
               >
                 <Link2 size={12} /> Terikat Wacana
@@ -963,7 +960,7 @@ const GuruDashboard = () => {
             )}
           </div>
 
-          <p className="font-semibold text-slate-800 leading-relaxed text-base mb-6 whitespace-pre-wrap pl-12 md:pl-0">
+          <p className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap">
             {s.pertanyaan}
           </p>
 
@@ -985,15 +982,15 @@ const GuruDashboard = () => {
               return (
                 <div
                   key={opt}
-                  className={`px-5 py-3 rounded-xl border flex items-start gap-3 transition-all ${isCorrect ? "bg-emerald-50 border-emerald-300 shadow-sm" : "bg-white border-slate-200"}`}
+                  className={`px-4 py-2.5 md:px-5 md:py-3 rounded-xl border flex items-start gap-3 transition-all ${isCorrect ? "bg-emerald-50 border-emerald-300 shadow-sm" : "bg-white border-slate-200"}`}
                 >
                   <span
-                    className={`font-bold text-sm w-6 flex-shrink-0 pt-0.5 ${isCorrect ? "text-emerald-700" : "text-slate-400"}`}
+                    className={`font-bold text-xs md:text-sm w-5 flex-shrink-0 pt-0.5 ${isCorrect ? "text-emerald-700" : "text-slate-400"}`}
                   >
                     {opt}.
                   </span>
                   <span
-                    className={`text-sm font-medium leading-relaxed whitespace-pre-wrap ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
+                    className={`text-xs md:text-sm font-medium leading-relaxed whitespace-pre-wrap ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
                   >
                     {s[keyMap]}
                   </span>
@@ -1433,28 +1430,28 @@ const GuruDashboard = () => {
 
               {nilaiViewMode === "rekap" && statsNilai && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <Card className="p-5 border-none shadow-sm bg-linear-to-br from-emerald-600 to-emerald-500 text-white rounded-[1.5rem]">
+                  <Card className="p-4 md:p-5 border-none shadow-sm bg-linear-to-br from-emerald-600 to-emerald-500 text-white rounded-[1.5rem]">
                     <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">
                       Rata-Rata Umum
                     </p>
-                    <div className="text-3xl font-bold">
+                    <div className="text-2xl md:text-3xl font-bold">
                       {statsNilai.rataRata}
                     </div>
                   </Card>
-                  <Card className="p-5 border border-emerald-100 shadow-sm bg-emerald-50 rounded-[1.5rem]">
+                  <Card className="p-4 md:p-5 border border-emerald-100 shadow-sm bg-emerald-50 rounded-[1.5rem]">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/80 mb-1">
                       Nilai Tertinggi
                     </p>
-                    <div className="text-3xl font-bold text-emerald-700">
+                    <div className="text-2xl md:text-3xl font-bold text-emerald-700">
                       {statsNilai.tertinggi}
                     </div>
                   </Card>
-                  <Card className="p-5 border border-rose-100 shadow-sm bg-rose-50 rounded-[1.5rem]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-rose-600/80 mb-1">
-                      Siswa Remedial (&lt; {KKM_SCORE})
+                  <Card className="p-4 md:p-5 border border-rose-100 shadow-sm bg-rose-50 rounded-[1.5rem]">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-rose-600/80 mb-1 flex flex-col sm:block">
+                      <span>Siswa Remedial</span> <span>(&lt; {KKM_SCORE})</span>
                     </p>
-                    <div className="text-3xl font-bold text-rose-600 flex items-center gap-2">
-                      <BarChart3 size={24} /> {statsNilai.remedial}
+                    <div className="text-2xl md:text-3xl font-bold text-rose-600 flex items-center gap-2 mt-1">
+                      <BarChart3 size={20} className="md:w-6 md:h-6" /> {statsNilai.remedial}
                     </div>
                   </Card>
                 </div>
@@ -1506,11 +1503,10 @@ const GuruDashboard = () => {
                     {isAllSelected ? "Batal Pilih" : "Pilih Semua"}
                   </button>
 
-                  {/* TOMBOL SAPU BERSIH BARU */}
                   <button
                     onClick={handleDeleteAll}
                     disabled={isDeletingBulk}
-                    className="flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-50"
+                    className="flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-50"
                     title="Hapus seluruh data yang tampil di tabel ini"
                   >
                     <Trash2 size={16} /> Sapu Bersih
@@ -1528,9 +1524,9 @@ const GuruDashboard = () => {
                 />
               </div>
 
-              {/* AREA FILTER */}
-              <div className="flex items-start md:items-center gap-3 w-full md:w-auto min-w-0">
-                <div className="grid grid-cols-2 md:flex md:flex-wrap items-center gap-2 flex-1 min-w-0">
+              {/* AREA FILTER - REVISI MOBILE GRID */}
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-2 w-full md:w-auto min-w-0">
                   {currentConfig.filterKeys.map((key) => {
                     if (
                       tab === "nilai" &&
@@ -1561,13 +1557,14 @@ const GuruDashboard = () => {
 
                 <button
                   onClick={() => fetchData(false)}
-                  className="p-3.5 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
+                  className="w-full md:w-auto flex justify-center items-center gap-2 p-3 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
                   title="Sinkronkan Ulang"
                 >
                   <RefreshCw
                     size={18}
                     className={loading || isSyncing ? "animate-spin" : ""}
                   />
+                  <span className="md:hidden font-bold text-sm">Refresh Data</span>
                 </button>
               </div>
             </div>
@@ -1637,229 +1634,218 @@ const GuruDashboard = () => {
             {renderBankSoal()}
           </motion.div>
         ) : (
-          /* KONTEN UTAMA: MONITORING NILAI (DOUBLE STICKY) */
+          /* KONTEN UTAMA: MONITORING NILAI */
           <motion.div variants={fadeUp}>
             {nilaiViewMode === "rekap" ? (
-              <Card className="overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
-                <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
+              <>
+                {/* DESKTOP VIEW - REKAP NILAI */}
+                <Card className="hidden md:block overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
+                  <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
+                    {pivotNilaiData.data.length === 0 ? (
+                      <div className="py-20 text-center text-slate-400 font-semibold text-lg">
+                        Belum ada nilai ujian masuk.
+                      </div>
+                    ) : (
+                      <table
+                        id="data-table-guru"
+                        className="w-full text-left text-sm whitespace-nowrap border-collapse"
+                      >
+                        <thead className="sticky top-0 z-20 shadow-sm">
+                          <tr>
+                            <th
+                              style={{ position: "sticky", left: 0, zIndex: 30, minWidth: "60px" }}
+                              className="px-6 py-5 bg-slate-50 border-b-2 border-r border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center"
+                            >No</th>
+                            <th
+                              style={{ position: "sticky", left: "60px", zIndex: 30, minWidth: "220px" }}
+                              className="px-6 py-5 bg-slate-50 border-b-2 border-r border-slate-200 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] text-slate-500 font-bold text-xs uppercase tracking-wider"
+                            >Nama Siswa</th>
+                            <th className="px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center">Kelas</th>
+                            {pivotNilaiData.mapels.map((m) => (
+                              <th key={m} className="px-6 py-5 bg-slate-50 border-b-2 border-l border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider text-center">{m}</th>
+                            ))}
+                            <th className="px-6 py-5 bg-emerald-50 border-b-2 border-l border-emerald-200 text-emerald-700 font-bold text-xs uppercase tracking-wider text-center">Rata-Rata</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {pivotNilaiData.data.map((item, idx) => (
+                            <tr key={`${item.nama_siswa}_${item.kelas}`} className="hover:bg-emerald-50/40 transition-colors group bg-white">
+                              <td style={{ position: "sticky", left: 0, zIndex: 10, minWidth: "60px" }} className="px-6 py-4 font-bold text-slate-400 bg-white border-r border-slate-100 text-center group-hover:bg-emerald-50 transition-colors">{idx + 1}</td>
+                              <td style={{ position: "sticky", left: "60px", zIndex: 10, minWidth: "220px" }} className="px-6 py-4 font-bold text-slate-800 bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors col-nama">{item.nama_siswa}</td>
+                              <td className="px-6 py-4 text-center"><span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md font-semibold text-[11px] text-slate-600">{item.kelas}</span></td>
+                              {pivotNilaiData.mapels.map((m) => {
+                                const skor = item[m];
+                                const isKkmFailed = skor !== undefined && skor < KKM_SCORE;
+                                return (
+                                  <td key={m} className={`px-6 py-4 text-center font-bold text-base border-l border-slate-100 ${isKkmFailed ? "text-rose-500 bg-rose-50/50" : "text-slate-600"}`}>
+                                    {skor !== undefined ? skor : "-"}
+                                  </td>
+                                );
+                              })}
+                              <td className={`px-6 py-4 text-center font-bold text-lg border-l border-slate-100 ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600 bg-rose-50" : "text-emerald-600 bg-emerald-50/50"}`}>{item.RataRata}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </Card>
+
+                {/* MOBILE VIEW - REKAP NILAI (BANKING CARD STYLE) */}
+                <div className="md:hidden flex flex-col gap-4">
                   {pivotNilaiData.data.length === 0 ? (
-                    <div className="py-20 text-center text-slate-400 font-semibold text-lg">
+                    <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
                       Belum ada nilai ujian masuk.
                     </div>
                   ) : (
-                    <table
-                      id="data-table-guru"
-                      className="w-full text-left text-sm whitespace-nowrap border-collapse"
-                    >
-                      <thead className="sticky top-0 z-20 shadow-sm">
-                        <tr>
-                          <th
-                            style={{
-                              position: "sticky",
-                              left: 0,
-                              zIndex: 30,
-                              minWidth: "60px",
-                            }}
-                            className="px-6 py-5 bg-slate-50 border-b-2 border-r border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center"
-                          >
-                            No
-                          </th>
-                          <th
-                            style={{
-                              position: "sticky",
-                              left: "60px",
-                              zIndex: 30,
-                              minWidth: "220px",
-                            }}
-                            className="px-6 py-5 bg-slate-50 border-b-2 border-r border-slate-200 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] text-slate-500 font-bold text-xs uppercase tracking-wider"
-                          >
-                            Nama Siswa
-                          </th>
-                          <th className="px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center">
-                            Kelas
-                          </th>
-                          {pivotNilaiData.mapels.map((m) => (
-                            <th
-                              key={m}
-                              className="px-6 py-5 bg-slate-50 border-b-2 border-l border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider text-center"
-                            >
-                              {m}
-                            </th>
-                          ))}
-                          <th className="px-6 py-5 bg-emerald-50 border-b-2 border-l border-emerald-200 text-emerald-700 font-bold text-xs uppercase tracking-wider text-center">
-                            Rata-Rata
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {pivotNilaiData.data.map((item, idx) => (
-                          <tr
-                            key={`${item.nama_siswa}_${item.kelas}`}
-                            className="hover:bg-emerald-50/40 transition-colors group bg-white"
-                          >
-                            <td
-                              style={{
-                                position: "sticky",
-                                left: 0,
-                                zIndex: 10,
-                                minWidth: "60px",
-                              }}
-                              className="px-6 py-4 font-bold text-slate-400 bg-white border-r border-slate-100 text-center group-hover:bg-emerald-50 transition-colors"
-                            >
-                              {idx + 1}
-                            </td>
-                            <td
-                              style={{
-                                position: "sticky",
-                                left: "60px",
-                                zIndex: 10,
-                                minWidth: "220px",
-                              }}
-                              className="px-6 py-4 font-bold text-slate-800 bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors col-nama"
-                            >
-                              {item.nama_siswa}
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md font-semibold text-[11px] text-slate-600">
-                                {item.kelas}
-                              </span>
-                            </td>
-                            {pivotNilaiData.mapels.map((m) => {
-                              const skor = item[m];
-                              const isKkmFailed =
-                                skor !== undefined && skor < KKM_SCORE;
-                              return (
-                                <td
-                                  key={m}
-                                  className={`px-6 py-4 text-center font-bold text-base border-l border-slate-100 ${isKkmFailed ? "text-rose-500 bg-rose-50/50" : "text-slate-600"}`}
-                                >
-                                  {skor !== undefined ? skor : "-"}
-                                </td>
-                              );
-                            })}
-                            <td
-                              className={`px-6 py-4 text-center font-bold text-lg border-l border-slate-100 ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600 bg-rose-50" : "text-emerald-600 bg-emerald-50/50"}`}
-                            >
-                              {item.RataRata}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </Card>
-            ) : (
-              <Card className="overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
-                <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
-                  {processedData.length === 0 ? (
-                    <div className="py-20 text-center text-slate-400 font-semibold text-lg">
-                      Tidak ada log ujian terekam.
-                    </div>
-                  ) : (
-                    <table
-                      id="data-table-guru"
-                      className="w-full text-left text-sm whitespace-nowrap border-collapse"
-                    >
-                      <thead className="sticky top-0 z-20 shadow-sm">
-                        <tr>
-                          {currentConfig.columns.map((col, index) => {
-                            const isID = index === 0;
-                            const isName = index === 1;
-                            const stickyStyle = isID
-                              ? {
-                                  position: "sticky",
-                                  left: 0,
-                                  zIndex: 30,
-                                  minWidth: "80px",
-                                }
-                              : isName
-                                ? {
-                                    position: "sticky",
-                                    left: "80px",
-                                    zIndex: 30,
-                                    minWidth: "220px",
-                                  }
-                                : {};
+                    pivotNilaiData.data.map((item, idx) => (
+                      <Card key={`${item.nama_siswa}_${item.kelas}`} className="p-4 bg-white border border-slate-200 shadow-sm rounded-2xl">
+                        <div className="flex justify-between items-start mb-3 pb-3 border-b border-slate-100">
+                          <span className="font-black text-slate-800 text-[16px] leading-tight line-clamp-2">
+                            {idx + 1}. {item.nama_siswa}
+                          </span>
+                          <span className="px-2 py-1 bg-slate-100 border border-slate-200 rounded-md font-bold text-[10px] text-slate-600 shrink-0">
+                            {item.kelas}
+                          </span>
+                        </div>
+                        <div className="space-y-2 mb-3">
+                          {pivotNilaiData.mapels.map((m) => {
+                            const skor = item[m];
+                            const isKkmFailed = skor !== undefined && skor < KKM_SCORE;
                             return (
-                              <th
-                                key={col.key}
-                                style={stickyStyle}
-                                className={`px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider ${isID || isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}
-                              >
-                                {col.label}
-                              </th>
+                              <div key={m} className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500 font-semibold">{m}</span>
+                                <span className={`font-bold ${isKkmFailed ? "text-rose-500" : "text-slate-700"}`}>
+                                  {skor !== undefined ? skor : "-"}
+                                </span>
+                              </div>
                             );
                           })}
-                          <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider print-hidden">
-                            Aksi
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {processedData.map((item, i) => (
-                          <tr
-                            key={item.id || i}
-                            className="hover:bg-emerald-50/40 transition-colors group bg-white"
-                          >
+                        </div>
+                        <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Rata-Rata</span>
+                          <span className={`font-black text-lg ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600" : "text-emerald-600"}`}>
+                            {item.RataRata}
+                          </span>
+                        </div>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* DESKTOP VIEW - LOG RIWAYAT */}
+                <Card className="hidden md:block overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
+                  <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
+                    {processedData.length === 0 ? (
+                      <div className="py-20 text-center text-slate-400 font-semibold text-lg">
+                        Tidak ada log ujian terekam.
+                      </div>
+                    ) : (
+                      <table id="data-table-guru" className="w-full text-left text-sm whitespace-nowrap border-collapse">
+                        <thead className="sticky top-0 z-20 shadow-sm">
+                          <tr>
                             {currentConfig.columns.map((col, index) => {
                               const isID = index === 0;
                               const isName = index === 1;
-                              const stickyStyle = isID
-                                ? {
-                                    position: "sticky",
-                                    left: 0,
-                                    zIndex: 10,
-                                    minWidth: "80px",
-                                  }
-                                : isName
-                                  ? {
-                                      position: "sticky",
-                                      left: "80px",
-                                      zIndex: 10,
-                                      minWidth: "220px",
-                                    }
-                                  : {};
+                              const stickyStyle = isID ? { position: "sticky", left: 0, zIndex: 30, minWidth: "80px" } : isName ? { position: "sticky", left: "80px", zIndex: 30, minWidth: "220px" } : {};
                               return (
-                                <td
-                                  key={col.key}
-                                  style={stickyStyle}
-                                  className={`px-6 py-4 font-semibold text-slate-700 ${isID || isName ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}
-                                >
+                                <th key={col.key} style={stickyStyle} className={`px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider ${isID || isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}>
+                                  {col.label}
+                                </th>
+                              );
+                            })}
+                            <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider print-hidden">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {processedData.map((item, i) => (
+                            <tr key={item.id || i} className="hover:bg-emerald-50/40 transition-colors group bg-white">
+                              {currentConfig.columns.map((col, index) => {
+                                const isID = index === 0;
+                                const isName = index === 1;
+                                const stickyStyle = isID ? { position: "sticky", left: 0, zIndex: 10, minWidth: "80px" } : isName ? { position: "sticky", left: "80px", zIndex: 10, minWidth: "220px" } : {};
+                                return (
+                                  <td key={col.key} style={stickyStyle} className={`px-6 py-4 font-semibold text-slate-700 ${isID || isName ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}>
+                                    {col.key === "status" ? (
+                                      <Badge type={item[col.key]} />
+                                    ) : col.key === "skor" ? (
+                                      <span className={`text-base font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}>
+                                        {item[col.key]}
+                                      </span>
+                                    ) : (
+                                      item[col.key] || "-"
+                                    )}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-6 py-4 text-center print-hidden">
+                                <button onClick={() => handleDelete(item.id)} className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </Card>
+
+                {/* MOBILE VIEW - LOG RIWAYAT (BANKING CARD STYLE) */}
+                <div className="md:hidden flex flex-col gap-4">
+                  {processedData.length === 0 ? (
+                    <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
+                      Tidak ada log ujian terekam.
+                    </div>
+                  ) : (
+                    processedData.map((item, i) => (
+                      <Card key={item.id || i} className="p-4 bg-white border border-slate-200 shadow-sm rounded-2xl">
+                        <div className="flex justify-between items-start gap-3 mb-3 pb-3 border-b border-slate-100">
+                          <span className="font-black text-slate-800 text-[15px] leading-tight line-clamp-2">
+                            {item.nama_siswa}
+                          </span>
+                          <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 shrink-0">
+                            #{item.id}
+                          </span>
+                        </div>
+                        <div className="space-y-2 mb-4">
+                          {currentConfig.columns.map(col => {
+                            if (col.key === 'id' || col.key === 'nama_siswa') return null;
+                            return (
+                              <div key={col.key} className="flex justify-between items-center text-sm gap-4">
+                                <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wider shrink-0">{col.label}</span>
+                                <div className="text-right font-semibold text-slate-700 truncate">
                                   {col.key === "status" ? (
                                     <Badge type={item[col.key]} />
                                   ) : col.key === "skor" ? (
-                                    <span
-                                      className={`text-base font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}
-                                    >
+                                    <span className={`text-[15px] font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}>
                                       {item[col.key]}
                                     </span>
                                   ) : (
-                                    item[col.key] || "-"
+                                    item[col.key] || <span className="text-slate-300">-</span>
                                   )}
-                                </td>
-                              );
-                            })}
-                            <td className="px-6 py-4 text-center print-hidden">
-                              <button
-                                onClick={() => handleDelete(item.id)}
-                                className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <div className="pt-3 border-t border-slate-100 flex">
+                          <button onClick={() => handleDelete(item.id)} className="w-full py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-red-100 transition-colors">
+                            <Trash2 size={16}/> Hapus Log
+                          </button>
+                        </div>
+                      </Card>
+                    ))
                   )}
                 </div>
-              </Card>
+              </>
             )}
           </motion.div>
         )}
 
-        {/* MODAL BUAT/EDIT MANUAL */}
+        {/* MODAL BUAT/EDIT MANUAL (COMPACT PADA MOBILE) */}
         <AnimatePresence>
           {isModalOpen && tab === "soal" && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
@@ -1867,37 +1853,37 @@ const GuruDashboard = () => {
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-4xl my-auto py-8"
+                className="w-full max-w-4xl my-auto py-4 md:py-8"
               >
-                <Card className="p-6 md:p-8 shadow-2xl border-0 rounded-[2rem] bg-white">
-                  <div className="flex justify-between items-center mb-6 pb-5 border-b border-slate-100">
+                <Card className="p-4 md:p-8 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white">
+                  <div className="flex justify-between items-center mb-4 md:mb-6 pb-3 md:pb-5 border-b border-slate-100">
                     <div>
-                      <h3 className="text-2xl font-bold text-slate-800 tracking-tight">
+                      <h3 className="text-lg md:text-2xl font-bold text-slate-800 tracking-tight">
                         {isEdit ? "Edit Soal" : "Buat Soal Baru"}
                       </h3>
-                      <p className="text-emerald-600 font-bold text-xs uppercase tracking-widest mt-1">
+                      <p className="text-emerald-600 font-bold text-[10px] md:text-xs uppercase tracking-widest mt-0.5 md:mt-1">
                         Sistem Database CBT
                       </p>
                     </div>
                     <button
                       onClick={() => setIsModalOpen(false)}
                       disabled={isSaving}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50 border border-transparent hover:border-red-100"
+                      className="p-1.5 md:p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors disabled:opacity-50 border border-transparent hover:border-red-100"
                     >
-                      <X size={24} />
+                      <X size={20} className="md:w-6 md:h-6" />
                     </button>
                   </div>
 
-                  <form onSubmit={handleSave} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-5 rounded-[1.5rem] border border-slate-100">
+                  <form onSubmit={handleSave} className="space-y-4 md:space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 bg-slate-50 p-4 md:p-5 rounded-[1rem] md:rounded-[1.5rem] border border-slate-100">
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
+                        <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                           ID Sistem (Bisa Diedit)
                         </label>
                         <input
                           type="number"
                           step="any"
-                          className={`w-full p-3.5 text-sm rounded-xl font-bold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800"}`}
+                          className={`w-full p-2.5 md:p-3.5 text-xs md:text-sm rounded-lg md:rounded-xl font-bold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800"}`}
                           value={formData.id}
                           onChange={(e) =>
                             setFormData({ ...formData, id: e.target.value })
@@ -1908,7 +1894,7 @@ const GuruDashboard = () => {
                       </div>
 
                       <div className="space-y-1.5 md:col-span-1">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
+                        <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                           Mapel
                         </label>
                         <PremiumSelect
@@ -1930,7 +1916,7 @@ const GuruDashboard = () => {
                       </div>
 
                       <div className="space-y-1.5 md:col-span-1">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
+                        <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                           Kelas
                         </label>
                         <PremiumMultiSelect
@@ -1945,13 +1931,13 @@ const GuruDashboard = () => {
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-amber-600 ml-1">
+                        <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-amber-600 ml-1">
                           Bobot Poin
                         </label>
                         <input
                           type="number"
                           step="any"
-                          className="w-full p-3.5 text-sm bg-amber-50 border border-amber-200 rounded-xl font-bold text-amber-700 outline-none focus:border-amber-400"
+                          className="w-full p-2.5 md:p-3.5 text-xs md:text-sm bg-amber-50 border border-amber-200 rounded-lg md:rounded-xl font-bold text-amber-700 outline-none focus:border-amber-400"
                           value={formData.poin || ""}
                           onChange={(e) =>
                             setFormData({ ...formData, poin: e.target.value })
@@ -1962,29 +1948,29 @@ const GuruDashboard = () => {
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
+                    <div className="space-y-1 md:space-y-1.5">
+                      <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                         Wacana / Teks Cerita (Opsional)
                       </label>
                       <textarea
                         disabled={isSaving}
                         placeholder="Tuliskan paragraf wacana di sini..."
                         rows="3"
-                        className="w-full p-4 text-sm bg-slate-50 border border-slate-200 rounded-[1.5rem] font-medium outline-none focus:border-emerald-500 focus:bg-white transition-all resize-y whitespace-pre-wrap text-slate-700"
+                        className="w-full p-3 md:p-4 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-xl md:rounded-[1.5rem] font-medium outline-none focus:border-emerald-500 focus:bg-white transition-all resize-y whitespace-pre-wrap text-slate-700"
                         value={formData.wacana || ""}
                         onChange={(e) =>
                           setFormData({ ...formData, wacana: e.target.value })
                         }
                       />
-                      <p className="text-[10px] font-medium text-amber-600 ml-1 mt-1 flex items-center gap-1">
-                        <AlertTriangle size={12} /> Jangan gunakan kalimat
+                      <p className="text-[9px] md:text-[10px] font-medium text-amber-600 ml-1 mt-1 flex items-start md:items-center gap-1">
+                        <AlertTriangle size={12} className="shrink-0 mt-0.5 md:mt-0" /> Jangan gunakan kalimat
                         "Untuk soal nomor 1-5" di dalam teks wacana, karena soal
                         CBT akan diacak.
                       </p>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
+                    <div className="space-y-1 md:space-y-1.5">
+                      <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                         Pertanyaan Inti <span className="text-red-500">*</span>
                       </label>
                       <textarea
@@ -1992,7 +1978,7 @@ const GuruDashboard = () => {
                         disabled={isSaving}
                         rows="3"
                         placeholder="Tuliskan pertanyaan di sini..."
-                        className="w-full p-4 text-sm bg-white border border-slate-200 rounded-[1.5rem] font-semibold outline-none focus:border-emerald-500 transition-all resize-y whitespace-pre-wrap text-slate-800 shadow-sm"
+                        className="w-full p-3 md:p-4 text-xs md:text-sm bg-white border border-slate-200 rounded-xl md:rounded-[1.5rem] font-semibold outline-none focus:border-emerald-500 transition-all resize-y whitespace-pre-wrap text-slate-800 shadow-sm"
                         value={formData.pertanyaan || ""}
                         onChange={(e) =>
                           setFormData({
@@ -2003,15 +1989,15 @@ const GuruDashboard = () => {
                       />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
+                    <div className="space-y-1 md:space-y-1.5">
+                      <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                         Link Gambar Lampiran (Opsional)
                       </label>
                       <input
                         type="text"
                         disabled={isSaving}
                         placeholder="Contoh: https://i.imgur.com/gambar.png"
-                        className="w-full p-3.5 text-sm bg-white border border-slate-200 rounded-xl font-medium text-slate-700 outline-none focus:border-emerald-500 transition-all shadow-sm"
+                        className="w-full p-2.5 md:p-3.5 text-xs md:text-sm bg-white border border-slate-200 rounded-lg md:rounded-xl font-medium text-slate-700 outline-none focus:border-emerald-500 transition-all shadow-sm"
                         value={formData.link_gambar || ""}
                         onChange={(e) =>
                           setFormData({
@@ -2022,14 +2008,14 @@ const GuruDashboard = () => {
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5 pt-1 md:pt-2">
                       {["A", "B", "C", "D", "E"].map((opt) => {
                         const keyMap = `opsi_${opt.toLowerCase()}`;
                         const isKunci = formData.jawaban_benar === opt;
                         return (
-                          <div key={opt} className="space-y-1.5 relative">
+                          <div key={opt} className="space-y-1 md:space-y-1.5 relative">
                             <label
-                              className={`text-[11px] font-bold uppercase tracking-wider ml-1 ${isKunci ? "text-emerald-600" : "text-slate-500"}`}
+                              className={`text-[10px] md:text-[11px] font-bold uppercase tracking-wider ml-1 ${isKunci ? "text-emerald-600" : "text-slate-500"}`}
                             >
                               Pilihan {opt} {isKunci && "(KUNCI)"}
                             </label>
@@ -2037,7 +2023,7 @@ const GuruDashboard = () => {
                               required={opt !== "E"}
                               disabled={isSaving}
                               placeholder={`Jawaban ${opt}...`}
-                              className={`w-full p-3.5 text-sm border rounded-xl font-medium outline-none transition-all shadow-sm whitespace-pre-wrap resize-y ${isKunci ? "bg-emerald-50 border-emerald-300 text-emerald-900 focus:ring-2 focus:ring-emerald-500/20" : "bg-white border-slate-200 text-slate-700 focus:border-emerald-500"}`}
+                              className={`w-full p-2.5 md:p-3.5 text-xs md:text-sm border rounded-lg md:rounded-xl font-medium outline-none transition-all shadow-sm whitespace-pre-wrap resize-y ${isKunci ? "bg-emerald-50 border-emerald-300 text-emerald-900 focus:ring-2 focus:ring-emerald-500/20" : "bg-white border-slate-200 text-slate-700 focus:border-emerald-500"}`}
                               value={formData[keyMap] || ""}
                               onChange={(e) =>
                                 setFormData({
@@ -2049,14 +2035,14 @@ const GuruDashboard = () => {
                           </div>
                         );
                       })}
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 ml-1">
+                      <div className="space-y-1 md:space-y-1.5">
+                        <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-emerald-600 ml-1">
                           Tetapkan Kunci Jawaban
                         </label>
                         <select
                           required
                           disabled={isSaving}
-                          className="w-full p-3.5 text-sm bg-linear-to-r from-emerald-600 to-emerald-500 border border-emerald-400 text-white rounded-xl font-bold outline-none shadow-md cursor-pointer"
+                          className="w-full p-2.5 md:p-3.5 text-xs md:text-sm bg-linear-to-r from-emerald-600 to-emerald-500 border border-emerald-400 text-white rounded-lg md:rounded-xl font-bold outline-none shadow-md cursor-pointer"
                           value={formData.jawaban_benar || "A"}
                           onChange={(e) =>
                             setFormData({
@@ -2074,11 +2060,11 @@ const GuruDashboard = () => {
                       </div>
                     </div>
 
-                    <div className="pt-6 mt-4 border-t border-slate-100">
+                    <div className="pt-4 md:pt-6 mt-2 md:mt-4 border-t border-slate-100">
                       <button
                         type="submit"
                         disabled={isSaving}
-                        className="w-full bg-linear-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed border border-emerald-400"
+                        className="w-full bg-linear-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm md:text-sm py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed border border-emerald-400"
                       >
                         {isSaving ? (
                           <RefreshCw size={18} className="animate-spin" />
@@ -2095,7 +2081,7 @@ const GuruDashboard = () => {
           )}
         </AnimatePresence>
 
-        {/* MODAL IMPORT MASAL (SMART PASTE) */}
+        {/* MODAL IMPORT MASAL (SMART PASTE) - COMPACT MOBILE */}
         <AnimatePresence>
           {isBulkOpen && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
@@ -2103,16 +2089,16 @@ const GuruDashboard = () => {
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-5xl my-auto py-8"
+                className="w-full max-w-5xl my-auto py-4 md:py-8"
               >
-                <Card className="p-6 md:p-8 shadow-2xl border-0 rounded-[2rem] bg-white">
-                  <div className="flex justify-between items-start md:items-center mb-6 pb-5 border-b border-slate-100">
+                <Card className="p-4 md:p-8 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white">
+                  <div className="flex justify-between items-start md:items-center mb-4 md:mb-6 pb-3 md:pb-5 border-b border-slate-100">
                     <div>
-                      <h3 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
-                        <UploadCloud className="text-emerald-500" size={28} />{" "}
+                      <h3 className="text-lg md:text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2 md:gap-3">
+                        <UploadCloud className="text-emerald-500" size={24} />{" "}
                         Import Soal Massal
                       </h3>
-                      <p className="text-slate-500 font-medium text-xs mt-1.5">
+                      <p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1 md:mt-1.5">
                         Sistem AI otomatis memisahkan Wacana, Pertanyaan
                         (termasuk list menurun), dan menghapus tulisan "Soal
                         nomor X-Y".
@@ -2121,13 +2107,13 @@ const GuruDashboard = () => {
                     <button
                       onClick={() => setIsBulkOpen(false)}
                       disabled={isSaving}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50 border border-transparent hover:border-red-100"
+                      className="p-1.5 md:p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors disabled:opacity-50 border border-transparent hover:border-red-100"
                     >
-                      <X size={24} />
+                      <X size={20} className="md:w-6 md:h-6" />
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-3 md:mb-4">
                     <div className="w-full">
                       <PremiumSelect
                         value={bulkMapel}
@@ -2155,7 +2141,7 @@ const GuruDashboard = () => {
                       />
                     </div>
 
-                    <div className="relative flex items-center shadow-sm rounded-xl">
+                    <div className="relative flex items-center shadow-sm rounded-lg md:rounded-xl">
                       <Target
                         className="absolute left-3 text-amber-500"
                         size={16}
@@ -2163,7 +2149,7 @@ const GuruDashboard = () => {
                       <input
                         type="number"
                         step="any"
-                        className="w-full p-3.5 pl-10 text-sm bg-amber-50 border border-amber-200 rounded-xl font-bold text-amber-700 outline-none focus:border-amber-400"
+                        className="w-full p-2.5 md:p-3.5 pl-9 md:pl-10 text-xs md:text-sm bg-amber-50 border border-amber-200 rounded-lg md:rounded-xl font-bold text-amber-700 outline-none focus:border-amber-400"
                         placeholder="Poin per Soal"
                         value={bulkPoin}
                         onChange={(e) => setBulkPoin(e.target.value)}
@@ -2173,20 +2159,20 @@ const GuruDashboard = () => {
                   </div>
 
                   <textarea
-                    className="w-full p-5 bg-slate-50 border border-slate-200 rounded-[1.5rem] font-mono text-[13px] outline-none focus:bg-white focus:border-emerald-500 transition-all resize-y h-64 text-slate-700 shadow-inner leading-relaxed"
+                    className="w-full p-4 md:p-5 bg-slate-50 border border-slate-200 rounded-xl md:rounded-[1.5rem] font-mono text-[11px] md:text-[13px] outline-none focus:bg-white focus:border-emerald-500 transition-all resize-y h-48 md:h-64 text-slate-700 shadow-inner leading-relaxed"
                     placeholder="Paste soal dari Ms.Word ke sini...&#10;&#10;Contoh Format:&#10;Teks wacana cerita diletakkan di awal paragraf (jika ada).&#10;Pertanyaan diletakkan sebelum opsi.&#10;a. opsi A&#10;b. opsi B&#10;c. opsi C&#10;d. opsi D&#10;e. opsi E&#10;Kunci: D"
                     value={bulkText}
                     onChange={(e) => setBulkText(e.target.value)}
                     disabled={isSaving}
                   />
 
-                  <div className="flex justify-end mt-5">
+                  <div className="flex justify-end mt-4 md:mt-5">
                     <button
                       onClick={handleParseBulkText}
                       disabled={
                         !bulkText || !bulkMapel || !bulkKelas || isSaving
                       }
-                      className="bg-slate-800 text-white font-bold text-sm px-6 py-3.5 rounded-xl shadow-md hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-50"
+                      className="w-full md:w-auto bg-slate-800 text-white font-bold text-sm px-6 py-3.5 rounded-lg md:rounded-xl shadow-md hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-50"
                     >
                       Pratinjau (Preview) AI
                     </button>
@@ -2196,28 +2182,28 @@ const GuruDashboard = () => {
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="mt-8 border-t border-slate-100 pt-6"
+                      className="mt-6 md:mt-8 border-t border-slate-100 pt-5 md:pt-6"
                     >
-                      <div className="flex items-center gap-2 mb-4">
-                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-xs font-bold border border-emerald-200">
+                      <div className="flex flex-col md:flex-row items-start md:items-center gap-2 mb-4">
+                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-emerald-200">
                           {parsedBulkData.length} Soal Terdeteksi
                         </span>
-                        <span className="text-xs text-slate-500 font-medium">
+                        <span className="text-[10px] md:text-xs text-slate-500 font-medium">
                           Silakan periksa hasil bacaan sistem di bawah ini.
                         </span>
                       </div>
 
-                      <div className="max-h-[500px] overflow-y-auto bg-slate-50 rounded-[1.5rem] border border-slate-200 p-4 space-y-4 mb-6 scrollbar-thin">
+                      <div className="max-h-[400px] md:max-h-[500px] overflow-y-auto bg-slate-50 rounded-xl md:rounded-[1.5rem] border border-slate-200 p-3 md:p-4 space-y-3 md:space-y-4 mb-5 md:mb-6 scrollbar-thin">
                         {parsedBulkData.map((item, idx) => (
                           <div
                             key={idx}
-                            className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 relative"
+                            className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 relative"
                           >
-                            <div className="absolute top-4 right-4 text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">
+                            <div className="absolute top-3 right-3 md:top-4 md:right-4 text-[9px] md:text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">
                               #{idx + 1}
                             </div>
                             {item.wacana && (
-                              <div className="mb-3 p-3 bg-amber-50/50 border border-amber-100 text-xs text-slate-700 rounded-lg leading-relaxed">
+                              <div className="mb-3 p-2.5 md:p-3 bg-amber-50/50 border border-amber-100 text-[10px] md:text-xs text-slate-700 rounded-lg leading-relaxed">
                                 <strong className="text-amber-600 block mb-1">
                                   Teks Wacana Terikat:
                                 </strong>
@@ -2226,41 +2212,41 @@ const GuruDashboard = () => {
                                 </span>
                               </div>
                             )}
-                            <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap mb-4 pr-10 leading-relaxed">
+                            <p className="text-xs md:text-sm font-semibold text-slate-800 whitespace-pre-wrap mb-3 md:mb-4 pr-8 md:pr-10 leading-relaxed">
                               {item.pertanyaan}
                             </p>
-                            <div className="flex flex-col gap-1.5 text-xs text-slate-600 font-medium">
+                            <div className="flex flex-col gap-1 md:gap-1.5 text-[10px] md:text-xs text-slate-600 font-medium">
                               {item.opsi_a && (
                                 <div
-                                  className={`p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "A" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
+                                  className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "A" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                                 >
                                   <strong>A.</strong> {item.opsi_a}
                                 </div>
                               )}
                               {item.opsi_b && (
                                 <div
-                                  className={`p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "B" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
+                                  className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "B" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                                 >
                                   <strong>B.</strong> {item.opsi_b}
                                 </div>
                               )}
                               {item.opsi_c && (
                                 <div
-                                  className={`p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "C" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
+                                  className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "C" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                                 >
                                   <strong>C.</strong> {item.opsi_c}
                                 </div>
                               )}
                               {item.opsi_d && (
                                 <div
-                                  className={`p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "D" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
+                                  className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "D" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                                 >
                                   <strong>D.</strong> {item.opsi_d}
                                 </div>
                               )}
                               {item.opsi_e && (
                                 <div
-                                  className={`p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "E" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
+                                  className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "E" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                                 >
                                   <strong>E.</strong> {item.opsi_e}
                                 </div>
@@ -2273,7 +2259,7 @@ const GuruDashboard = () => {
                       <button
                         onClick={handleSaveBulk}
                         disabled={isSaving}
-                        className="w-full bg-linear-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 border border-emerald-400"
+                        className="w-full bg-linear-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm md:text-sm py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 border border-emerald-400"
                       >
                         {isSaving ? (
                           <RefreshCw className="animate-spin" size={18} />
@@ -2299,32 +2285,30 @@ const GuruDashboard = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
               >
-                <Card className="w-full max-w-sm p-8 shadow-2xl border-0 rounded-[2rem] bg-white text-center flex flex-col items-center">
+                <Card className="w-full max-w-sm p-6 md:p-8 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white text-center flex flex-col items-center">
                   <div
-                    className={`p-5 rounded-[1.5rem] mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500 shadow-inner" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500 shadow-inner" : "bg-emerald-50 text-emerald-500 shadow-inner"}`}
+                    className={`p-4 md:p-5 rounded-[1.5rem] mb-4 md:mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500 shadow-inner" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500 shadow-inner" : "bg-emerald-50 text-emerald-500 shadow-inner"}`}
                   >
-                    {customAlert.type === "danger" ||
-                    customAlert.type === "confirm" ? (
-                      <AlertTriangle size={40} />
+                    {customAlert.type === "danger" || customAlert.type === "confirm" ? (
+                      <AlertTriangle size={36} className="md:w-10 md:h-10" />
                     ) : customAlert.type === "warning" ? (
-                      <AlertTriangle size={40} />
+                      <AlertTriangle size={36} className="md:w-10 md:h-10" />
                     ) : (
-                      <Info size={40} />
+                      <Info size={36} className="md:w-10 md:h-10" />
                     )}
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-800 mb-2">
+                  <h3 className="text-xl md:text-2xl font-bold text-slate-800 mb-2">
                     {customAlert.title}
                   </h3>
-                  <p className="text-sm text-slate-500 mb-8 font-medium px-2 leading-relaxed">
+                  <p className="text-xs md:text-sm text-slate-500 mb-6 md:mb-8 font-medium px-2 leading-relaxed">
                     {customAlert.message}
                   </p>
-                  <div className="flex gap-3 w-full">
-                    {customAlert.type === "confirm" ||
-                    customAlert.type === "danger" ? (
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                    {customAlert.type === "confirm" || customAlert.type === "danger" ? (
                       <>
                         <button
                           onClick={closeAlert}
-                          className="flex-1 py-3 px-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm"
+                          className="w-full py-3 px-4 bg-slate-100 text-slate-600 rounded-lg md:rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm order-2 sm:order-1"
                         >
                           Batal
                         </button>
@@ -2334,7 +2318,7 @@ const GuruDashboard = () => {
                               ? customAlert.onConfirm
                               : closeAlert
                           }
-                          className={`flex-1 py-3 px-4 rounded-xl font-bold text-white shadow-lg transition-all text-sm bg-red-500 hover:bg-red-600 shadow-red-500/30`}
+                          className={`w-full py-3 px-4 rounded-lg md:rounded-xl font-bold text-white shadow-lg transition-all text-sm bg-red-500 hover:bg-red-600 shadow-red-500/30 order-1 sm:order-2`}
                         >
                           Ya, Eksekusi
                         </button>
@@ -2342,7 +2326,7 @@ const GuruDashboard = () => {
                     ) : (
                       <button
                         onClick={closeAlert}
-                        className="w-full py-3 px-4 rounded-xl font-bold text-white shadow-lg bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 text-sm transition-all"
+                        className="w-full py-3 px-4 rounded-lg md:rounded-xl font-bold text-white shadow-lg bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 text-sm transition-all"
                       >
                         Mengerti
                       </button>
