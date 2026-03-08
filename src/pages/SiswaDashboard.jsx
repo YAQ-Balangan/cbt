@@ -59,6 +59,23 @@ const getVal = (obj, keyName) => {
   const foundKey = Object.keys(obj).find((k) => k.toLowerCase() === lowerKey);
   return foundKey ? obj[foundKey] : "";
 };
+const formatTanggalLokal = (dateString) => {
+  if (!dateString) return "Hari ini";
+  try {
+    // Cek apakah formatnya ISO (berisi T dan Z)
+    if (String(dateString).includes("T") && String(dateString).includes("Z")) {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }); // Hasil: 01 Mar 2026
+    }
+    return dateString;
+  } catch (error) {
+    return dateString;
+  }
+};
 
 const KKM_SCORE = 75; // Sesuaikan jika perlu
 const MAX_CHEAT_WARNINGS = 3;
@@ -241,6 +258,19 @@ const SiswaDashboard = () => {
         "Akses Ditolak",
         "TOKEN SALAH! Silakan periksa kembali token ujian Anda.",
       );
+    const sudahMengerjakan = myResults.some(
+      (res) =>
+        String(getVal(res, "Mapel")).toUpperCase() ===
+        String(examMapel).toUpperCase(),
+    );
+
+    if (sudahMengerjakan) {
+      return showAlert(
+        "danger",
+        "Akses Dibatasi",
+        "Anda sudah mengerjakan ujian ini. Nilai Anda sudah terekam di sistem dan tidak bisa diulang.",
+      );
+    }
 
     setActiveExam(exam);
     setLoadingSoal(true);
@@ -310,13 +340,16 @@ const SiswaDashboard = () => {
   };
 
   // ==========================================
-  // 3. KALKULASI SKOR & SUBMIT (REVISI DATA BENAR/SALAH)
+  // 3. KALKULASI SKOR & SUBMIT (REVISI DATA BENAR/SALAH & DETAIL JAWABAN)
   // ==========================================
   const executeEndExam = async (isForced, isCheating) => {
     setIsSubmitting(true);
 
     let skorSiswa = 0;
     let benarCount = 0;
+
+    // VARIABEL BARU: Untuk menyimpan detail jawaban siswa
+    let detailJawabanArray = [];
 
     const currentAnswers = answersRef.current;
     const currentSoalData = soalDataRef.current;
@@ -325,7 +358,7 @@ const SiswaDashboard = () => {
     currentSoalData.forEach((soal) => {
       const poin = parseFloat(getVal(soal, "Poin")) || 2;
       const idSoal = String(getVal(soal, "id")).trim();
-      const jawabanSiswa = currentAnswers[idSoal];
+      const jawabanSiswa = currentAnswers[idSoal] || ""; // Ambil jawaban siswa, kosongkan jika tidak diisi
       const jawabanBenar = String(getVal(soal, "Jawaban_Benar"))
         .toUpperCase()
         .trim();
@@ -337,6 +370,13 @@ const SiswaDashboard = () => {
         skorSiswa += poin;
         benarCount++;
       }
+
+      // REKAM DETAIL JAWABAN PER NOMOR
+      detailJawabanArray.push({
+        tanya: getVal(soal, "Pertanyaan"), // Menyimpan isi pertanyaannya
+        jawab_siswa: jawabanSiswa, // Menyimpan apa yang dipilih siswa
+        kunci: jawabanBenar, // Menyimpan kunci aslinya
+      });
     });
 
     let finalScore = Number(skorSiswa.toFixed(2));
@@ -356,7 +396,7 @@ const SiswaDashboard = () => {
       }
       const nextId = maxId + 1;
 
-      // POST NILAI DENGAN TAMBAHAN BENAR, SALAH, TOTAL SOAL
+      // POST NILAI DENGAN TAMBAHAN BENAR, SALAH, TOTAL SOAL, DAN DETAIL JAWABAN
       await api.create("Nilai", {
         id: nextId,
         nama_siswa: getVal(user, "Nama"),
@@ -367,6 +407,8 @@ const SiswaDashboard = () => {
         salah: salahCount,
         total_soal: totalSoal,
         status: isCheating ? "Diskualifikasi (Curang)" : "Selesai",
+        // MENGUBAH ARRAY KE BENTUK STRING AGAR BISA DISIMPAN DI SHEET/DB
+        detail_jawaban: JSON.stringify(detailJawabanArray),
       });
 
       const sessionKey = `cbt_session_${getVal(user, "Username")}_${getVal(activeExamRef.current, "ID")}`;
@@ -988,14 +1030,29 @@ const SiswaDashboard = () => {
           background-size: 400% 400%;
           animation: gradientBG 15s ease infinite;
         }
+          @keyframes blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
       `}</style>
+
+      {/* TAMBAHKAN ELEMEN BACKGROUND INI TEPAT DI BAWAH STYLE */}
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 z-0 pointer-events-none"></div>
+      <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-emerald-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob z-0 pointer-events-none"></div>
+      <div className="fixed top-[20%] right-[-10%] w-[400px] h-[400px] bg-teal-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000 z-0 pointer-events-none"></div>
+      <div className="fixed bottom-[-20%] left-[20%] w-[600px] h-[600px] bg-blue-100/60 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000 z-0 pointer-events-none"></div>
 
       {activeTab === "home" && (
         <motion.div
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
-          className="max-w-5xl mx-auto space-y-6 pb-24"
+          className="max-w-5xl mx-auto space-y-6 pb-24 relative z-10"
         >
           <motion.header
             variants={fadeUp}
@@ -1091,7 +1148,7 @@ const SiswaDashboard = () => {
                         </span>
                         <span className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
                           <Calendar size={12} className="text-amber-500" />{" "}
-                          {getVal(ex, "Tanggal") || "Hari ini"}
+                          {formatTanggalLokal(getVal(ex, "Tanggal"))}
                         </span>
                       </div>
                     </div>
@@ -1132,7 +1189,7 @@ const SiswaDashboard = () => {
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
-          className="max-w-5xl mx-auto space-y-6 pb-24"
+          className="max-w-5xl mx-auto space-y-6 pb-24 relative z-10"
         >
           <motion.div
             variants={fadeUp}
@@ -1214,7 +1271,7 @@ const SiswaDashboard = () => {
                           {skor}
                         </span>
                         <span className="text-xs font-bold text-slate-400 pb-1.5 uppercase tracking-widest">
-                          Total Poin
+                          Poin
                         </span>
                       </div>
 

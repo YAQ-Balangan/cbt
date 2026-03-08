@@ -30,6 +30,8 @@ import {
   Info,
   ListChecks,
   Link2,
+  Eye,
+  XCircle,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
@@ -150,7 +152,9 @@ const PremiumSelect = ({
                     ${isSelected ? "bg-emerald-50 text-emerald-800 font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-emerald-700 font-medium"}
                   `}
                 >
-                  <span className="whitespace-normal break-words pr-2">{opt.label}</span>
+                  <span className="whitespace-normal break-words pr-2">
+                    {opt.label}
+                  </span>
                   {isSelected && (
                     <Check
                       size={16}
@@ -280,7 +284,9 @@ const PremiumMultiSelect = ({
                     ) : (
                       <Square size={16} className="text-slate-300 shrink-0" />
                     )}
-                    <span className="text-xs md:text-sm whitespace-normal break-words leading-tight">{opt.label}</span>
+                    <span className="text-xs md:text-sm whitespace-normal break-words leading-tight">
+                      {opt.label}
+                    </span>
                   </div>
                 );
               })}
@@ -401,6 +407,10 @@ const GuruDashboard = () => {
   const [formData, setFormData] = useState({});
   const [isEdit, setIsEdit] = useState(false);
   const [originalId, setOriginalId] = useState(null);
+
+  // Modal Review Jawaban Siswa
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewData, setReviewData] = useState(null);
 
   const [customAlert, setCustomAlert] = useState({
     isOpen: false,
@@ -656,6 +666,11 @@ const GuruDashboard = () => {
       poin: formatPoinDisplay(item.poin),
     });
     setIsModalOpen(true);
+  };
+
+  const openReviewModal = (item) => {
+    setReviewData(item);
+    setIsReviewModalOpen(true);
   };
 
   // ======================================================================
@@ -1021,9 +1036,16 @@ const GuruDashboard = () => {
     data.forEach((row) => {
       if (!row.nama_siswa) return;
       const key = `${row.nama_siswa}_${row.kelas}`;
-      if (!grouped[key])
+      const mapelKey = row.mapel;
+
+      if (!grouped[key]) {
         grouped[key] = { nama_siswa: row.nama_siswa, kelas: row.kelas };
-      grouped[key][row.mapel] = parseFloat(row.skor) || 0;
+      }
+
+      // Pastikan hanya merekam nilai pertama kali (jika belum ada nilainya)
+      if (grouped[key][mapelKey] === undefined) {
+        grouped[key][mapelKey] = parseFloat(row.skor) || 0;
+      }
     });
 
     const finalData = Object.values(grouped).map((student) => {
@@ -1308,7 +1330,6 @@ const GuruDashboard = () => {
           @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
           .header-live-bg { background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa); background-size: 400% 400%; animation: gradientBG 15s ease infinite; }
         `}</style>
-
         {/* HEADER ELEGAN */}
         <motion.header
           variants={fadeUp}
@@ -1333,8 +1354,8 @@ const GuruDashboard = () => {
             className="absolute -bottom-20 right-10 w-80 h-80 bg-emerald-100/40 rounded-[35%] backdrop-blur-md -z-10"
           />
 
-          <div>
-            <div className="flex items-center gap-3">
+          <div className="w-full md:w-auto text-center md:text-left">
+            <div className="flex flex-col md:flex-row items-center gap-2 md:gap-3">
               <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">
                 {currentConfig.title}
               </h2>
@@ -1349,9 +1370,9 @@ const GuruDashboard = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap w-full md:w-auto gap-3 z-10">
+          <div className="flex flex-wrap w-full md:w-auto gap-2 z-10">
             {tab === "soal" && (
-              <>
+              <div className="flex gap-2 w-full md:w-auto">
                 <button
                   onClick={() => {
                     setBulkMapel("");
@@ -1367,44 +1388,44 @@ const GuruDashboard = () => {
                 </button>
                 <button
                   onClick={openAddModal}
-                  className="flex-1 md:flex-none bg-linear-to-r from-emerald-600 to-emerald-500 text-white px-5 py-3 rounded-xl font-bold shadow-md shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400"
+                  className="flex-1 md:flex-none bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-5 py-3 rounded-xl font-bold shadow-md shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400"
                 >
                   <Plus size={18} /> Buat Manual
                 </button>
-              </>
+              </div>
             )}
 
             {tab === "nilai" && (
-              <div className="flex flex-wrap w-full gap-2 justify-end">
+              /* REVISI MOBILE: Grid 2 kolom di HP agar tidak berantakan & simetris */
+              <div className="grid grid-cols-2 md:flex md:flex-wrap w-full md:w-auto gap-2 mt-4 md:mt-0">
                 <button
                   onClick={() => handleExport("print")}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-colors shadow-sm"
+                  className="flex justify-center items-center gap-2 md:gap-1.5 px-4 py-3 md:py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-colors shadow-sm w-full md:w-auto"
                 >
-                  <Printer size={14} /> Print
+                  <Printer size={16} className="md:w-3.5 md:h-3.5" /> Print
                 </button>
                 <button
                   onClick={() => handleExport("pdf")}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 text-xs font-bold rounded-xl transition-colors shadow-sm"
+                  className="flex justify-center items-center gap-2 md:gap-1.5 px-4 py-3 md:py-2.5 bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 text-xs font-bold rounded-xl transition-colors shadow-sm w-full md:w-auto"
                 >
-                  <Download size={14} /> PDF
+                  <Download size={16} className="md:w-3.5 md:h-3.5" /> PDF
                 </button>
                 <button
                   onClick={() => handleExport("xls")}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 text-xs font-bold rounded-xl transition-colors shadow-sm"
+                  className="flex justify-center items-center gap-2 md:gap-1.5 px-4 py-3 md:py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 text-xs font-bold rounded-xl transition-colors shadow-sm w-full md:w-auto"
                 >
-                  <Download size={14} /> EXCEL
+                  <Download size={16} className="md:w-3.5 md:h-3.5" /> EXCEL
                 </button>
                 <button
                   onClick={() => handleExport("doc")}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100 text-xs font-bold rounded-xl transition-colors shadow-sm"
+                  className="flex justify-center items-center gap-2 md:gap-1.5 px-4 py-3 md:py-2.5 bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100 text-xs font-bold rounded-xl transition-colors shadow-sm w-full md:w-auto"
                 >
-                  <Download size={14} /> WORD
+                  <Download size={16} className="md:w-3.5 md:h-3.5" /> WORD
                 </button>
               </div>
             )}
           </div>
         </motion.header>
-
         {/* TOGGLE VIEW MODE & STATISTIK (KHUSUS NILAI) */}
         <AnimatePresence mode="wait">
           {tab === "nilai" && (
@@ -1413,45 +1434,51 @@ const GuruDashboard = () => {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
             >
-              <div className="flex items-center gap-2 mb-6 bg-white p-1.5 rounded-xl w-max border border-slate-200 shadow-sm">
+              {/* REVISI MOBILE: Toggle Button Proporsional */}
+              <div className="flex items-center w-full md:w-max p-1.5 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm mx-auto md:mx-0">
                 <button
                   onClick={() => setNilaiViewMode("rekap")}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "rekap" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-800"}`}
+                  className={`flex-1 md:flex-none flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "rekap" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-800"}`}
                 >
                   <TableProperties size={16} /> Buku Nilai
                 </button>
                 <button
                   onClick={() => setNilaiViewMode("log")}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "log" ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                  className={`flex-1 md:flex-none flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "log" ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                 >
                   <LayoutList size={16} /> Log Riwayat
                 </button>
               </div>
 
               {nilaiViewMode === "rekap" && statsNilai && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <Card className="p-4 md:p-5 border-none shadow-sm bg-linear-to-br from-emerald-600 to-emerald-500 text-white rounded-[1.5rem]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">
+                /* REVISI MOBILE: Grid Statistik lebih rapi */
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                  <Card className="p-5 md:p-6 border-none shadow-sm bg-gradient-to-br from-emerald-600 to-emerald-500 text-white rounded-[1.5rem] flex flex-col justify-center items-center sm:items-start">
+                    <p className="text-[11px] font-bold uppercase tracking-widest opacity-80 mb-2">
                       Rata-Rata Umum
                     </p>
-                    <div className="text-2xl md:text-3xl font-bold">
+                    <div className="text-4xl md:text-4xl font-bold">
                       {statsNilai.rataRata}
                     </div>
                   </Card>
-                  <Card className="p-4 md:p-5 border border-emerald-100 shadow-sm bg-emerald-50 rounded-[1.5rem]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/80 mb-1">
+                  <Card className="p-5 md:p-6 border border-emerald-100 shadow-sm bg-emerald-50 rounded-[1.5rem] flex flex-col justify-center items-center sm:items-start">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600/80 mb-2">
                       Nilai Tertinggi
                     </p>
-                    <div className="text-2xl md:text-3xl font-bold text-emerald-700">
+                    <div className="text-4xl md:text-4xl font-bold text-emerald-700">
                       {statsNilai.tertinggi}
                     </div>
                   </Card>
-                  <Card className="p-4 md:p-5 border border-rose-100 shadow-sm bg-rose-50 rounded-[1.5rem]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-rose-600/80 mb-1 flex flex-col sm:block">
-                      <span>Siswa Remedial</span> <span>(&lt; {KKM_SCORE})</span>
+                  <Card className="p-5 md:p-6 border border-rose-100 shadow-sm bg-rose-50 rounded-[1.5rem] flex flex-col justify-center items-center sm:items-start">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-rose-600/80 mb-2 flex items-center gap-1">
+                      Siswa Remedial{" "}
+                      <span className="lowercase font-medium tracking-normal text-rose-500">
+                        (&lt; {KKM_SCORE})
+                      </span>
                     </p>
-                    <div className="text-2xl md:text-3xl font-bold text-rose-600 flex items-center gap-2 mt-1">
-                      <BarChart3 size={20} className="md:w-6 md:h-6" /> {statsNilai.remedial}
+                    <div className="text-4xl md:text-4xl font-bold text-rose-600 flex items-center gap-3 mt-1">
+                      <BarChart3 size={28} className="opacity-50" />{" "}
+                      {statsNilai.remedial}
                     </div>
                   </Card>
                 </div>
@@ -1459,13 +1486,12 @@ const GuruDashboard = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* STATISTIK & TOOLBAR GLOBAL */}
         <motion.div
           variants={fadeUp}
           className="flex flex-col xl:flex-row gap-4"
         >
-          <Card className="p-6 bg-linear-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden flex flex-col justify-center">
+          <Card className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden flex flex-col justify-center">
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <Award size={56} className="text-amber-400" />
             </div>
@@ -1564,13 +1590,14 @@ const GuruDashboard = () => {
                     size={18}
                     className={loading || isSyncing ? "animate-spin" : ""}
                   />
-                  <span className="md:hidden font-bold text-sm">Refresh Data</span>
+                  <span className="md:hidden font-bold text-sm">
+                    Refresh Data
+                  </span>
                 </button>
               </div>
             </div>
           </Card>
         </motion.div>
-
         {/* ========================================== */}
         {/* PANEL AKSI MELAYANG (FLOATING BULK DELETE) */}
         {/* ========================================== */}
@@ -1614,7 +1641,6 @@ const GuruDashboard = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* KONTEN UTAMA: BANK SOAL ATAU NILAI */}
         {loading && data.length === 0 ? (
           <div className="py-20 text-center flex flex-col items-center">
@@ -1653,36 +1679,94 @@ const GuruDashboard = () => {
                         <thead className="sticky top-0 z-20 shadow-sm">
                           <tr>
                             <th
-                              style={{ position: "sticky", left: 0, zIndex: 30, minWidth: "60px" }}
+                              style={{
+                                position: "sticky",
+                                left: 0,
+                                zIndex: 30,
+                                minWidth: "60px",
+                              }}
                               className="px-6 py-5 bg-slate-50 border-b-2 border-r border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center"
-                            >No</th>
+                            >
+                              No
+                            </th>
                             <th
-                              style={{ position: "sticky", left: "60px", zIndex: 30, minWidth: "220px" }}
+                              style={{
+                                position: "sticky",
+                                left: "60px",
+                                zIndex: 30,
+                                minWidth: "220px",
+                              }}
                               className="px-6 py-5 bg-slate-50 border-b-2 border-r border-slate-200 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] text-slate-500 font-bold text-xs uppercase tracking-wider"
-                            >Nama Siswa</th>
-                            <th className="px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center">Kelas</th>
+                            >
+                              Nama Siswa
+                            </th>
+                            <th className="px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center">
+                              Kelas
+                            </th>
                             {pivotNilaiData.mapels.map((m) => (
-                              <th key={m} className="px-6 py-5 bg-slate-50 border-b-2 border-l border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider text-center">{m}</th>
+                              <th
+                                key={m}
+                                className="px-6 py-5 bg-slate-50 border-b-2 border-l border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider text-center"
+                              >
+                                {m}
+                              </th>
                             ))}
-                            <th className="px-6 py-5 bg-emerald-50 border-b-2 border-l border-emerald-200 text-emerald-700 font-bold text-xs uppercase tracking-wider text-center">Rata-Rata</th>
+                            <th className="px-6 py-5 bg-emerald-50 border-b-2 border-l border-emerald-200 text-emerald-700 font-bold text-xs uppercase tracking-wider text-center">
+                              Rata-Rata
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {pivotNilaiData.data.map((item, idx) => (
-                            <tr key={`${item.nama_siswa}_${item.kelas}`} className="hover:bg-emerald-50/40 transition-colors group bg-white">
-                              <td style={{ position: "sticky", left: 0, zIndex: 10, minWidth: "60px" }} className="px-6 py-4 font-bold text-slate-400 bg-white border-r border-slate-100 text-center group-hover:bg-emerald-50 transition-colors">{idx + 1}</td>
-                              <td style={{ position: "sticky", left: "60px", zIndex: 10, minWidth: "220px" }} className="px-6 py-4 font-bold text-slate-800 bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors col-nama">{item.nama_siswa}</td>
-                              <td className="px-6 py-4 text-center"><span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md font-semibold text-[11px] text-slate-600">{item.kelas}</span></td>
+                            <tr
+                              key={`${item.nama_siswa}_${item.kelas}`}
+                              className="hover:bg-emerald-50/40 transition-colors group bg-white"
+                            >
+                              <td
+                                style={{
+                                  position: "sticky",
+                                  left: 0,
+                                  zIndex: 10,
+                                  minWidth: "60px",
+                                }}
+                                className="px-6 py-4 font-bold text-slate-400 bg-white border-r border-slate-100 text-center group-hover:bg-emerald-50 transition-colors"
+                              >
+                                {idx + 1}
+                              </td>
+                              <td
+                                style={{
+                                  position: "sticky",
+                                  left: "60px",
+                                  zIndex: 10,
+                                  minWidth: "220px",
+                                }}
+                                className="px-6 py-4 font-bold text-slate-800 bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors col-nama"
+                              >
+                                {item.nama_siswa}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md font-semibold text-[11px] text-slate-600">
+                                  {item.kelas}
+                                </span>
+                              </td>
                               {pivotNilaiData.mapels.map((m) => {
                                 const skor = item[m];
-                                const isKkmFailed = skor !== undefined && skor < KKM_SCORE;
+                                const isKkmFailed =
+                                  skor !== undefined && skor < KKM_SCORE;
                                 return (
-                                  <td key={m} className={`px-6 py-4 text-center font-bold text-base border-l border-slate-100 ${isKkmFailed ? "text-rose-500 bg-rose-50/50" : "text-slate-600"}`}>
+                                  <td
+                                    key={m}
+                                    className={`px-6 py-4 text-center font-bold text-base border-l border-slate-100 ${isKkmFailed ? "text-rose-500 bg-rose-50/50" : "text-slate-600"}`}
+                                  >
                                     {skor !== undefined ? skor : "-"}
                                   </td>
                                 );
                               })}
-                              <td className={`px-6 py-4 text-center font-bold text-lg border-l border-slate-100 ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600 bg-rose-50" : "text-emerald-600 bg-emerald-50/50"}`}>{item.RataRata}</td>
+                              <td
+                                className={`px-6 py-4 text-center font-bold text-lg border-l border-slate-100 ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600 bg-rose-50" : "text-emerald-600 bg-emerald-50/50"}`}
+                              >
+                                {item.RataRata}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1699,7 +1783,10 @@ const GuruDashboard = () => {
                     </div>
                   ) : (
                     pivotNilaiData.data.map((item, idx) => (
-                      <Card key={`${item.nama_siswa}_${item.kelas}`} className="p-4 bg-white border border-slate-200 shadow-sm rounded-2xl">
+                      <Card
+                        key={`${item.nama_siswa}_${item.kelas}`}
+                        className="p-4 bg-white border border-slate-200 shadow-sm rounded-2xl"
+                      >
                         <div className="flex justify-between items-start mb-3 pb-3 border-b border-slate-100">
                           <span className="font-black text-slate-800 text-[16px] leading-tight line-clamp-2">
                             {idx + 1}. {item.nama_siswa}
@@ -1711,11 +1798,19 @@ const GuruDashboard = () => {
                         <div className="space-y-2 mb-3">
                           {pivotNilaiData.mapels.map((m) => {
                             const skor = item[m];
-                            const isKkmFailed = skor !== undefined && skor < KKM_SCORE;
+                            const isKkmFailed =
+                              skor !== undefined && skor < KKM_SCORE;
                             return (
-                              <div key={m} className="flex justify-between items-center text-sm">
-                                <span className="text-slate-500 font-semibold">{m}</span>
-                                <span className={`font-bold ${isKkmFailed ? "text-rose-500" : "text-slate-700"}`}>
+                              <div
+                                key={m}
+                                className="flex justify-between items-center text-sm"
+                              >
+                                <span className="text-slate-500 font-semibold">
+                                  {m}
+                                </span>
+                                <span
+                                  className={`font-bold ${isKkmFailed ? "text-rose-500" : "text-slate-700"}`}
+                                >
                                   {skor !== undefined ? skor : "-"}
                                 </span>
                               </div>
@@ -1723,8 +1818,12 @@ const GuruDashboard = () => {
                           })}
                         </div>
                         <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Rata-Rata</span>
-                          <span className={`font-black text-lg ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600" : "text-emerald-600"}`}>
+                          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                            Rata-Rata
+                          </span>
+                          <span
+                            className={`font-black text-lg ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600" : "text-emerald-600"}`}
+                          >
                             {item.RataRata}
                           </span>
                         </div>
@@ -1743,35 +1842,81 @@ const GuruDashboard = () => {
                         Tidak ada log ujian terekam.
                       </div>
                     ) : (
-                      <table id="data-table-guru" className="w-full text-left text-sm whitespace-nowrap border-collapse">
+                      <table
+                        id="data-table-guru"
+                        className="w-full text-left text-sm whitespace-nowrap border-collapse"
+                      >
                         <thead className="sticky top-0 z-20 shadow-sm">
                           <tr>
                             {currentConfig.columns.map((col, index) => {
                               const isID = index === 0;
                               const isName = index === 1;
-                              const stickyStyle = isID ? { position: "sticky", left: 0, zIndex: 30, minWidth: "80px" } : isName ? { position: "sticky", left: "80px", zIndex: 30, minWidth: "220px" } : {};
+                              const stickyStyle = isID
+                                ? {
+                                    position: "sticky",
+                                    left: 0,
+                                    zIndex: 30,
+                                    minWidth: "80px",
+                                  }
+                                : isName
+                                  ? {
+                                      position: "sticky",
+                                      left: "80px",
+                                      zIndex: 30,
+                                      minWidth: "220px",
+                                    }
+                                  : {};
                               return (
-                                <th key={col.key} style={stickyStyle} className={`px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider ${isID || isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}>
+                                <th
+                                  key={col.key}
+                                  style={stickyStyle}
+                                  className={`px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider ${isID || isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}
+                                >
                                   {col.label}
                                 </th>
                               );
                             })}
-                            <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider print-hidden">Aksi</th>
+                            <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider print-hidden min-w-[120px]">
+                              Aksi
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {processedData.map((item, i) => (
-                            <tr key={item.id || i} className="hover:bg-emerald-50/40 transition-colors group bg-white">
+                            <tr
+                              key={item.id || i}
+                              className="hover:bg-emerald-50/40 transition-colors group bg-white"
+                            >
                               {currentConfig.columns.map((col, index) => {
                                 const isID = index === 0;
                                 const isName = index === 1;
-                                const stickyStyle = isID ? { position: "sticky", left: 0, zIndex: 10, minWidth: "80px" } : isName ? { position: "sticky", left: "80px", zIndex: 10, minWidth: "220px" } : {};
+                                const stickyStyle = isID
+                                  ? {
+                                      position: "sticky",
+                                      left: 0,
+                                      zIndex: 10,
+                                      minWidth: "80px",
+                                    }
+                                  : isName
+                                    ? {
+                                        position: "sticky",
+                                        left: "80px",
+                                        zIndex: 10,
+                                        minWidth: "220px",
+                                      }
+                                    : {};
                                 return (
-                                  <td key={col.key} style={stickyStyle} className={`px-6 py-4 font-semibold text-slate-700 ${isID || isName ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}>
+                                  <td
+                                    key={col.key}
+                                    style={stickyStyle}
+                                    className={`px-6 py-4 font-semibold text-slate-700 ${isID || isName ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}
+                                  >
                                     {col.key === "status" ? (
                                       <Badge type={item[col.key]} />
                                     ) : col.key === "skor" ? (
-                                      <span className={`text-base font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}>
+                                      <span
+                                        className={`text-base font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}
+                                      >
                                         {item[col.key]}
                                       </span>
                                     ) : (
@@ -1781,9 +1926,23 @@ const GuruDashboard = () => {
                                 );
                               })}
                               <td className="px-6 py-4 text-center print-hidden">
-                                <button onClick={() => handleDelete(item.id)} className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm">
-                                  <Trash2 size={16} />
-                                </button>
+                                <div className="flex items-center justify-center gap-2">
+                                  {/* TOMBOL REVIEW JAWABAN */}
+                                  <button
+                                    onClick={() => openReviewModal(item)}
+                                    className="p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                                    title="Lihat Akurasi/Detail Jawaban"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(item.id)}
+                                    className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                                    title="Hapus Log"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -1801,7 +1960,10 @@ const GuruDashboard = () => {
                     </div>
                   ) : (
                     processedData.map((item, i) => (
-                      <Card key={item.id || i} className="p-4 bg-white border border-slate-200 shadow-sm rounded-2xl">
+                      <Card
+                        key={item.id || i}
+                        className="p-4 bg-white border border-slate-200 shadow-sm rounded-2xl"
+                      >
                         <div className="flex justify-between items-start gap-3 mb-3 pb-3 border-b border-slate-100">
                           <span className="font-black text-slate-800 text-[15px] leading-tight line-clamp-2">
                             {item.nama_siswa}
@@ -1811,29 +1973,48 @@ const GuruDashboard = () => {
                           </span>
                         </div>
                         <div className="space-y-2 mb-4">
-                          {currentConfig.columns.map(col => {
-                            if (col.key === 'id' || col.key === 'nama_siswa') return null;
+                          {currentConfig.columns.map((col) => {
+                            if (col.key === "id" || col.key === "nama_siswa")
+                              return null;
                             return (
-                              <div key={col.key} className="flex justify-between items-center text-sm gap-4">
-                                <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wider shrink-0">{col.label}</span>
+                              <div
+                                key={col.key}
+                                className="flex justify-between items-center text-sm gap-4"
+                              >
+                                <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wider shrink-0">
+                                  {col.label}
+                                </span>
                                 <div className="text-right font-semibold text-slate-700 truncate">
                                   {col.key === "status" ? (
                                     <Badge type={item[col.key]} />
                                   ) : col.key === "skor" ? (
-                                    <span className={`text-[15px] font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}>
+                                    <span
+                                      className={`text-[15px] font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}
+                                    >
                                       {item[col.key]}
                                     </span>
                                   ) : (
-                                    item[col.key] || <span className="text-slate-300">-</span>
+                                    item[col.key] || (
+                                      <span className="text-slate-300">-</span>
+                                    )
                                   )}
                                 </div>
                               </div>
-                            )
+                            );
                           })}
                         </div>
-                        <div className="pt-3 border-t border-slate-100 flex">
-                          <button onClick={() => handleDelete(item.id)} className="w-full py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-red-100 transition-colors">
-                            <Trash2 size={16}/> Hapus Log
+                        <div className="pt-3 border-t border-slate-100 flex gap-2">
+                          <button
+                            onClick={() => openReviewModal(item)}
+                            className="flex-1 py-2.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-blue-100 transition-colors"
+                          >
+                            <Eye size={16} /> Jawaban
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="w-[50px] shrink-0 py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm flex justify-center items-center hover:bg-red-100 transition-colors"
+                          >
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </Card>
@@ -1844,7 +2025,111 @@ const GuruDashboard = () => {
             )}
           </motion.div>
         )}
+        {/* MODAL REVIEW JAWABAN SISWA */}
+        <AnimatePresence>
+          {isReviewModalOpen && reviewData && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-4xl my-auto"
+              >
+                <Card className="p-0 shadow-2xl border-0 rounded-[2rem] bg-white overflow-hidden flex flex-col max-h-[90vh]">
+                  {/* Header */}
+                  <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-800">
+                        Analisis Jawaban Siswa
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        {reviewData.nama_siswa} • {reviewData.mapel}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsReviewModalOpen(false)}
+                      className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full"
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
 
+                  {/* Isi Detail */}
+                  <div className="p-6 overflow-y-auto bg-white scrollbar-thin">
+                    {reviewData.detail_jawaban ? (
+                      // JIKA DATA DETAIL TERSEDIA
+                      <div className="space-y-4">
+                        {JSON.parse(reviewData.detail_jawaban).map(
+                          (item, idx) => {
+                            const isBenar =
+                              String(item.jawab_siswa) === String(item.kunci);
+                            return (
+                              <div
+                                key={idx}
+                                className={`p-4 rounded-2xl border-2 ${isBenar ? "border-emerald-100 bg-emerald-50/30" : "border-rose-100 bg-rose-50/30"}`}
+                              >
+                                <div className="flex justify-between mb-2">
+                                  <span className="font-bold text-slate-500 text-xs uppercase">
+                                    Soal No. {idx + 1}
+                                  </span>
+                                  <Badge
+                                    className={
+                                      isBenar ? "bg-emerald-500" : "bg-rose-500"
+                                    }
+                                  >
+                                    {isBenar ? "Benar" : "Salah"}
+                                  </Badge>
+                                </div>
+                                <p className="text-slate-800 font-medium mb-4">
+                                  {item.tanya}
+                                </p>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                                    <span className="text-[10px] block text-slate-400 font-bold uppercase">
+                                      Pilihan Siswa
+                                    </span>
+                                    <span
+                                      className={`font-bold ${isBenar ? "text-emerald-600" : "text-rose-600"}`}
+                                    >
+                                      {item.jawab_siswa}
+                                    </span>
+                                  </div>
+                                  <div className="p-3 bg-white rounded-xl border border-slate-200">
+                                    <span className="text-[10px] block text-slate-400 font-bold uppercase">
+                                      Kunci Jawaban
+                                    </span>
+                                    <span className="font-bold text-slate-700">
+                                      {item.kunci}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          },
+                        )}
+                      </div>
+                    ) : (
+                      // JIKA DATA DETAIL TIDAK ADA (BELUM TERUPDATE DI DB)
+                      <div className="py-20 text-center">
+                        <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                          <AlertTriangle size={40} />
+                        </div>
+                        <h4 className="text-lg font-bold text-slate-700">
+                          Detail Jawaban Tidak Ditemukan
+                        </h4>
+                        <p className="text-slate-500 text-sm max-w-xs mx-auto mt-2">
+                          Halaman Ujian Siswa perlu diperbarui agar mengirimkan
+                          rincian jawaban ke kolom <b>detail_jawaban</b> di
+                          tabel Nilai.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
         {/* MODAL BUAT/EDIT MANUAL (COMPACT PADA MOBILE) */}
         <AnimatePresence>
           {isModalOpen && tab === "soal" && (
@@ -1874,7 +2159,10 @@ const GuruDashboard = () => {
                     </button>
                   </div>
 
-                  <form onSubmit={handleSave} className="space-y-4 md:space-y-6">
+                  <form
+                    onSubmit={handleSave}
+                    className="space-y-4 md:space-y-6"
+                  >
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 bg-slate-50 p-4 md:p-5 rounded-[1rem] md:rounded-[1.5rem] border border-slate-100">
                       <div className="space-y-1.5">
                         <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
@@ -1963,9 +2251,12 @@ const GuruDashboard = () => {
                         }
                       />
                       <p className="text-[9px] md:text-[10px] font-medium text-amber-600 ml-1 mt-1 flex items-start md:items-center gap-1">
-                        <AlertTriangle size={12} className="shrink-0 mt-0.5 md:mt-0" /> Jangan gunakan kalimat
-                        "Untuk soal nomor 1-5" di dalam teks wacana, karena soal
-                        CBT akan diacak.
+                        <AlertTriangle
+                          size={12}
+                          className="shrink-0 mt-0.5 md:mt-0"
+                        />{" "}
+                        Jangan gunakan kalimat "Untuk soal nomor 1-5" di dalam
+                        teks wacana, karena soal CBT akan diacak.
                       </p>
                     </div>
 
@@ -2013,7 +2304,10 @@ const GuruDashboard = () => {
                         const keyMap = `opsi_${opt.toLowerCase()}`;
                         const isKunci = formData.jawaban_benar === opt;
                         return (
-                          <div key={opt} className="space-y-1 md:space-y-1.5 relative">
+                          <div
+                            key={opt}
+                            className="space-y-1 md:space-y-1.5 relative"
+                          >
                             <label
                               className={`text-[10px] md:text-[11px] font-bold uppercase tracking-wider ml-1 ${isKunci ? "text-emerald-600" : "text-slate-500"}`}
                             >
@@ -2042,7 +2336,7 @@ const GuruDashboard = () => {
                         <select
                           required
                           disabled={isSaving}
-                          className="w-full p-2.5 md:p-3.5 text-xs md:text-sm bg-linear-to-r from-emerald-600 to-emerald-500 border border-emerald-400 text-white rounded-lg md:rounded-xl font-bold outline-none shadow-md cursor-pointer"
+                          className="w-full p-2.5 md:p-3.5 text-xs md:text-sm bg-gradient-to-r from-emerald-600 to-emerald-500 border border-emerald-400 text-white rounded-lg md:rounded-xl font-bold outline-none shadow-md cursor-pointer"
                           value={formData.jawaban_benar || "A"}
                           onChange={(e) =>
                             setFormData({
@@ -2064,7 +2358,7 @@ const GuruDashboard = () => {
                       <button
                         type="submit"
                         disabled={isSaving}
-                        className="w-full bg-linear-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm md:text-sm py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed border border-emerald-400"
+                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm md:text-sm py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed border border-emerald-400"
                       >
                         {isSaving ? (
                           <RefreshCw size={18} className="animate-spin" />
@@ -2080,7 +2374,6 @@ const GuruDashboard = () => {
             </div>
           )}
         </AnimatePresence>
-
         {/* MODAL IMPORT MASAL (SMART PASTE) - COMPACT MOBILE */}
         <AnimatePresence>
           {isBulkOpen && (
@@ -2259,7 +2552,7 @@ const GuruDashboard = () => {
                       <button
                         onClick={handleSaveBulk}
                         disabled={isSaving}
-                        className="w-full bg-linear-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm md:text-sm py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 border border-emerald-400"
+                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-sm md:text-sm py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 border border-emerald-400"
                       >
                         {isSaving ? (
                           <RefreshCw className="animate-spin" size={18} />
@@ -2275,7 +2568,6 @@ const GuruDashboard = () => {
             </div>
           )}
         </AnimatePresence>
-
         {/* MODAL CUSTOM ALERT */}
         <AnimatePresence>
           {customAlert.isOpen && (
@@ -2289,7 +2581,8 @@ const GuruDashboard = () => {
                   <div
                     className={`p-4 md:p-5 rounded-[1.5rem] mb-4 md:mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500 shadow-inner" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500 shadow-inner" : "bg-emerald-50 text-emerald-500 shadow-inner"}`}
                   >
-                    {customAlert.type === "danger" || customAlert.type === "confirm" ? (
+                    {customAlert.type === "danger" ||
+                    customAlert.type === "confirm" ? (
                       <AlertTriangle size={36} className="md:w-10 md:h-10" />
                     ) : customAlert.type === "warning" ? (
                       <AlertTriangle size={36} className="md:w-10 md:h-10" />
@@ -2304,7 +2597,8 @@ const GuruDashboard = () => {
                     {customAlert.message}
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3 w-full">
-                    {customAlert.type === "confirm" || customAlert.type === "danger" ? (
+                    {customAlert.type === "confirm" ||
+                    customAlert.type === "danger" ? (
                       <>
                         <button
                           onClick={closeAlert}
