@@ -509,7 +509,7 @@ const AdminDashboard = () => {
   // State Search, Filter, Sort
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [sortConfig, setSortConfig] = useState({ key: "id", direction: "asc" });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({});
@@ -549,7 +549,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     setSearch("");
     setFilters({});
-    setSortConfig({ key: null, direction: "asc" });
+    setSortConfig({ key: "id", direction: "asc" });
     fetchData(false);
     const intervalId = setInterval(() => fetchData(true), 30000);
     return () => clearInterval(intervalId);
