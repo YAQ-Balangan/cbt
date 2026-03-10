@@ -27,6 +27,7 @@ import {
   AlertTriangle,
   Info,
   Maximize,
+  X,
 } from "lucide-react";
 import { AuthContext } from "../context/AuthContext";
 import { api } from "../api/api";
@@ -62,14 +63,13 @@ const getVal = (obj, keyName) => {
 const formatTanggalLokal = (dateString) => {
   if (!dateString) return "Hari ini";
   try {
-    // Cek apakah formatnya ISO (berisi T dan Z)
     if (String(dateString).includes("T") && String(dateString).includes("Z")) {
       const date = new Date(dateString);
       return date.toLocaleDateString("id-ID", {
         day: "2-digit",
         month: "short",
         year: "numeric",
-      }); // Hasil: 01 Mar 2026
+      });
     }
     return dateString;
   } catch (error) {
@@ -77,7 +77,7 @@ const formatTanggalLokal = (dateString) => {
   }
 };
 
-const KKM_SCORE = 75; // Sesuaikan jika perlu
+const KKM_SCORE = 75;
 const MAX_CHEAT_WARNINGS = 3;
 
 const SiswaDashboard = () => {
@@ -90,7 +90,7 @@ const SiswaDashboard = () => {
   const [myResults, setMyResults] = useState([]);
 
   // ==========================================
-  // 🟢 STATE MESIN UJIAN (EXAM ENGINE)
+  // STATE MESIN UJIAN (EXAM ENGINE)
   // ==========================================
   const [tokens, setTokens] = useState({});
   const [activeExam, setActiveExam] = useState(null);
@@ -103,10 +103,11 @@ const SiswaDashboard = () => {
   const [cheatWarnings, setCheatWarnings] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // STATE FORCE FULLSCREEN BARRIER
+  // STATE UNTUK GAMBAR ZOOM
+  const [zoomedImg, setZoomedImg] = useState(null);
+
   const [requireFullscreen, setRequireFullscreen] = useState(false);
 
-  // STATE CUSTOM ALERT
   const [customAlert, setCustomAlert] = useState({
     isOpen: false,
     type: "info",
@@ -123,12 +124,13 @@ const SiswaDashboard = () => {
     setCustomAlert((prev) => ({ ...prev, isOpen: false }));
   }, []);
 
-  // REFS UNTUK MENCEGAH BUG CLOSURE
   const activeExamRef = useRef(activeExam);
   const answersRef = useRef(answers);
   const soalDataRef = useRef(soalData);
   const isSubmittingRef = useRef(isSubmitting);
   const isAlerting = useRef(false);
+  const timeLeftRef = useRef(timeLeft);
+  const cheatWarningsRef = useRef(cheatWarnings);
 
   useEffect(() => {
     activeExamRef.current = activeExam;
@@ -143,9 +145,16 @@ const SiswaDashboard = () => {
     isSubmittingRef.current = isSubmitting;
   }, [isSubmitting]);
 
-  const userKelas = String(getVal(user, "Kelas") || "").toUpperCase();
-  const isMipaUser = userKelas.includes("MIPA") || userKelas.includes("IPA");
-  const isIpsUser = userKelas.includes("IPS");
+  // ==============================================================
+  // IDENTITAS KELAS SISWA (SMART PARSER - ANTI HARDCODE)
+  // ==============================================================
+  const userKelasFull = String(getVal(user, "Kelas") || "")
+    .toUpperCase()
+    .trim();
+  const userParts = userKelasFull.split(" ");
+  const userTingkat = userParts[0] || ""; // Contoh: "XII"
+  const userJurusan = userParts[1] || ""; // Contoh: "MIPA"
+  const userTingkatJurusan = `${userTingkat} ${userJurusan}`.trim(); // Contoh: "XII MIPA"
 
   // ==========================================
   // 1. SILENT POLLING DATA
@@ -160,47 +169,29 @@ const SiswaDashboard = () => {
         let finalJadwal = [];
         if (jadwalRes && jadwalRes.length > 0) {
           const filteredJadwal = jadwalRes.filter((j) => {
-            const jadwalKelas = String(getVal(j, "Kelas") || "").toUpperCase();
-            const mapel = String(getVal(j, "Mapel") || "").toUpperCase();
+            const jadwalKelasRaw = String(
+              getVal(j, "Kelas") || "",
+            ).toUpperCase();
 
-            let isKelasMatch = false;
-            if (jadwalKelas.includes("SEMUA") || jadwalKelas === "")
-              isKelasMatch = true;
-            else if (jadwalKelas.includes("MIPA") && isMipaUser)
-              isKelasMatch = true;
-            else if (jadwalKelas.includes("IPS") && isIpsUser)
-              isKelasMatch = true;
-            else if (
-              userKelas.includes(jadwalKelas) ||
-              jadwalKelas.includes(userKelas)
-            )
-              isKelasMatch = true;
-            else if (jadwalKelas === "XII" && userKelas.includes("XII"))
-              isKelasMatch = true;
-            else if (jadwalKelas === "XI" && userKelas.includes("XI"))
-              isKelasMatch = true;
-            else if (
-              jadwalKelas === "X" &&
-              userKelas.includes("X") &&
-              !userKelas.includes("XI")
-            )
-              isKelasMatch = true;
+            // Aturan 1: Ujian Global
+            if (jadwalKelasRaw === "" || jadwalKelasRaw.includes("SEMUA"))
+              return true;
 
-            if (!isKelasMatch) return false;
-            if (isMipaUser) {
-              if (mapel === "BAHASA INDONESIA") return false;
-              if (mapel === "EKONOMI" || mapel.includes("(IPS)")) return false;
-            }
-            if (isIpsUser) {
-              if (mapel.includes("(IPA)") || mapel.includes("(MIPA)"))
-                return false;
-            }
-            return true;
+            // Aturan 2: Pencocokan Hierarki Kategori Kelas (Smart Filter)
+            const targetArray = jadwalKelasRaw.split(",").map((t) => t.trim());
+            const isMatch = targetArray.some((target) => {
+              return (
+                target === userKelasFull || // Spesifik (X MIPA 1)
+                target === userTingkatJurusan || // Rumpun (X MIPA)
+                target === userJurusan || // Jurusan (MIPA)
+                target === userTingkat
+              ); // Angkatan (X / XII)
+            });
+
+            return isMatch;
           });
-          finalJadwal =
-            filteredJadwal.length === 0 && jadwalRes.length > 0
-              ? jadwalRes
-              : filteredJadwal;
+
+          finalJadwal = filteredJadwal;
         }
 
         let finalNilai = [];
@@ -232,7 +223,7 @@ const SiswaDashboard = () => {
     fetchData(false);
     const intervalId = setInterval(() => fetchData(true), 30000);
     return () => clearInterval(intervalId);
-  }, [user, userKelas, isMipaUser, isIpsUser]);
+  }, [user, userKelasFull, userTingkat, userJurusan, userTingkatJurusan]);
 
   // ==========================================
   // 2. FUNGSI MEMULAI UJIAN & CEK SESI
@@ -246,18 +237,22 @@ const SiswaDashboard = () => {
     const inputToken = tokens[examId]?.toUpperCase() || "";
     const realToken = String(examToken || "").toUpperCase();
 
-    if (!inputToken)
+    // Abaikan input token jika di server tidak disetting token (kosong)
+    if (realToken && !inputToken) {
       return showAlert(
         "warning",
         "Token Diperlukan",
         "Silakan masukkan TOKEN ujian terlebih dahulu!",
       );
-    if (inputToken !== realToken)
+    }
+    if (realToken && inputToken !== realToken) {
       return showAlert(
         "danger",
         "Akses Ditolak",
         "TOKEN SALAH! Silakan periksa kembali token ujian Anda.",
       );
+    }
+
     const sudahMengerjakan = myResults.some(
       (res) =>
         String(getVal(res, "Mapel")).toUpperCase() ===
@@ -268,7 +263,7 @@ const SiswaDashboard = () => {
       return showAlert(
         "danger",
         "Akses Dibatasi",
-        "Anda sudah mengerjakan ujian ini. Nilai Anda sudah terekam di sistem dan tidak bisa diulang.",
+        "Anda sudah menyelesaikan ujian ini. Nilai Anda sudah terekam di sistem.",
       );
     }
 
@@ -281,7 +276,7 @@ const SiswaDashboard = () => {
     if (elem.requestFullscreen) {
       elem
         .requestFullscreen()
-        .catch(() => console.log("Fullscreen diblokir otomatis oleh browser"));
+        .catch(() => console.log("Fullscreen otomatis tertunda"));
     }
 
     try {
@@ -290,23 +285,23 @@ const SiswaDashboard = () => {
 
       const filterSoal = allSoal.filter((s) => {
         const soalMapel = String(getVal(s, "Mapel")).toUpperCase();
-        const soalKelas = String(getVal(s, "Kelas")).toUpperCase();
+        const soalKelasRaw = String(getVal(s, "Kelas")).toUpperCase();
 
         if (soalMapel !== examMapelUpper) return false;
-        if (soalKelas.includes("SEMUA") || soalKelas === "") return true;
-        if (soalKelas.includes("MIPA") && isMipaUser) return true;
-        if (soalKelas.includes("IPS") && isIpsUser) return true;
-        if (userKelas.includes(soalKelas) || soalKelas.includes(userKelas))
-          return true;
-        if (soalKelas === "XII" && userKelas.includes("XII")) return true;
-        if (soalKelas === "XI" && userKelas.includes("XI")) return true;
-        if (
-          soalKelas === "X" &&
-          userKelas.includes("X") &&
-          !userKelas.includes("XI")
-        )
-          return true;
-        return false;
+
+        if (soalKelasRaw === "" || soalKelasRaw.includes("SEMUA")) return true;
+
+        const targetArray = soalKelasRaw.split(",").map((t) => t.trim());
+        const isMatch = targetArray.some((target) => {
+          return (
+            target === userKelasFull ||
+            target === userTingkatJurusan ||
+            target === userJurusan ||
+            target === userTingkat
+          );
+        });
+
+        return isMatch;
       });
 
       // Acak urutan soal
@@ -340,15 +335,13 @@ const SiswaDashboard = () => {
   };
 
   // ==========================================
-  // 3. KALKULASI SKOR & SUBMIT (REVISI DATA BENAR/SALAH & DETAIL JAWABAN)
+  // 3. KALKULASI SKOR & SUBMIT
   // ==========================================
   const executeEndExam = async (isForced, isCheating) => {
     setIsSubmitting(true);
 
     let skorSiswa = 0;
     let benarCount = 0;
-
-    // VARIABEL BARU: Untuk menyimpan detail jawaban siswa
     let detailJawabanArray = [];
 
     const currentAnswers = answersRef.current;
@@ -358,7 +351,7 @@ const SiswaDashboard = () => {
     currentSoalData.forEach((soal) => {
       const poin = parseFloat(getVal(soal, "Poin")) || 2;
       const idSoal = String(getVal(soal, "id")).trim();
-      const jawabanSiswa = currentAnswers[idSoal] || ""; // Ambil jawaban siswa, kosongkan jika tidak diisi
+      const jawabanSiswa = currentAnswers[idSoal] || "";
       const jawabanBenar = String(getVal(soal, "Jawaban_Benar"))
         .toUpperCase()
         .trim();
@@ -371,11 +364,10 @@ const SiswaDashboard = () => {
         benarCount++;
       }
 
-      // REKAM DETAIL JAWABAN PER NOMOR
       detailJawabanArray.push({
-        tanya: getVal(soal, "Pertanyaan"), // Menyimpan isi pertanyaannya
-        jawab_siswa: jawabanSiswa, // Menyimpan apa yang dipilih siswa
-        kunci: jawabanBenar, // Menyimpan kunci aslinya
+        tanya: getVal(soal, "Pertanyaan"),
+        jawab_siswa: jawabanSiswa,
+        kunci: jawabanBenar,
       });
     });
 
@@ -396,7 +388,6 @@ const SiswaDashboard = () => {
       }
       const nextId = maxId + 1;
 
-      // POST NILAI DENGAN TAMBAHAN BENAR, SALAH, TOTAL SOAL, DAN DETAIL JAWABAN
       await api.create("Nilai", {
         id: nextId,
         nama_siswa: getVal(user, "Nama"),
@@ -407,7 +398,6 @@ const SiswaDashboard = () => {
         salah: salahCount,
         total_soal: totalSoal,
         status: isCheating ? "Diskualifikasi (Curang)" : "Selesai",
-        // MENGUBAH ARRAY KE BENTUK STRING AGAR BISA DISIMPAN DI SHEET/DB
         detail_jawaban: JSON.stringify(detailJawabanArray),
       });
 
@@ -426,7 +416,7 @@ const SiswaDashboard = () => {
         showAlert(
           "danger",
           "UJIAN DIHENTIKAN PAKSA!",
-          "Jawaban Anda dikirim secara otomatis seadanya karena telah melanggar aturan.",
+          "Jawaban Anda dikirim secara otomatis karena telah melanggar aturan.",
         );
       } else if (isForced) {
         showAlert(
@@ -515,7 +505,6 @@ const SiswaDashboard = () => {
         isAlerting.current
       )
         return;
-
       isAlerting.current = true;
 
       setCheatWarnings((prev) => {
@@ -535,7 +524,6 @@ const SiswaDashboard = () => {
             `Sistem Mendeteksi: ${reason}.\n\nJangan ulangi! Jika melampaui batas toleransi, ujian akan dihentikan paksa.`,
           );
         }
-
         setTimeout(() => {
           isAlerting.current = false;
         }, 3000);
@@ -574,7 +562,6 @@ const SiswaDashboard = () => {
       );
     };
 
-    // MENDETEKSI KELUAR FULLSCREEN & MEMBLOKIR LAYAR
     const handleFullscreenChange = () => {
       if (
         !document.fullscreenElement &&
@@ -631,16 +618,13 @@ const SiswaDashboard = () => {
     };
   }, [activeExam, isSubmitting, handleCheatDetected]);
 
-  // FUNGSI UNTUK KEMBALI FULLSCREEN DARI BLOKIRAN
   const reenterFullscreen = () => {
     const elem = document.documentElement;
     if (elem.requestFullscreen) {
       elem
         .requestFullscreen()
-        .then(() => {
-          setRequireFullscreen(false);
-        })
-        .catch((err) => {
+        .then(() => setRequireFullscreen(false))
+        .catch(() => {
           showAlert(
             "warning",
             "Gagal Fullscreen",
@@ -651,10 +635,9 @@ const SiswaDashboard = () => {
   };
 
   // ==========================================
-  // 🟢 RENDER RUANG UJIAN (EXAM ENGINE) SOLID & AMBIENT
+  // RENDER RUANG UJIAN (EXAM ENGINE)
   // ==========================================
   if (activeExam) {
-    // 🔴 LAYER PENGHALANG JIKA KELUAR FULLSCREEN
     if (requireFullscreen) {
       return (
         <div className="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center text-white px-6 text-center">
@@ -667,12 +650,11 @@ const SiswaDashboard = () => {
           </h2>
           <p className="text-slate-300 text-sm md:text-base mb-10 max-w-lg leading-relaxed">
             Ujian ini mewajibkan mode layar penuh untuk mencegah kecurangan.
-            Sistem telah mencatat aktivitas ini sebagai peringatan. Anda tidak
-            dapat melihat soal sebelum kembali.
+            Sistem telah mencatat aktivitas ini sebagai peringatan.
           </p>
           <button
             onClick={reenterFullscreen}
-            className="flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-black py-4 px-8 rounded-2xl shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 active:scale-95 uppercase tracking-widest"
+            className="flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black py-4 px-8 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95 uppercase tracking-widest"
           >
             <Maximize size={20} /> Lanjutkan Ujian
           </button>
@@ -682,6 +664,29 @@ const SiswaDashboard = () => {
 
     const examMapel = getVal(activeExam, "Mapel");
     const currentSoal = soalData[currentSoalIndex];
+
+    if (!currentSoal) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-100 flex-col">
+          <ShieldAlert size={64} className="text-red-500 mb-4" />
+          <h2 className="text-xl font-bold">Soal Belum Tersedia!</h2>
+          <p className="text-slate-500 mt-2 mb-6 text-center max-w-md">
+            Guru belum mengunggah soal untuk ujian ini atau salah memberikan tag
+            kelas. Harap lapor ke Pengawas.
+          </p>
+          <button
+            onClick={() => {
+              setActiveExam(null);
+              setRequireFullscreen(false);
+            }}
+            className="px-6 py-3 bg-slate-800 text-white rounded-lg font-bold"
+          >
+            Kembali ke Beranda
+          </button>
+        </div>
+      );
+    }
+
     const currentSoalId = String(getVal(currentSoal, "id")).trim();
     const answeredCount = Object.keys(answers).length;
     const progressPercent =
@@ -689,29 +694,17 @@ const SiswaDashboard = () => {
 
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none relative overflow-hidden">
-        {/* CSS AMBIENT BACKGROUND & ANIMATED BLOBS */}
         <style type="text/css">{`
-          @keyframes blob {
-            0% { transform: translate(0px, 0px) scale(1); }
-            33% { transform: translate(30px, -50px) scale(1.1); }
-            66% { transform: translate(-20px, 20px) scale(0.9); }
-            100% { transform: translate(0px, 0px) scale(1); }
-          }
-          .animate-blob { animation: blob 7s infinite; }
-          .animation-delay-2000 { animation-delay: 2s; }
-          .animation-delay-4000 { animation-delay: 4s; }
-          .exam-ambient-bg {
-            background: linear-gradient(135deg, #f8fafc, #f1f5f9, #e2e8f0);
-          }
+          @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
+          .animate-blob { animation: blob 7s infinite; } .animation-delay-2000 { animation-delay: 2s; } .animation-delay-4000 { animation-delay: 4s; }
+          .exam-ambient-bg { background: linear-gradient(135deg, #f8fafc, #f1f5f9, #e2e8f0); }
         `}</style>
 
-        {/* Background Ambient Elements */}
         <div className="absolute inset-0 exam-ambient-bg z-0"></div>
         <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-emerald-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob z-0"></div>
         <div className="absolute top-[20%] right-[-10%] w-96 h-96 bg-teal-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000 z-0"></div>
         <div className="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-slate-300/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000 z-0"></div>
 
-        {/* HEADER GLASSMORPHISM */}
         <header className="bg-white/70 backdrop-blur-xl border-b border-white/50 sticky top-0 z-50 shadow-sm px-4 py-3 flex justify-between items-center relative">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl shadow-md hidden md:block">
@@ -750,23 +743,21 @@ const SiswaDashboard = () => {
           </div>
         </header>
 
-        {/* MAIN CONTENT AREA: SOLID FIXED LAYOUT UNTUK LAPTOP */}
         <main className="flex-1 w-full max-w-7xl mx-auto p-3 md:p-5 flex flex-col justify-center animate-fade-in z-10 relative">
           {loadingSoal ? (
             <div className="flex flex-col items-center justify-center h-full m-auto">
               <RefreshCw
-                className="animate-spin text-emerald-500 mb-4 drop-shadow-md"
+                className="animate-spin text-emerald-500 mb-4"
                 size={48}
               />
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter drop-shadow-sm">
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">
                 Menyiapkan Naskah Soal...
               </h2>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 w-full h-[calc(100vh-100px)] lg:h-[calc(100vh-120px)] min-h-[500px]">
-              {/* KOLOM KIRI: SOAL (SOLID & SCROLL INSIDE) */}
+              {/* KIRI: SOAL */}
               <div className="lg:col-span-8 flex flex-col h-full bg-white/80 backdrop-blur-2xl border border-white rounded-[2rem] shadow-xl overflow-hidden">
-                {/* Header Soal */}
                 <div className="px-6 py-4 border-b border-slate-200/60 bg-white/40 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-3">
                     <span className="bg-slate-800 text-white font-black px-4 py-1.5 rounded-lg text-sm shadow-md">
@@ -786,7 +777,6 @@ const SiswaDashboard = () => {
                   )}
                 </div>
 
-                {/* Body Soal (Scrollable Area) */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8 flex flex-col">
                   {getVal(currentSoal, "Wacana") && (
                     <div className="p-5 bg-amber-50/70 border border-amber-200/80 rounded-2xl relative shadow-sm mb-6">
@@ -803,13 +793,27 @@ const SiswaDashboard = () => {
                     {getVal(currentSoal, "Pertanyaan")}
                   </p>
 
+                  {/* PERBAIKAN FITUR GAMBAR TERPOTONG & CLICK TO ZOOM */}
                   {getVal(currentSoal, "Link_Gambar") && (
-                    <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-md pointer-events-none">
-                      <img
-                        src={getVal(currentSoal, "Link_Gambar")}
-                        alt="Pendukung"
-                        className="w-full object-contain"
-                      />
+                    <div className="mb-6 w-full flex justify-start">
+                      <div
+                        onClick={() =>
+                          setZoomedImg(getVal(currentSoal, "Link_Gambar"))
+                        }
+                        className="relative group cursor-pointer rounded-2xl border border-slate-200 shadow-sm bg-white p-1.5 md:p-2 inline-block w-fit max-w-full"
+                        title="Klik untuk memperbesar gambar"
+                      >
+                        <img
+                          src={getVal(currentSoal, "Link_Gambar")}
+                          alt="Gambar Pendukung"
+                          className="max-w-full h-auto max-h-[40vh] md:max-h-[50vh] object-contain rounded-xl"
+                        />
+                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                          <span className="text-white font-bold bg-slate-900/80 px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg backdrop-blur-sm">
+                            <Maximize size={18} /> Klik Perbesar
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -843,14 +847,13 @@ const SiswaDashboard = () => {
                   </div>
                 </div>
 
-                {/* Footer Soal (Navigasi Kiri/Kanan) */}
                 <div className="px-6 py-4 border-t border-slate-200/60 bg-white/40 flex justify-between items-center shrink-0">
                   <button
                     onClick={() =>
                       setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
                     }
                     disabled={currentSoalIndex === 0}
-                    className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 flex items-center gap-2 transition-all shadow-sm"
+                    className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-slate-50 disabled:opacity-40 flex items-center gap-2 shadow-sm"
                   >
                     <ArrowLeft size={16} />{" "}
                     <span className="hidden sm:block">Sebelumnya</span>
@@ -862,7 +865,7 @@ const SiswaDashboard = () => {
                       )
                     }
                     disabled={currentSoalIndex === soalData.length - 1}
-                    className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-95 uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-40 transition-all"
+                    className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-bold shadow-lg uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-40"
                   >
                     <span className="hidden sm:block">Selanjutnya</span>{" "}
                     <ArrowRight size={16} />
@@ -870,7 +873,7 @@ const SiswaDashboard = () => {
                 </div>
               </div>
 
-              {/* KOLOM KANAN: NAVIGASI NOMOR (SOLID & SCROLL INSIDE) */}
+              {/* KANAN: NAVIGASI NOMOR */}
               <div className="lg:col-span-4 flex flex-col h-full bg-white/80 backdrop-blur-2xl border border-white rounded-[2rem] shadow-xl overflow-hidden">
                 <div className="p-6 border-b border-slate-200/60 bg-white/40 shrink-0">
                   <div className="flex justify-between items-end mb-2">
@@ -883,7 +886,7 @@ const SiswaDashboard = () => {
                   </div>
                   <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden shadow-inner">
                     <div
-                      className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full transition-all duration-500 ease-out rounded-full"
+                      className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full transition-all duration-500 rounded-full"
                       style={{ width: `${progressPercent}%` }}
                     ></div>
                   </div>
@@ -903,17 +906,9 @@ const SiswaDashboard = () => {
                         <button
                           key={idx}
                           onClick={() => setCurrentSoalIndex(idx)}
-                          className={`aspect-square flex items-center justify-center rounded-xl font-bold text-sm transition-all duration-200 border-2 
+                          className={`aspect-square flex items-center justify-center rounded-xl font-bold text-sm transition-all border-2 
                             ${isCurrent ? "scale-110 shadow-lg ring-4 ring-slate-800/10 z-10 border-slate-800" : "hover:scale-105 border-transparent"} 
-                            ${
-                              hasAnswered
-                                ? isCurrent
-                                  ? "bg-emerald-500 text-white"
-                                  : "bg-emerald-500 text-white shadow-md border-emerald-600"
-                                : isCurrent
-                                  ? "bg-slate-800 text-white"
-                                  : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm"
-                            }
+                            ${hasAnswered ? (isCurrent ? "bg-emerald-500 text-white" : "bg-emerald-500 text-white shadow-md border-emerald-600") : isCurrent ? "bg-slate-800 text-white" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50 shadow-sm"}
                           `}
                         >
                           {idx + 1}
@@ -927,13 +922,13 @@ const SiswaDashboard = () => {
                   <button
                     onClick={() => handleEndExamClick(false, false)}
                     disabled={isSubmitting}
-                    className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-xl shadow-xl shadow-slate-900/20 active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 disabled:opacity-70"
+                    className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-xl shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 disabled:opacity-70"
                   >
                     {isSubmitting ? (
                       <RefreshCw size={20} className="animate-spin" />
                     ) : (
                       <CheckCircle2 size={20} />
-                    )}
+                    )}{" "}
                     {isSubmitting ? "Menyimpan..." : "Kumpulkan Ujian"}
                   </button>
                 </div>
@@ -942,14 +937,42 @@ const SiswaDashboard = () => {
           )}
         </main>
 
-        {/* MODAL CUSTOM ALERT DI DALAM UJIAN (Z-INDEX SUPER TINGGI) */}
+        {/* OVERLAY LAYAR PENUH UNTUK ZOOM GAMBAR */}
+        <AnimatePresence>
+          {zoomedImg && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setZoomedImg(null)}
+              className="fixed inset-0 z-[999999] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-4 md:p-10 cursor-zoom-out"
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setZoomedImg(null);
+                }}
+                className="absolute top-6 right-6 text-white bg-slate-800/50 hover:bg-red-500 p-2 rounded-full transition-colors z-10 shadow-lg"
+              >
+                <X size={28} />
+              </button>
+              <img
+                src={zoomedImg}
+                alt="Zoomed"
+                className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {customAlert.isOpen && (
             <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
               <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
               >
                 <Card className="w-full max-w-md p-8 shadow-2xl border border-white/20 rounded-[2rem] bg-white/95 backdrop-blur-xl text-center flex flex-col items-center">
                   <div
@@ -963,7 +986,7 @@ const SiswaDashboard = () => {
                       <AlertTriangle size={48} />
                     )}
                   </div>
-                  <h3 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">
+                  <h3 className="text-2xl font-black text-slate-800 mb-3">
                     {customAlert.title}
                   </h3>
                   <p className="text-sm text-slate-600 mb-8 font-medium px-2 leading-relaxed whitespace-pre-wrap">
@@ -974,7 +997,7 @@ const SiswaDashboard = () => {
                       <>
                         <button
                           onClick={closeAlert}
-                          className="flex-1 py-3.5 px-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm uppercase tracking-widest"
+                          className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm uppercase tracking-widest"
                         >
                           Batal
                         </button>
@@ -984,7 +1007,7 @@ const SiswaDashboard = () => {
                               ? customAlert.onConfirm
                               : closeAlert
                           }
-                          className={`flex-1 py-3.5 px-4 rounded-xl font-bold text-white shadow-lg transition-all text-sm uppercase tracking-widest bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-emerald-500/30`}
+                          className="flex-1 py-3.5 rounded-xl font-bold text-white shadow-lg transition-all text-sm uppercase tracking-widest bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600"
                         >
                           Ya, Kumpulkan
                         </button>
@@ -992,7 +1015,7 @@ const SiswaDashboard = () => {
                     ) : (
                       <button
                         onClick={closeAlert}
-                        className={`w-full py-3.5 px-4 rounded-xl font-bold text-white shadow-lg text-sm uppercase tracking-widest transition-all ${customAlert.type === "danger" ? "bg-gradient-to-r from-red-500 to-red-600 shadow-red-500/30" : "bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-emerald-500/30"}`}
+                        className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg text-sm uppercase tracking-widest transition-all ${customAlert.type === "danger" ? "bg-gradient-to-r from-red-500 to-red-600" : "bg-gradient-to-r from-emerald-500 to-emerald-600"}`}
                       >
                         Mengerti
                       </button>
@@ -1008,7 +1031,7 @@ const SiswaDashboard = () => {
   }
 
   // ==========================================
-  // 🟢 RENDER LOBBY & HASIL UJIAN (DEFAULT VIEW)
+  // RENDER LOBBY & HASIL UJIAN (DEFAULT VIEW)
   // ==========================================
   return (
     <Dashboard
@@ -1020,28 +1043,12 @@ const SiswaDashboard = () => {
       setActive={setActiveTab}
     >
       <style type="text/css">{`
-        @keyframes gradientBG {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        .header-live-bg {
-          background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa);
-          background-size: 400% 400%;
-          animation: gradientBG 15s ease infinite;
-        }
-          @keyframes blob {
-          0% { transform: translate(0px, 0px) scale(1); }
-          33% { transform: translate(30px, -50px) scale(1.1); }
-          66% { transform: translate(-20px, 20px) scale(0.9); }
-          100% { transform: translate(0px, 0px) scale(1); }
-        }
-        .animate-blob { animation: blob 7s infinite; }
-        .animation-delay-2000 { animation-delay: 2s; }
-        .animation-delay-4000 { animation-delay: 4s; }
+        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .header-live-bg { background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa); background-size: 400% 400%; animation: gradientBG 15s ease infinite; }
+        @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
+        .animate-blob { animation: blob 7s infinite; } .animation-delay-2000 { animation-delay: 2s; } .animation-delay-4000 { animation-delay: 4s; }
       `}</style>
 
-      {/* TAMBAHKAN ELEMEN BACKGROUND INI TEPAT DI BAWAH STYLE */}
       <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 z-0 pointer-events-none"></div>
       <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-emerald-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob z-0 pointer-events-none"></div>
       <div className="fixed top-[20%] right-[-10%] w-[400px] h-[400px] bg-teal-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000 z-0 pointer-events-none"></div>
@@ -1092,7 +1099,7 @@ const SiswaDashboard = () => {
                 Kelas Anda
               </p>
               <p className="font-black text-xl text-slate-800 leading-none">
-                {userKelas || "-"}
+                {userKelasFull || "-"}
               </p>
             </div>
           </motion.header>
@@ -1166,7 +1173,7 @@ const SiswaDashboard = () => {
                         />
                         <button
                           onClick={() => handleStartExam(ex)}
-                          className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-black px-6 py-3.5 rounded-xl shadow-md shadow-emerald-500/30 active:scale-95 transition-all uppercase tracking-widest text-sm"
+                          className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 text-white font-black px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-all uppercase tracking-widest text-sm"
                         >
                           MULAI
                         </button>
@@ -1246,7 +1253,6 @@ const SiswaDashboard = () => {
                 const isDiskualifikasi = status
                   .toLowerCase()
                   .includes("diskualifikasi");
-
                 const benarCount = getVal(res, "Benar");
                 const salahCount = getVal(res, "Salah");
                 const totalCount = getVal(res, "Total_Soal");
@@ -1275,7 +1281,6 @@ const SiswaDashboard = () => {
                         </span>
                       </div>
 
-                      {/* INFO STATISTIK BENAR SALAH */}
                       <div className="grid grid-cols-3 gap-2 mt-2 pt-4 border-t border-slate-100">
                         <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-center">
                           <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
@@ -1311,7 +1316,6 @@ const SiswaDashboard = () => {
         </motion.div>
       )}
 
-      {/* MODAL LOBBY ALERT */}
       <AnimatePresence>
         {customAlert.isOpen && (
           <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">

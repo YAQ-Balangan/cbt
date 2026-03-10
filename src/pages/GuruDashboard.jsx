@@ -1,5 +1,5 @@
 // src/pages/GuruDashboard.jsx
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useContext } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Layers,
@@ -31,11 +31,14 @@ import {
   ListChecks,
   Link2,
   Eye,
-  XCircle,
+  ImagePlus,
+  Undo,
+  Redo,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
+import { AuthContext } from "../context/AuthContext";
 
 // IMPORT LIBRARY EXPORT
 import * as XLSX from "xlsx";
@@ -54,7 +57,7 @@ import {
 import { saveAs } from "file-saver";
 
 // ==========================================
-// HELPER: PENYELAMAT FORMAT TANGGAL SHEETS
+// HELPER: FORMAT POIN
 // ==========================================
 const formatPoinDisplay = (val) => {
   if (val === undefined || val === null || val === "") return "2";
@@ -299,39 +302,51 @@ const PremiumMultiSelect = ({
 };
 
 // ==========================================
-// DATA REFERENSI LENGKAP KELAS
+// GENERATOR OPSI KELAS OTOMATIS
 // ==========================================
+const TINGKAT_SEKOLAH = ["X", "XI", "XII"];
+const JURUSAN_SEKOLAH = ["MIPA", "IPS"];
+const MAKSIMAL_ROMBEL = 2;
+
 const OPSI_KELAS_LENGKAP = [
-  { label: "KATEGORI JURUSAN", isLabel: true },
-  { label: "Semua MIPA", value: "MIPA" },
-  { label: "Semua IPS", value: "IPS" },
-  { label: "KATEGORI TINGKAT", isLabel: true },
-  { label: "Semua Kelas X", value: "Kelas X" },
-  { label: "Semua Kelas XI", value: "Kelas XI" },
-  { label: "Semua Kelas XII", value: "Kelas XII" },
-  { label: "KATEGORI TINGKAT & JURUSAN", isLabel: true },
-  { label: "X MIPA", value: "X MIPA" },
-  { label: "X IPS", value: "X IPS" },
-  { label: "XI MIPA", value: "XI MIPA" },
-  { label: "XI IPS", value: "XI IPS" },
-  { label: "XII MIPA", value: "XII MIPA" },
-  { label: "XII IPS", value: "XII IPS" },
-  { label: "KELAS SPESIFIK (X)", isLabel: true },
-  { label: "X MIPA 1", value: "X MIPA 1" },
-  { label: "X MIPA 2", value: "X MIPA 2" },
-  { label: "X IPS 1", value: "X IPS 1" },
-  { label: "X IPS 2", value: "X IPS 2" },
-  { label: "KELAS SPESIFIK (XI)", isLabel: true },
-  { label: "XI MIPA 1", value: "XI MIPA 1" },
-  { label: "XI MIPA 2", value: "XI MIPA 2" },
-  { label: "XI IPS 1", value: "XI IPS 1" },
-  { label: "XI IPS 2", value: "XI IPS 2" },
-  { label: "KELAS SPESIFIK (XII)", isLabel: true },
-  { label: "XII MIPA 1", value: "XII MIPA 1" },
-  { label: "XII MIPA 2", value: "XII MIPA 2" },
-  { label: "XII IPS 1", value: "XII IPS 1" },
-  { label: "XII IPS 2", value: "XII IPS 2" },
+  { label: "KATEGORI GLOBAL", isLabel: true },
+  { label: "Semua Kelas (Umum)", value: "SEMUA" },
 ];
+
+OPSI_KELAS_LENGKAP.push({
+  label: "KATEGORI TINGKAT (GABUNGAN JURUSAN)",
+  isLabel: true,
+});
+TINGKAT_SEKOLAH.forEach((t) => {
+  OPSI_KELAS_LENGKAP.push({
+    label: `Kelas ${t} (Gabungan MIPA & IPS)`,
+    value: t,
+  });
+});
+
+OPSI_KELAS_LENGKAP.push({ label: "KATEGORI JURUSAN GLOBAL", isLabel: true });
+JURUSAN_SEKOLAH.forEach((j) => {
+  OPSI_KELAS_LENGKAP.push({ label: `Semua ${j} (X, XI, XII)`, value: j });
+});
+
+OPSI_KELAS_LENGKAP.push({ label: "KATEGORI TINGKAT & JURUSAN", isLabel: true });
+TINGKAT_SEKOLAH.forEach((t) => {
+  JURUSAN_SEKOLAH.forEach((j) => {
+    OPSI_KELAS_LENGKAP.push({ label: `${t} ${j}`, value: `${t} ${j}` });
+  });
+});
+
+OPSI_KELAS_LENGKAP.push({ label: "KELAS SPESIFIK (ROMBEL)", isLabel: true });
+TINGKAT_SEKOLAH.forEach((t) => {
+  JURUSAN_SEKOLAH.forEach((j) => {
+    for (let i = 1; i <= MAKSIMAL_ROMBEL; i++) {
+      OPSI_KELAS_LENGKAP.push({
+        label: `${t} ${j} ${i}`,
+        value: `${t} ${j} ${i}`,
+      });
+    }
+  });
+});
 
 const TAB_CONFIG = {
   soal: {
@@ -352,6 +367,7 @@ const TAB_CONFIG = {
       opsi_d: "",
       opsi_e: "",
       jawaban_benar: "A",
+      guru_pembuat: "",
     },
     filterKeys: ["mapel", "kelas"],
   },
@@ -383,32 +399,36 @@ const MENU_ITEMS = [
 const KKM_SCORE = 75;
 
 const GuruDashboard = () => {
+  const { user } = useContext(AuthContext);
+  const namaGuruLog = user?.nama || user?.username || "Guru";
+
   const [tab, setTab] = useState("soal");
   const [data, setData] = useState([]);
+  const currentConfig = TAB_CONFIG[tab];
 
-  // State Mapel Dinamis Backend
+  // STATE & API GAMBAR
+  const IMGBB_API_KEY = "db28c000ce57b260d7d09cb4c18790e0";
+  const [uploadingImgId, setUploadingImgId] = useState(null);
+
+  // LOGIKA UNDO / REDO
+  const [actionHistory, setActionHistory] = useState({ undo: [], redo: [] });
+  const [isDoingHistory, setIsDoingHistory] = useState(false);
+
   const [mapelOptions, setMapelOptions] = useState([]);
-
-  // Loading States
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
 
-  // Filter & Search
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({});
-
-  // Ceklis / Bulk Selection
   const [selectedIds, setSelectedIds] = useState([]);
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({});
   const [isEdit, setIsEdit] = useState(false);
   const [originalId, setOriginalId] = useState(null);
 
-  // Modal Review Jawaban Siswa
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewData, setReviewData] = useState(null);
 
@@ -420,7 +440,6 @@ const GuruDashboard = () => {
     onConfirm: null,
   });
 
-  // State Import Masal
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [parsedBulkData, setParsedBulkData] = useState([]);
@@ -431,14 +450,98 @@ const GuruDashboard = () => {
 
   const [nilaiViewMode, setNilaiViewMode] = useState("rekap");
 
-  const currentConfig = TAB_CONFIG[tab];
-
   const showAlert = (type, title, message, onConfirm = null) => {
     setCustomAlert({ isOpen: true, type, title, message, onConfirm });
   };
   const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
 
-  // --- FETCH DATA MATA PELAJARAN DINAMIS ---
+  // --- REKAM JEJAK SEJARAH (UNDO/REDO LOGGER) ---
+  const pushAction = (action) => {
+    setActionHistory((prev) => ({ undo: [...prev.undo, action], redo: [] }));
+  };
+
+  const handleUndo = async () => {
+    if (actionHistory.undo.length === 0) return;
+    const action = actionHistory.undo[actionHistory.undo.length - 1];
+    setIsDoingHistory(true);
+    try {
+      if (action.type === "DELETE") {
+        await api.create(currentConfig.sheet, action.item);
+      } else if (action.type === "CREATE") {
+        await api.delete(currentConfig.sheet, action.item.id);
+      } else if (action.type === "UPDATE") {
+        await api.update(
+          currentConfig.sheet,
+          action.oldItem.id,
+          action.oldItem,
+        );
+      } else if (action.type === "BULK_DELETE") {
+        for (let it of action.items) {
+          await api.create(currentConfig.sheet, it);
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      } else if (action.type === "BULK_CREATE") {
+        for (let it of action.items) {
+          await api.delete(currentConfig.sheet, it.id);
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
+
+      setActionHistory((prev) => ({
+        undo: prev.undo.slice(0, -1),
+        redo: [...prev.redo, action],
+      }));
+      await fetchData(false);
+    } catch (err) {
+      showAlert(
+        "danger",
+        "Undo Gagal",
+        "Gagal membatalkan aksi: " + err.message,
+      );
+    } finally {
+      setIsDoingHistory(false);
+    }
+  };
+
+  const handleRedo = async () => {
+    if (actionHistory.redo.length === 0) return;
+    const action = actionHistory.redo[actionHistory.redo.length - 1];
+    setIsDoingHistory(true);
+    try {
+      if (action.type === "DELETE") {
+        await api.delete(currentConfig.sheet, action.item.id);
+      } else if (action.type === "CREATE") {
+        await api.create(currentConfig.sheet, action.item);
+      } else if (action.type === "UPDATE") {
+        await api.update(
+          currentConfig.sheet,
+          action.newItem.id,
+          action.newItem,
+        );
+      } else if (action.type === "BULK_DELETE") {
+        for (let it of action.items) {
+          await api.delete(currentConfig.sheet, it.id);
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      } else if (action.type === "BULK_CREATE") {
+        for (let it of action.items) {
+          await api.create(currentConfig.sheet, it);
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
+
+      setActionHistory((prev) => ({
+        undo: [...prev.undo, action],
+        redo: prev.redo.slice(0, -1),
+      }));
+      await fetchData(false);
+    } catch (err) {
+      showAlert("danger", "Redo Gagal", "Gagal mengulang aksi: " + err.message);
+    } finally {
+      setIsDoingHistory(false);
+    }
+  };
+
   const fetchMapelList = async () => {
     try {
       const res = await api.read("Mapel");
@@ -447,25 +550,20 @@ const GuruDashboard = () => {
         setMapelOptions([...new Set(list)].sort());
       }
     } catch (error) {
-      console.error("Gagal menarik data Mapel:", error);
+      console.error("Gagal menarik Mapel", error);
     }
   };
 
-  // --- FETCH DATA UTAMA ---
   const fetchData = async (isBackground = false) => {
     if (!currentConfig) return;
     if (!isBackground) setLoading(true);
-
     try {
       const result = await api.read(currentConfig.sheet);
       const newData = result || [];
-      setData((prevData) => {
-        const isDataChanged =
-          JSON.stringify(prevData) !== JSON.stringify(newData);
-        return isDataChanged ? newData : prevData;
-      });
+      setData((prev) =>
+        JSON.stringify(prev) !== JSON.stringify(newData) ? newData : prev,
+      );
     } catch (error) {
-      console.error("Gagal menarik data:", error);
       if (!isBackground) setData([]);
     } finally {
       if (isBackground) setIsSyncing(false);
@@ -476,7 +574,7 @@ const GuruDashboard = () => {
   useEffect(() => {
     setSearch("");
     setFilters({});
-    setSelectedIds([]); // Reset seleksi saat ganti tab
+    setSelectedIds([]);
     fetchMapelList();
     fetchData(false);
     const intervalId = setInterval(() => fetchData(true), 30000);
@@ -484,22 +582,108 @@ const GuruDashboard = () => {
   }, [tab]);
 
   // ==============================================================
-  // FUNGSI CRUD SEKARANG TIDAK ME-REFRESH HALAMAN (OPTIMISTIC UI)
+  // UX LUAR: UPLOAD GAMBAR LANGSUNG PADA KARTU SOAL
   // ==============================================================
+  const handleInlineImageUpload = async (e, item) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      return showAlert(
+        "warning",
+        "Ukuran Gambar Terlalu Besar",
+        "Maksimal ukuran gambar adalah 2MB. Silakan kompres foto Anda.",
+      );
+    }
+
+    setUploadingImgId(item.id);
+    const formDataUpload = new FormData();
+    formDataUpload.append("image", file);
+
+    try {
+      const res = await fetch(
+        `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
+        {
+          method: "POST",
+          body: formDataUpload,
+        },
+      );
+      const dataImg = await res.json();
+
+      if (dataImg.success) {
+        const safeUrl = `https://wsrv.nl/?url=${dataImg.data.url}`;
+        const payloadToSave = {
+          ...item,
+          link_gambar: safeUrl,
+          poin: parseFloat(item.poin),
+        };
+
+        const resApi = await api.update(
+          currentConfig.sheet,
+          item.id,
+          payloadToSave,
+        );
+        if (resApi && resApi.error) throw new Error(resApi.error.message);
+
+        setData((prev) =>
+          prev.map((d) =>
+            String(d.id) === String(item.id) ? payloadToSave : d,
+          ),
+        );
+        pushAction({ type: "UPDATE", oldItem: item, newItem: payloadToSave });
+      } else {
+        throw new Error("Gagal mengunggah gambar ke server. Coba lagi nanti.");
+      }
+    } catch (err) {
+      showAlert("danger", "Upload Gagal", err.message);
+    } finally {
+      setUploadingImgId(null);
+      e.target.value = null; // Reset file input
+    }
+  };
+
+  const handleRemoveInlineImage = async (item) => {
+    setUploadingImgId(item.id);
+    try {
+      const payloadToSave = {
+        ...item,
+        link_gambar: "",
+        poin: parseFloat(item.poin),
+      };
+      const resApi = await api.update(
+        currentConfig.sheet,
+        item.id,
+        payloadToSave,
+      );
+      if (resApi && resApi.error) throw new Error(resApi.error.message);
+
+      setData((prev) =>
+        prev.map((d) => (String(d.id) === String(item.id) ? payloadToSave : d)),
+      );
+      pushAction({ type: "UPDATE", oldItem: item, newItem: payloadToSave });
+    } catch (err) {
+      showAlert("danger", "Gagal Hapus Gambar", err.message);
+    } finally {
+      setUploadingImgId(null);
+    }
+  };
 
   const handleDelete = async (id) => {
     showAlert(
       "confirm",
       "Hapus Data?",
-      `Yakin ingin menghapus data dengan ID: #${id}? Tindakan ini permanen.`,
+      `Yakin ingin menghapus data dengan ID: #${id}?`,
       async () => {
         closeAlert();
         setLoading(true);
         try {
-          await api.delete(currentConfig.sheet, id);
-          setData((prev) =>
-            prev.filter((item) => String(item.id) !== String(id)),
-          );
+          const itemToDelete = data.find((d) => String(d.id) === String(id));
+          const res = await api.delete(currentConfig.sheet, id);
+          if (res && res.error)
+            throw new Error(res.error.message || JSON.stringify(res.error));
+
+          if (itemToDelete) pushAction({ type: "DELETE", item: itemToDelete });
+          await fetchData(false);
           setSelectedIds((prev) =>
             prev.filter((selId) => String(selId) !== String(id)),
           );
@@ -516,25 +700,24 @@ const GuruDashboard = () => {
     showAlert(
       "confirm",
       "Hapus Banyak Soal?",
-      `Yakin ingin menghapus ${selectedIds.length} soal yang Anda pilih secara permanen?`,
+      `Yakin ingin menghapus ${selectedIds.length} soal?`,
       async () => {
         closeAlert();
         setIsDeletingBulk(true);
         setLoading(true);
         try {
+          const itemsToDelete = data.filter((d) => selectedIds.includes(d.id));
           for (let i = 0; i < selectedIds.length; i++) {
-            await api.delete(currentConfig.sheet, selectedIds[i]);
+            const res = await api.delete(currentConfig.sheet, selectedIds[i]);
+            if (res && res.error)
+              throw new Error(res.error.message || JSON.stringify(res.error));
+            await new Promise((r) => setTimeout(r, 300));
           }
-          setData((prev) =>
-            prev.filter((item) => !selectedIds.includes(item.id)),
-          );
+          pushAction({ type: "BULK_DELETE", items: itemsToDelete });
+          await fetchData(false);
           setSelectedIds([]);
         } catch (error) {
-          showAlert(
-            "danger",
-            "Kesalahan",
-            "Terjadi kesalahan saat menghapus: " + error.message,
-          );
+          showAlert("danger", "Kesalahan", error.message);
         } finally {
           setIsDeletingBulk(false);
           setLoading(false);
@@ -544,25 +727,26 @@ const GuruDashboard = () => {
   };
 
   const handleDeleteAll = () => {
-    if (processedData.length === 0) {
+    if (processedData.length === 0)
       return showAlert("warning", "Kosong", "Tidak ada data untuk dihapus.");
-    }
     showAlert(
       "danger",
       "Sapu Bersih Database?",
-      "PERINGATAN! Anda akan menghapus SELURUH soal yang tampil di tabel ini secara permanen. Lanjutkan?",
+      "Anda akan menghapus SELURUH soal yang tampil di tabel ini secara permanen. Lanjutkan?",
       async () => {
         closeAlert();
         setLoading(true);
         setIsDeletingBulk(true);
         try {
+          const itemsToDelete = [...processedData];
           for (let item of processedData) {
-            await api.delete(currentConfig.sheet, item.id);
+            const res = await api.delete(currentConfig.sheet, item.id);
+            if (res && res.error)
+              throw new Error(res.error.message || JSON.stringify(res.error));
+            await new Promise((r) => setTimeout(r, 300));
           }
-          const deletedIds = processedData.map((item) => item.id);
-          setData((prev) =>
-            prev.filter((item) => !deletedIds.includes(item.id)),
-          );
+          pushAction({ type: "BULK_DELETE", items: itemsToDelete });
+          await fetchData(false);
           setSelectedIds([]);
           showAlert(
             "info",
@@ -592,7 +776,7 @@ const GuruDashboard = () => {
         showAlert(
           "warning",
           "ID Duplikat",
-          `ID telah dipakai! Dialihkan ke ID yang aman: ${maxId + 1}. Silakan klik simpan lagi.`,
+          `ID dipakai! Dialihkan ke ID aman: ${maxId + 1}. Silakan klik simpan lagi.`,
         );
         return;
       }
@@ -613,25 +797,35 @@ const GuruDashboard = () => {
 
     const payloadToSave = {
       ...formData,
+      id: parseInt(formData.id),
       poin: parseFloat(String(formData.poin).replace(",", ".")) || 0,
+      guru_pembuat: namaGuruLog,
     };
 
     setIsSaving(true);
     try {
+      let res;
       if (isEdit) {
-        await api.update(currentConfig.sheet, originalId, payloadToSave);
-        setData((prev) =>
-          prev.map((item) =>
-            String(item.id) === String(originalId) ? payloadToSave : item,
-          ),
-        );
+        const oldItem = data.find((d) => String(d.id) === String(originalId));
+        res = await api.update(currentConfig.sheet, originalId, payloadToSave);
+        if (!(res && res.error) && oldItem)
+          pushAction({ type: "UPDATE", oldItem, newItem: payloadToSave });
       } else {
-        await api.create(currentConfig.sheet, payloadToSave);
-        setData((prev) => [...prev, payloadToSave]);
+        res = await api.create(currentConfig.sheet, payloadToSave);
+        if (!(res && res.error))
+          pushAction({ type: "CREATE", item: payloadToSave });
       }
+
+      if (res && res.error) {
+        throw new Error(
+          `Airtable menolak data. Detail: ${JSON.stringify(res.error)}`,
+        );
+      }
+
+      await fetchData(false);
       setIsModalOpen(false);
     } catch (error) {
-      showAlert("danger", "Kesalahan", error.message);
+      showAlert("danger", "Kesalahan Server", error.message);
     } finally {
       setIsSaving(false);
     }
@@ -649,10 +843,7 @@ const GuruDashboard = () => {
   const openEditModal = (item) => {
     setIsEdit(true);
     setOriginalId(item.id);
-    setFormData({
-      ...item,
-      poin: formatPoinDisplay(item.poin),
-    });
+    setFormData({ ...item, poin: formatPoinDisplay(item.poin) });
     setIsModalOpen(true);
   };
 
@@ -660,11 +851,7 @@ const GuruDashboard = () => {
     const maxId =
       data.length > 0 ? Math.max(...data.map((d) => parseInt(d.id) || 0)) : 0;
     setIsEdit(false);
-    setFormData({
-      ...item,
-      id: maxId + 1,
-      poin: formatPoinDisplay(item.poin),
-    });
+    setFormData({ ...item, id: maxId + 1, poin: formatPoinDisplay(item.poin) });
     setIsModalOpen(true);
   };
 
@@ -673,9 +860,6 @@ const GuruDashboard = () => {
     setIsReviewModalOpen(true);
   };
 
-  // ======================================================================
-  // OTAK AI: PENGURAI TEKS CERDAS (MENDETEKSI LIST & WACANA OTOMATIS)
-  // ======================================================================
   const handleParseBulkText = () => {
     if (!bulkMapel)
       return showAlert("warning", "Validasi", "Harap pilih Mata Pelajaran.");
@@ -690,7 +874,6 @@ const GuruDashboard = () => {
       data.length > 0
         ? Math.max(...data.map((item) => parseInt(item.id) || 0))
         : 0;
-
     let wacanaTerakhir = "";
 
     for (let i = 0; i < blocks.length - 1; i += 2) {
@@ -724,7 +907,6 @@ const GuruDashboard = () => {
       let wacana = "";
       let pertanyaan = "";
 
-      // AI DETECTION LOGIC
       if (teksSebelumOpsi.includes("\n\n")) {
         let paragraf = teksSebelumOpsi.split(/\n\s*\n/);
         pertanyaan = paragraf.pop().trim();
@@ -736,7 +918,6 @@ const GuruDashboard = () => {
           .map((l) => l.trim())
           .filter(Boolean);
         const firstLine = lines[0] || "";
-
         const isWacanaMarker = /wacana|teks|kutipan|puisi|cerita/i.test(
           firstLine,
         );
@@ -770,8 +951,8 @@ const GuruDashboard = () => {
         mapel: bulkMapel,
         kelas: bulkKelas,
         poin: parseFloat(String(bulkPoin).replace(",", ".")) || 0,
-        wacana: wacana,
-        pertanyaan: pertanyaan,
+        wacana,
+        pertanyaan,
         link_gambar: "",
         opsi_a: opsiA,
         opsi_b: opsiB,
@@ -779,6 +960,7 @@ const GuruDashboard = () => {
         opsi_d: opsiD,
         opsi_e: opsiE,
         jawaban_benar: kunci,
+        guru_pembuat: namaGuruLog,
       });
     }
     setParsedBulkData(parsed);
@@ -790,13 +972,28 @@ const GuruDashboard = () => {
     setBulkProgress(0);
 
     try {
+      const savedItems = [];
       for (let i = 0; i < parsedBulkData.length; i++) {
-        await api.create(currentConfig.sheet, parsedBulkData[i]);
+        const payloadToSave = {
+          ...parsedBulkData[i],
+          id: parseInt(parsedBulkData[i].id),
+          poin:
+            parseFloat(String(parsedBulkData[i].poin).replace(",", ".")) || 0,
+        };
+
+        const res = await api.create(currentConfig.sheet, payloadToSave);
+        if (res && res.error)
+          throw new Error(
+            `Airtable menolak Soal ke-${i + 1}. Detail: ${JSON.stringify(res.error)}`,
+          );
+
+        savedItems.push(payloadToSave);
         setBulkProgress(i + 1);
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      setData((prev) => [...prev, ...parsedBulkData]);
-
+      pushAction({ type: "BULK_CREATE", items: savedItems });
+      await fetchData(false);
       showAlert(
         "info",
         "Berhasil!",
@@ -806,18 +1003,13 @@ const GuruDashboard = () => {
       setBulkText("");
       setParsedBulkData([]);
     } catch (error) {
-      showAlert(
-        "danger",
-        "Gagal!",
-        "Kesalahan menyimpan masal: " + error.message,
-      );
+      showAlert("danger", "Gagal Import Massal!", error.message);
     } finally {
       setIsSaving(false);
       setBulkProgress(0);
     }
   };
 
-  // --- PEMROSESAN DATA ---
   const processedData = useMemo(() => {
     let result = [...data];
     if (search) {
@@ -837,42 +1029,30 @@ const GuruDashboard = () => {
         );
       }
     });
-
-    result.sort((a, b) => {
-      const idA = parseInt(a.id, 10) || 0;
-      const idB = parseInt(b.id, 10) || 0;
-      return idA - idB;
-    });
-
+    result.sort(
+      (a, b) => (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0),
+    );
     return result;
   }, [data, search, filters]);
 
-  // Handle Pilih Semua (Select All)
   const isAllSelected =
     processedData.length > 0 && selectedIds.length === processedData.length;
   const handleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(processedData.map((item) => item.id));
-    }
+    if (isAllSelected) setSelectedIds([]);
+    else setSelectedIds(processedData.map((item) => item.id));
   };
-
-  const toggleSelect = (id) => {
+  const toggleSelect = (id) =>
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
     );
-  };
 
-  // --- RENDERING TAMPILAN SOAL ---
   const renderBankSoal = () => {
-    if (processedData.length === 0) {
+    if (processedData.length === 0)
       return (
         <div className="py-20 text-center text-slate-400 font-semibold text-lg bg-white rounded-[2rem] border border-slate-200 shadow-sm w-full">
           Tidak ada soal ditemukan.
         </div>
       );
-    }
 
     let elements = [];
     for (let i = 0; i < processedData.length; i++) {
@@ -888,7 +1068,6 @@ const GuruDashboard = () => {
           if (processedData[j].wacana === s.wacana) bundleCount++;
           else break;
         }
-
         elements.push(
           <div
             key={`wacana-header-${s.id}`}
@@ -928,19 +1107,35 @@ const GuruDashboard = () => {
             </button>
           </div>
 
-          {/* REVISI MOBILE: Tombol aksi selalu terlihat di HP, hanya disembunyikan pakai group-hover di Desktop */}
-          <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20">
+            <label
+              className={`p-1.5 md:p-2 bg-white border border-emerald-200 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition-all shadow-sm cursor-pointer ${uploadingImgId === s.id ? "opacity-50 cursor-wait" : ""}`}
+              title="Sisipkan Gambar"
+            >
+              {uploadingImgId === s.id ? (
+                <RefreshCw size={16} className="animate-spin" />
+              ) : (
+                <ImagePlus size={16} />
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploadingImgId === s.id}
+                onChange={(e) => handleInlineImageUpload(e, s)}
+              />
+            </label>
             <button
               onClick={() => handleDuplicate(s)}
               className="p-1.5 md:p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
-              title="Duplikat Soal Ini"
+              title="Duplikat"
             >
               <Copy size={16} />
             </button>
             <button
               onClick={() => openEditModal(s)}
               className="p-1.5 md:p-2 bg-white border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all shadow-sm"
-              title="Edit Soal"
+              title="Edit Teks Soal"
             >
               <Edit size={16} />
             </button>
@@ -953,7 +1148,7 @@ const GuruDashboard = () => {
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2 items-center mb-6 pl-10 pr-24 md:pl-12 md:pr-32">
+          <div className="flex flex-wrap gap-2 items-center mb-6 pl-10 pr-24 md:pl-12 md:pr-40">
             <span
               className={`font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border ${isSelected ? "bg-red-50 border-red-200 text-red-600" : "bg-slate-100 border-slate-200 text-slate-500"}`}
             >
@@ -966,11 +1161,13 @@ const GuruDashboard = () => {
               {s.mapel} | {s.kelas}
             </span>
             {s.wacana && (
-              <span
-                className="bg-blue-50 text-blue-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-blue-200 flex items-center gap-1"
-                title="Aman untuk diacak, wacana melekat secara mandiri pada soal ini."
-              >
+              <span className="bg-blue-50 text-blue-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-blue-200 flex items-center gap-1">
                 <Link2 size={12} /> Terikat Wacana
+              </span>
+            )}
+            {s.guru_pembuat && (
+              <span className="bg-slate-50 text-slate-500 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-slate-200">
+                👤 {s.guru_pembuat}
               </span>
             )}
           </div>
@@ -980,12 +1177,36 @@ const GuruDashboard = () => {
           </p>
 
           {s.link_gambar && (
-            <div className="mb-6 max-w-lg rounded-xl overflow-hidden border border-slate-200 shadow-sm p-2 bg-slate-50">
+            <div className="mb-6 max-w-lg rounded-xl border border-slate-200 shadow-sm p-2 bg-slate-50 relative group/img w-max">
+              <button
+                onClick={() => handleRemoveInlineImage(s)}
+                disabled={uploadingImgId === s.id}
+                className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity shadow-md hover:bg-red-600 z-10 disabled:opacity-0"
+                title="Copot Gambar"
+              >
+                <X size={14} />
+              </button>
               <img
                 src={s.link_gambar}
-                alt="Lampiran Soal"
-                className="w-full object-contain rounded-lg"
+                alt="Lampiran"
+                className={`max-h-56 object-contain rounded-lg ${uploadingImgId === s.id ? "opacity-50" : ""}`}
               />
+              {uploadingImgId === s.id && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <RefreshCw
+                    className="animate-spin text-emerald-600 drop-shadow"
+                    size={32}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {!s.link_gambar && uploadingImgId === s.id && (
+            <div className="mb-6 max-w-lg h-32 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50 flex items-center justify-center">
+              <RefreshCw className="animate-spin text-emerald-600" size={24} />
+              <span className="ml-2 text-sm font-bold text-emerald-700">
+                Menganalisa & Mengunggah...
+              </span>
             </div>
           )}
 
@@ -1027,27 +1248,19 @@ const GuruDashboard = () => {
 
   const pivotNilaiData = useMemo(() => {
     if (tab !== "nilai") return { data: [], mapels: [] };
-
     const mapels = [
       ...new Set(data.map((item) => item.mapel).filter(Boolean)),
     ].sort();
     const grouped = {};
-
     data.forEach((row) => {
       if (!row.nama_siswa) return;
       const key = `${row.nama_siswa}_${row.kelas}`;
       const mapelKey = row.mapel;
-
-      if (!grouped[key]) {
+      if (!grouped[key])
         grouped[key] = { nama_siswa: row.nama_siswa, kelas: row.kelas };
-      }
-
-      // Pastikan hanya merekam nilai pertama kali (jika belum ada nilainya)
-      if (grouped[key][mapelKey] === undefined) {
+      if (grouped[key][mapelKey] === undefined)
         grouped[key][mapelKey] = parseFloat(row.skor) || 0;
-      }
     });
-
     const finalData = Object.values(grouped).map((student) => {
       let total = 0,
         count = 0;
@@ -1060,13 +1273,11 @@ const GuruDashboard = () => {
       student.RataRata = count > 0 ? (total / count).toFixed(1) : 0;
       return student;
     });
-
     finalData.sort((a, b) => {
       const classCmp = String(a.kelas).localeCompare(String(b.kelas));
       if (classCmp !== 0) return classCmp;
       return String(a.nama_siswa).localeCompare(String(b.nama_siswa));
     });
-
     let filteredPivot = finalData;
     if (search)
       filteredPivot = filteredPivot.filter((s) =>
@@ -1076,7 +1287,6 @@ const GuruDashboard = () => {
       filteredPivot = filteredPivot.filter((s) =>
         String(s.kelas).toLowerCase().includes(filters.kelas.toLowerCase()),
       );
-
     return { data: filteredPivot, mapels };
   }, [data, tab, search, filters.kelas]);
 
@@ -1095,14 +1305,12 @@ const GuruDashboard = () => {
     );
     const totalScore = scores.reduce((a, b) => a + b, 0);
     let totalRemedial = 0;
-
     pivotNilaiData.data.forEach((item) => {
       const isRemedy = pivotNilaiData.mapels.some(
         (m) => item[m] !== undefined && item[m] < KKM_SCORE,
       );
       if (isRemedy) totalRemedial++;
     });
-
     return {
       rataRata: (totalScore / scores.length).toFixed(1),
       tertinggi: Math.max(...scores),
@@ -1111,7 +1319,6 @@ const GuruDashboard = () => {
     };
   }, [pivotNilaiData, tab, nilaiViewMode]);
 
-  // --- LOGIKA EXPORT & CETAK ---
   const handleExport = async (type) => {
     if (type === "print" || type === "pdf") {
       if (
@@ -1120,49 +1327,45 @@ const GuruDashboard = () => {
       ) {
         return showAlert("warning", "Kosong", "Tidak ada data untuk dicetak!");
       }
-
       const tableElement = document.getElementById("data-table-guru");
       if (!tableElement) return;
-
       const title =
         nilaiViewMode === "rekap"
           ? "REKAPITULASI BUKU NILAI SISWA"
           : "LOG RIWAYAT UJIAN SISWA";
       const subtitle = `Total Data: ${nilaiViewMode === "rekap" ? pivotNilaiData.data.length : processedData.length} | Waktu Cetak: ${new Date().toLocaleString("id-ID")}`;
-
       const printContent = `
-        <!DOCTYPE html>
-        <html lang="id">
-          <head>
-            <meta charset="UTF-8">
-            <title>Cetak Data Nilai</title>
-            <style>
-              @page { size: auto; margin: 15mm; } 
-              body { font-family: Arial, sans-serif; color: #000; margin: 0; padding: 0; }
-              .header-print { text-align: center; margin-bottom: 25px; }
-              .header-print h1 { font-size: 22pt; font-weight: 900; margin: 0 0 5px 0; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 10px; display: inline-block; }
-              .header-print p { font-size: 11pt; color: #444; margin: 10px 0 0 0; }
-              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-              th, td { border: 1px solid #000; padding: 8px; font-size: 10pt; text-align: center; }
-              th { background-color: #f1f5f9 !important; font-weight: bold; -webkit-print-color-adjust: exact; color: #000; }
-              td.col-nama { text-align: left; font-weight: bold; text-transform: uppercase; }
-              .text-red-500, .text-red-600 { color: #dc2626 !important; font-weight: bold; }
-              .text-blue-600 { color: #2563eb !important; font-weight: bold; }
-              .text-emerald-600 { color: #059669 !important; font-weight: bold; }
-              .bg-red-50 { background-color: #fef2f2 !important; -webkit-print-color-adjust: exact; }
-              .print-hidden { display: none !important; }
-            </style>
-          </head>
-          <body>
-            <div class="header-print">
-              <h1>${title}</h1>
-              <p>${subtitle}</p>
-            </div>
-            ${tableElement.outerHTML}
-          </body>
-        </html>
-      `;
-
+          <!DOCTYPE html>
+          <html lang="id">
+            <head>
+              <meta charset="UTF-8">
+              <title>Cetak Data Nilai</title>
+              <style>
+                @page { size: auto; margin: 15mm; } 
+                body { font-family: Arial, sans-serif; color: #000; margin: 0; padding: 0; }
+                .header-print { text-align: center; margin-bottom: 25px; }
+                .header-print h1 { font-size: 22pt; font-weight: 900; margin: 0 0 5px 0; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 10px; display: inline-block; }
+                .header-print p { font-size: 11pt; color: #444; margin: 10px 0 0 0; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                th, td { border: 1px solid #000; padding: 8px; font-size: 10pt; text-align: center; }
+                th { background-color: #f1f5f9 !important; font-weight: bold; -webkit-print-color-adjust: exact; color: #000; }
+                td.col-nama { text-align: left; font-weight: bold; text-transform: uppercase; }
+                .text-red-500, .text-red-600 { color: #dc2626 !important; font-weight: bold; }
+                .text-blue-600 { color: #2563eb !important; font-weight: bold; }
+                .text-emerald-600 { color: #059669 !important; font-weight: bold; }
+                .bg-red-50 { background-color: #fef2f2 !important; -webkit-print-color-adjust: exact; }
+                .print-hidden { display: none !important; }
+              </style>
+            </head>
+            <body>
+              <div class="header-print">
+                <h1>${title}</h1>
+                <p>${subtitle}</p>
+              </div>
+              ${tableElement.outerHTML}
+            </body>
+          </html>
+        `;
       let printIframe = document.getElementById("print-iframe-cerdas");
       if (!printIframe) {
         printIframe = document.createElement("iframe");
@@ -1173,12 +1376,10 @@ const GuruDashboard = () => {
         printIframe.style.border = "none";
         document.body.appendChild(printIframe);
       }
-
       const iframeDoc = printIframe.contentWindow.document;
       iframeDoc.open();
       iframeDoc.write(printContent);
       iframeDoc.close();
-
       printIframe.contentWindow.focus();
       setTimeout(() => {
         printIframe.contentWindow.print();
@@ -1189,7 +1390,6 @@ const GuruDashboard = () => {
     let exportData = [];
     let exportHeaders = [];
     let wscols = [];
-
     if (nilaiViewMode === "rekap") {
       if (pivotNilaiData.data.length === 0)
         return showAlert("warning", "Kosong", "Tidak ada data untuk diekspor!");
@@ -1308,7 +1508,6 @@ const GuruDashboard = () => {
         const blob = await Packer.toBlob(doc);
         saveAs(blob, `Rekap_Nilai_CBT_${new Date().getTime()}.docx`);
       } catch (error) {
-        console.error("Gagal membuat DOCX:", error);
         showAlert(
           "danger",
           "Kesalahan",
@@ -1330,6 +1529,7 @@ const GuruDashboard = () => {
           @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
           .header-live-bg { background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa); background-size: 400% 400%; animation: gradientBG 15s ease infinite; }
         `}</style>
+
         {/* HEADER ELEGAN */}
         <motion.header
           variants={fadeUp}
@@ -1372,7 +1572,35 @@ const GuruDashboard = () => {
 
           <div className="flex flex-wrap w-full md:w-auto gap-2 z-10">
             {tab === "soal" && (
-              <div className="flex gap-2 w-full md:w-auto">
+              <div className="flex flex-wrap md:flex-nowrap gap-2 w-full md:w-auto items-center">
+                {/* TOOLBAR UNDO & REDO */}
+                <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden w-full md:w-auto justify-center">
+                  <button
+                    onClick={handleUndo}
+                    disabled={isDoingHistory || actionHistory.undo.length === 0}
+                    className="p-3 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-30 disabled:hover:bg-white transition-all border-r border-slate-100"
+                    title="Undo (Batal Aksi Terakhir)"
+                  >
+                    {isDoingHistory ? (
+                      <RefreshCw size={18} className="animate-spin" />
+                    ) : (
+                      <Undo size={18} />
+                    )}
+                  </button>
+                  <button
+                    onClick={handleRedo}
+                    disabled={isDoingHistory || actionHistory.redo.length === 0}
+                    className="p-3 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-30 disabled:hover:bg-white transition-all"
+                    title="Redo (Ulangi Aksi)"
+                  >
+                    {isDoingHistory ? (
+                      <RefreshCw size={18} className="animate-spin" />
+                    ) : (
+                      <Redo size={18} />
+                    )}
+                  </button>
+                </div>
+
                 <button
                   onClick={() => {
                     setBulkMapel("");
@@ -1396,7 +1624,6 @@ const GuruDashboard = () => {
             )}
 
             {tab === "nilai" && (
-              /* REVISI MOBILE: Grid 2 kolom di HP agar tidak berantakan & simetris */
               <div className="grid grid-cols-2 md:flex md:flex-wrap w-full md:w-auto gap-2 mt-4 md:mt-0">
                 <button
                   onClick={() => handleExport("print")}
@@ -1426,6 +1653,7 @@ const GuruDashboard = () => {
             )}
           </div>
         </motion.header>
+
         {/* TOGGLE VIEW MODE & STATISTIK (KHUSUS NILAI) */}
         <AnimatePresence mode="wait">
           {tab === "nilai" && (
@@ -1434,7 +1662,6 @@ const GuruDashboard = () => {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
             >
-              {/* REVISI MOBILE: Toggle Button Proporsional */}
               <div className="flex items-center w-full md:w-max p-1.5 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm mx-auto md:mx-0">
                 <button
                   onClick={() => setNilaiViewMode("rekap")}
@@ -1451,7 +1678,6 @@ const GuruDashboard = () => {
               </div>
 
               {nilaiViewMode === "rekap" && statsNilai && (
-                /* REVISI MOBILE: Grid Statistik lebih rapi */
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                   <Card className="p-5 md:p-6 border-none shadow-sm bg-gradient-to-br from-emerald-600 to-emerald-500 text-white rounded-[1.5rem] flex flex-col justify-center items-center sm:items-start">
                     <p className="text-[11px] font-bold uppercase tracking-widest opacity-80 mb-2">
@@ -1486,6 +1712,7 @@ const GuruDashboard = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
         {/* STATISTIK & TOOLBAR GLOBAL */}
         <motion.div
           variants={fadeUp}
@@ -1514,7 +1741,6 @@ const GuruDashboard = () => {
 
           <Card className="flex-1 p-3 bg-white border border-slate-200 shadow-sm w-full rounded-[2rem] box-border flex flex-col justify-center">
             <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full min-w-0 px-2 py-2">
-              {/* TOMBOL PILIH SEMUA & SAPU BERSIH (KHUSUS TAB SOAL) */}
               {tab === "soal" && processedData.length > 0 && (
                 <div className="flex gap-2 w-full md:w-auto shrink-0">
                   <button
@@ -1525,10 +1751,9 @@ const GuruDashboard = () => {
                       <CheckSquare size={16} />
                     ) : (
                       <ListChecks size={16} />
-                    )}
+                    )}{" "}
                     {isAllSelected ? "Batal Pilih" : "Pilih Semua"}
                   </button>
-
                   <button
                     onClick={handleDeleteAll}
                     disabled={isDeletingBulk}
@@ -1550,7 +1775,6 @@ const GuruDashboard = () => {
                 />
               </div>
 
-              {/* AREA FILTER - REVISI MOBILE GRID */}
               <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto min-w-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-2 w-full md:w-auto min-w-0">
                   {currentConfig.filterKeys.map((key) => {
@@ -1580,7 +1804,6 @@ const GuruDashboard = () => {
                     );
                   })}
                 </div>
-
                 <button
                   onClick={() => fetchData(false)}
                   className="w-full md:w-auto flex justify-center items-center gap-2 p-3 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
@@ -1598,9 +1821,8 @@ const GuruDashboard = () => {
             </div>
           </Card>
         </motion.div>
-        {/* ========================================== */}
+
         {/* PANEL AKSI MELAYANG (FLOATING BULK DELETE) */}
-        {/* ========================================== */}
         <AnimatePresence>
           {selectedIds.length > 0 && tab === "soal" && (
             <motion.div
@@ -1628,7 +1850,7 @@ const GuruDashboard = () => {
                     <RefreshCw size={14} className="animate-spin" />
                   ) : (
                     <Trash2 size={14} />
-                  )}
+                  )}{" "}
                   Hapus Masal
                 </button>
                 <button
@@ -1641,6 +1863,7 @@ const GuruDashboard = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
         {/* KONTEN UTAMA: BANK SOAL ATAU NILAI */}
         {loading && data.length === 0 ? (
           <div className="py-20 text-center flex flex-col items-center">
@@ -1660,11 +1883,10 @@ const GuruDashboard = () => {
             {renderBankSoal()}
           </motion.div>
         ) : (
-          /* KONTEN UTAMA: MONITORING NILAI */
           <motion.div variants={fadeUp}>
+            {/* VIEW NILAI REKAP */}
             {nilaiViewMode === "rekap" ? (
               <>
-                {/* DESKTOP VIEW - REKAP NILAI */}
                 <Card className="hidden md:block overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
                   <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
                     {pivotNilaiData.data.length === 0 ? (
@@ -1774,8 +1996,6 @@ const GuruDashboard = () => {
                     )}
                   </div>
                 </Card>
-
-                {/* MOBILE VIEW - REKAP NILAI (BANKING CARD STYLE) */}
                 <div className="md:hidden flex flex-col gap-4">
                   {pivotNilaiData.data.length === 0 ? (
                     <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
@@ -1834,7 +2054,6 @@ const GuruDashboard = () => {
               </>
             ) : (
               <>
-                {/* DESKTOP VIEW - LOG RIWAYAT */}
                 <Card className="hidden md:block overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
                   <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
                     {processedData.length === 0 ? (
@@ -1927,7 +2146,6 @@ const GuruDashboard = () => {
                               })}
                               <td className="px-6 py-4 text-center print-hidden">
                                 <div className="flex items-center justify-center gap-2">
-                                  {/* TOMBOL REVIEW JAWABAN */}
                                   <button
                                     onClick={() => openReviewModal(item)}
                                     className="p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
@@ -1951,8 +2169,6 @@ const GuruDashboard = () => {
                     )}
                   </div>
                 </Card>
-
-                {/* MOBILE VIEW - LOG RIWAYAT (BANKING CARD STYLE) */}
                 <div className="md:hidden flex flex-col gap-4">
                   {processedData.length === 0 ? (
                     <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
@@ -2025,7 +2241,8 @@ const GuruDashboard = () => {
             )}
           </motion.div>
         )}
-        {/* MODAL REVIEW JAWABAN SISWA */}
+
+        {/* MODAL REVIEW JAWABAN SISWA (SMART PARSER) */}
         <AnimatePresence>
           {isReviewModalOpen && reviewData && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
@@ -2033,104 +2250,141 @@ const GuruDashboard = () => {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-4xl my-auto"
+                className="w-full max-w-4xl my-auto py-4 md:py-8"
               >
-                <Card className="p-0 shadow-2xl border-0 rounded-[2rem] bg-white overflow-hidden flex flex-col max-h-[90vh]">
+                <Card className="p-0 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white overflow-hidden flex flex-col max-h-[85vh] md:max-h-[90vh]">
                   {/* Header */}
-                  <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <div className="p-4 md:p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
                     <div>
-                      <h3 className="text-xl font-bold text-slate-800">
+                      <h3 className="text-lg md:text-xl font-bold text-slate-800">
                         Analisis Jawaban Siswa
                       </h3>
-                      <p className="text-sm text-slate-500">
-                        {reviewData.nama_siswa} • {reviewData.mapel}
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+                        {reviewData.nama_siswa || reviewData.Nama_Siswa} •{" "}
+                        {reviewData.mapel || reviewData.Mapel}
                       </p>
                     </div>
                     <button
                       onClick={() => setIsReviewModalOpen(false)}
-                      className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full"
+                      className="p-1.5 md:p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-colors"
                     >
-                      <X size={24} />
+                      <X size={20} className="md:w-6 md:h-6" />
                     </button>
                   </div>
 
-                  {/* Isi Detail */}
-                  <div className="p-6 overflow-y-auto bg-white scrollbar-thin">
-                    {reviewData.detail_jawaban ? (
-                      // JIKA DATA DETAIL TERSEDIA
-                      <div className="space-y-4">
-                        {JSON.parse(reviewData.detail_jawaban).map(
-                          (item, idx) => {
-                            const isBenar =
-                              String(item.jawab_siswa) === String(item.kunci);
-                            return (
-                              <div
-                                key={idx}
-                                className={`p-4 rounded-2xl border-2 ${isBenar ? "border-emerald-100 bg-emerald-50/30" : "border-rose-100 bg-rose-50/30"}`}
-                              >
-                                <div className="flex justify-between mb-2">
-                                  <span className="font-bold text-slate-500 text-xs uppercase">
-                                    Soal No. {idx + 1}
-                                  </span>
-                                  <Badge
-                                    className={
-                                      isBenar ? "bg-emerald-500" : "bg-rose-500"
-                                    }
-                                  >
-                                    {isBenar ? "Benar" : "Salah"}
-                                  </Badge>
-                                </div>
-                                <p className="text-slate-800 font-medium mb-4">
-                                  {item.tanya}
-                                </p>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="p-3 bg-white rounded-xl border border-slate-200">
-                                    <span className="text-[10px] block text-slate-400 font-bold uppercase">
-                                      Pilihan Siswa
+                  {/* Isi Detail (Pintar Membaca Nama Kolom) */}
+                  <div className="p-4 md:p-6 overflow-y-auto bg-slate-50/50 scrollbar-thin">
+                    {(() => {
+                      // 1. CARI KEY YANG MENGANDUNG KATA "detail" dan "jawaban" (ANTI HURUF BESAR/SPASI)
+                      const key = Object.keys(reviewData).find(
+                        (k) =>
+                          k.toLowerCase().replace(/[^a-z0-9]/g, "") ===
+                          "detailjawaban",
+                      );
+                      const rawData = key ? reviewData[key] : null;
+                      let parsedDetail = null;
+
+                      // 2. PARSING JSON DENGAN AMAN
+                      if (rawData) {
+                        try {
+                          parsedDetail =
+                            typeof rawData === "string"
+                              ? JSON.parse(rawData)
+                              : rawData;
+                        } catch (e) {
+                          console.error("Gagal parse JSON Detail Jawaban", e);
+                        }
+                      }
+
+                      // 3. RENDER JIKA DATA VALID
+                      if (
+                        parsedDetail &&
+                        Array.isArray(parsedDetail) &&
+                        parsedDetail.length > 0
+                      ) {
+                        return (
+                          <div className="space-y-4">
+                            {parsedDetail.map((item, idx) => {
+                              const isBenar =
+                                String(item.jawab_siswa)
+                                  .toUpperCase()
+                                  .trim() ===
+                                String(item.kunci).toUpperCase().trim();
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`p-4 md:p-5 rounded-2xl border-2 shadow-sm ${isBenar ? "border-emerald-100 bg-emerald-50/50" : "border-rose-100 bg-rose-50/50"}`}
+                                >
+                                  <div className="flex justify-between items-center mb-3">
+                                    <span className="font-black text-slate-400 text-[10px] md:text-xs uppercase tracking-widest bg-white px-3 py-1 rounded-md border border-slate-100">
+                                      Soal No. {idx + 1}
                                     </span>
                                     <span
-                                      className={`font-bold ${isBenar ? "text-emerald-600" : "text-rose-600"}`}
+                                      className={`px-3 py-1 rounded-md text-[10px] md:text-xs font-black uppercase tracking-widest text-white shadow-sm ${isBenar ? "bg-emerald-500" : "bg-rose-500"}`}
                                     >
-                                      {item.jawab_siswa}
+                                      {isBenar ? "Benar" : "Salah"}
                                     </span>
                                   </div>
-                                  <div className="p-3 bg-white rounded-xl border border-slate-200">
-                                    <span className="text-[10px] block text-slate-400 font-bold uppercase">
-                                      Kunci Jawaban
-                                    </span>
-                                    <span className="font-bold text-slate-700">
-                                      {item.kunci}
-                                    </span>
+                                  <p className="text-sm md:text-base text-slate-800 font-semibold mb-4 leading-relaxed whitespace-pre-wrap">
+                                    {item.tanya}
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                                      <div
+                                        className={`absolute top-0 left-0 w-1 h-full ${isBenar ? "bg-emerald-400" : "bg-rose-400"}`}
+                                      ></div>
+                                      <span className="text-[9px] md:text-[10px] block text-slate-400 font-bold uppercase tracking-widest mb-1">
+                                        Pilihan Siswa
+                                      </span>
+                                      <span
+                                        className={`text-sm md:text-base font-black ${isBenar ? "text-emerald-600" : "text-rose-600"}`}
+                                      >
+                                        {item.jawab_siswa || "KOSONG"}
+                                      </span>
+                                    </div>
+                                    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                                      <div className="absolute top-0 left-0 w-1 h-full bg-slate-300"></div>
+                                      <span className="text-[9px] md:text-[10px] block text-slate-400 font-bold uppercase tracking-widest mb-1">
+                                        Kunci Jawaban
+                                      </span>
+                                      <span className="text-sm md:text-base font-black text-slate-700">
+                                        {item.kunci}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          },
-                        )}
-                      </div>
-                    ) : (
-                      // JIKA DATA DETAIL TIDAK ADA (BELUM TERUPDATE DI DB)
-                      <div className="py-20 text-center">
-                        <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-                          <AlertTriangle size={40} />
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
+                      // 4. JIKA DATA KOSONG ATAU GAGAL PARSE
+                      return (
+                        <div className="py-16 md:py-24 text-center">
+                          <div className="w-20 h-20 bg-white border border-slate-200 rounded-full flex items-center justify-center mx-auto mb-5 text-slate-300 shadow-sm">
+                            <AlertTriangle size={36} />
+                          </div>
+                          <h4 className="text-lg md:text-xl font-black text-slate-700">
+                            Detail Jawaban Tidak Tersedia
+                          </h4>
+                          <p className="text-slate-500 text-sm max-w-sm mx-auto mt-2 leading-relaxed">
+                            Log rincian jawaban belum direkam oleh sistem saat
+                            siswa ini mengerjakan ujian. Atau pastikan nama
+                            kolom di Airtable sama persis yaitu:{" "}
+                            <b className="text-slate-700">detail_jawaban</b>
+                          </p>
                         </div>
-                        <h4 className="text-lg font-bold text-slate-700">
-                          Detail Jawaban Tidak Ditemukan
-                        </h4>
-                        <p className="text-slate-500 text-sm max-w-xs mx-auto mt-2">
-                          Halaman Ujian Siswa perlu diperbarui agar mengirimkan
-                          rincian jawaban ke kolom <b>detail_jawaban</b> di
-                          tabel Nilai.
-                        </p>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 </Card>
               </motion.div>
             </div>
           )}
         </AnimatePresence>
-        {/* MODAL BUAT/EDIT MANUAL (COMPACT PADA MOBILE) */}
+
+        {/* MODAL BUAT/EDIT MANUAL SEDERHANA */}
         <AnimatePresence>
           {isModalOpen && tab === "soal" && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
@@ -2158,7 +2412,6 @@ const GuruDashboard = () => {
                       <X size={20} className="md:w-6 md:h-6" />
                     </button>
                   </div>
-
                   <form
                     onSubmit={handleSave}
                     className="space-y-4 md:space-y-6"
@@ -2166,7 +2419,7 @@ const GuruDashboard = () => {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 bg-slate-50 p-4 md:p-5 rounded-[1rem] md:rounded-[1.5rem] border border-slate-100">
                       <div className="space-y-1.5">
                         <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
-                          ID Sistem (Bisa Diedit)
+                          ID Sistem
                         </label>
                         <input
                           type="number"
@@ -2180,7 +2433,6 @@ const GuruDashboard = () => {
                           required
                         />
                       </div>
-
                       <div className="space-y-1.5 md:col-span-1">
                         <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                           Mapel
@@ -2202,7 +2454,6 @@ const GuruDashboard = () => {
                           disabled={isSaving || mapelOptions.length === 0}
                         />
                       </div>
-
                       <div className="space-y-1.5 md:col-span-1">
                         <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                           Kelas
@@ -2217,7 +2468,6 @@ const GuruDashboard = () => {
                           disabled={isSaving}
                         />
                       </div>
-
                       <div className="space-y-1.5">
                         <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-amber-600 ml-1">
                           Bobot Poin
@@ -2235,7 +2485,6 @@ const GuruDashboard = () => {
                         />
                       </div>
                     </div>
-
                     <div className="space-y-1 md:space-y-1.5">
                       <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                         Wacana / Teks Cerita (Opsional)
@@ -2259,7 +2508,6 @@ const GuruDashboard = () => {
                         teks wacana, karena soal CBT akan diacak.
                       </p>
                     </div>
-
                     <div className="space-y-1 md:space-y-1.5">
                       <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                         Pertanyaan Inti <span className="text-red-500">*</span>
@@ -2279,15 +2527,15 @@ const GuruDashboard = () => {
                         }
                       />
                     </div>
-
+                    {/* Input Gambar Sederhana via Modal */}
                     <div className="space-y-1 md:space-y-1.5">
                       <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
-                        Link Gambar Lampiran (Opsional)
+                        URL Lampiran Gambar (Bila ada)
                       </label>
                       <input
                         type="text"
                         disabled={isSaving}
-                        placeholder="Contoh: https://i.imgur.com/gambar.png"
+                        placeholder="Paste link gambar (https://...) atau biarkan kosong."
                         className="w-full p-2.5 md:p-3.5 text-xs md:text-sm bg-white border border-slate-200 rounded-lg md:rounded-xl font-medium text-slate-700 outline-none focus:border-emerald-500 transition-all shadow-sm"
                         value={formData.link_gambar || ""}
                         onChange={(e) =>
@@ -2297,8 +2545,12 @@ const GuruDashboard = () => {
                           })
                         }
                       />
+                      <p className="text-[9px] md:text-[10px] font-medium text-slate-500 ml-1 mt-1">
+                        Anda juga bisa mengunggah foto langsung dari layar utama
+                        Bank Soal menggunakan tombol <b>Ikon Gambar</b> pada
+                        masing-masing soal.
+                      </p>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5 pt-1 md:pt-2">
                       {["A", "B", "C", "D", "E"].map((opt) => {
                         const keyMap = `opsi_${opt.toLowerCase()}`;
@@ -2353,7 +2605,6 @@ const GuruDashboard = () => {
                         </select>
                       </div>
                     </div>
-
                     <div className="pt-4 md:pt-6 mt-2 md:mt-4 border-t border-slate-100">
                       <button
                         type="submit"
@@ -2374,7 +2625,8 @@ const GuruDashboard = () => {
             </div>
           )}
         </AnimatePresence>
-        {/* MODAL IMPORT MASAL (SMART PASTE) - COMPACT MOBILE */}
+
+        {/* MODAL IMPORT MASAL */}
         <AnimatePresence>
           {isBulkOpen && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
@@ -2391,10 +2643,15 @@ const GuruDashboard = () => {
                         <UploadCloud className="text-emerald-500" size={24} />{" "}
                         Import Soal Massal
                       </h3>
-                      <p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1 md:mt-1.5">
-                        Sistem AI otomatis memisahkan Wacana, Pertanyaan
-                        (termasuk list menurun), dan menghapus tulisan "Soal
-                        nomor X-Y".
+                      <p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1 md:mt-1.5 leading-relaxed">
+                        Sistem AI otomatis memisahkan Wacana dan Pertanyaan.{" "}
+                        <br />
+                        <strong className="text-amber-600">
+                          Tips Gambar:
+                        </strong>{" "}
+                        Untuk menyisipkan gambar pada soal, silakan simpan
+                        proses import ini terlebih dahulu, lalu klik tombol{" "}
+                        <b>Ikon Gambar</b> pada masing-masing soal.
                       </p>
                     </div>
                     <button
@@ -2405,7 +2662,6 @@ const GuruDashboard = () => {
                       <X size={20} className="md:w-6 md:h-6" />
                     </button>
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-3 md:mb-4">
                     <div className="w-full">
                       <PremiumSelect
@@ -2423,7 +2679,6 @@ const GuruDashboard = () => {
                         disabled={isSaving || mapelOptions.length === 0}
                       />
                     </div>
-
                     <div className="w-full">
                       <PremiumMultiSelect
                         value={bulkKelas}
@@ -2433,7 +2688,6 @@ const GuruDashboard = () => {
                         disabled={isSaving}
                       />
                     </div>
-
                     <div className="relative flex items-center shadow-sm rounded-lg md:rounded-xl">
                       <Target
                         className="absolute left-3 text-amber-500"
@@ -2450,7 +2704,6 @@ const GuruDashboard = () => {
                       />
                     </div>
                   </div>
-
                   <textarea
                     className="w-full p-4 md:p-5 bg-slate-50 border border-slate-200 rounded-xl md:rounded-[1.5rem] font-mono text-[11px] md:text-[13px] outline-none focus:bg-white focus:border-emerald-500 transition-all resize-y h-48 md:h-64 text-slate-700 shadow-inner leading-relaxed"
                     placeholder="Paste soal dari Ms.Word ke sini...&#10;&#10;Contoh Format:&#10;Teks wacana cerita diletakkan di awal paragraf (jika ada).&#10;Pertanyaan diletakkan sebelum opsi.&#10;a. opsi A&#10;b. opsi B&#10;c. opsi C&#10;d. opsi D&#10;e. opsi E&#10;Kunci: D"
@@ -2458,7 +2711,6 @@ const GuruDashboard = () => {
                     onChange={(e) => setBulkText(e.target.value)}
                     disabled={isSaving}
                   />
-
                   <div className="flex justify-end mt-4 md:mt-5">
                     <button
                       onClick={handleParseBulkText}
@@ -2470,7 +2722,6 @@ const GuruDashboard = () => {
                       Pratinjau (Preview) AI
                     </button>
                   </div>
-
                   {parsedBulkData.length > 0 && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
@@ -2485,7 +2736,6 @@ const GuruDashboard = () => {
                           Silakan periksa hasil bacaan sistem di bawah ini.
                         </span>
                       </div>
-
                       <div className="max-h-[400px] md:max-h-[500px] overflow-y-auto bg-slate-50 rounded-xl md:rounded-[1.5rem] border border-slate-200 p-3 md:p-4 space-y-3 md:space-y-4 mb-5 md:mb-6 scrollbar-thin">
                         {parsedBulkData.map((item, idx) => (
                           <div
@@ -2548,7 +2798,6 @@ const GuruDashboard = () => {
                           </div>
                         ))}
                       </div>
-
                       <button
                         onClick={handleSaveBulk}
                         disabled={isSaving}
@@ -2568,6 +2817,7 @@ const GuruDashboard = () => {
             </div>
           )}
         </AnimatePresence>
+
         {/* MODAL CUSTOM ALERT */}
         <AnimatePresence>
           {customAlert.isOpen && (

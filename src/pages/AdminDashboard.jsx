@@ -286,35 +286,55 @@ const PremiumMultiSelect = ({
 };
 
 // ==========================================
-// DAFTAR OPSI KELAS SUPER LENGKAP
+// GENERATOR OPSI KELAS OTOMATIS
 // ==========================================
+const TINGKAT_SEKOLAH = ["X", "XI", "XII"];
+const JURUSAN_SEKOLAH = ["MIPA", "IPS"];
+const MAKSIMAL_ROMBEL = 2; // Berarti ada kelas 1 dan 2
+
 const OPSI_KELAS_LENGKAP = [
-  { label: "KATEGORI JURUSAN", isLabel: true },
-  { label: "Semua MIPA", value: "MIPA" },
-  { label: "Semua IPS", value: "IPS" },
-  { label: "KATEGORI TINGKAT & JURUSAN", isLabel: true },
-  { label: "X MIPA", value: "X MIPA" },
-  { label: "X IPS", value: "X IPS" },
-  { label: "XI MIPA", value: "XI MIPA" },
-  { label: "XI IPS", value: "XI IPS" },
-  { label: "XII MIPA", value: "XII MIPA" },
-  { label: "XII IPS", value: "XII IPS" },
-  { label: "KELAS SPESIFIK (X)", isLabel: true },
-  { label: "X MIPA 1", value: "X MIPA 1" },
-  { label: "X MIPA 2", value: "X MIPA 2" },
-  { label: "X IPS 1", value: "X IPS 1" },
-  { label: "X IPS 2", value: "X IPS 2" },
-  { label: "KELAS SPESIFIK (XI)", isLabel: true },
-  { label: "XI MIPA 1", value: "XI MIPA 1" },
-  { label: "XI MIPA 2", value: "XI MIPA 2" },
-  { label: "XI IPS 1", value: "XI IPS 1" },
-  { label: "XI IPS 2", value: "XI IPS 2" },
-  { label: "KELAS SPESIFIK (XII)", isLabel: true },
-  { label: "XII MIPA 1", value: "XII MIPA 1" },
-  { label: "XII MIPA 2", value: "XII MIPA 2" },
-  { label: "XII IPS 1", value: "XII IPS 1" },
-  { label: "XII IPS 2", value: "XII IPS 2" },
+  { label: "KATEGORI GLOBAL", isLabel: true },
+  { label: "Semua Kelas (Umum)", value: "SEMUA" },
 ];
+
+// 1. Kategori Tingkat (X, XI, XII)
+OPSI_KELAS_LENGKAP.push({
+  label: "KATEGORI TINGKAT (GABUNGAN JURUSAN)",
+  isLabel: true,
+});
+TINGKAT_SEKOLAH.forEach((t) => {
+  OPSI_KELAS_LENGKAP.push({
+    label: `Kelas ${t} (Gabungan MIPA & IPS)`,
+    value: t,
+  });
+});
+
+// 2. Kategori Jurusan Global (Semua MIPA, Semua IPS)
+OPSI_KELAS_LENGKAP.push({ label: "KATEGORI JURUSAN GLOBAL", isLabel: true });
+JURUSAN_SEKOLAH.forEach((j) => {
+  OPSI_KELAS_LENGKAP.push({ label: `Semua ${j} (X, XI, XII)`, value: j });
+});
+
+// 3. Kategori Tingkat + Jurusan (X MIPA, XII IPS, dll)
+OPSI_KELAS_LENGKAP.push({ label: "KATEGORI TINGKAT & JURUSAN", isLabel: true });
+TINGKAT_SEKOLAH.forEach((t) => {
+  JURUSAN_SEKOLAH.forEach((j) => {
+    OPSI_KELAS_LENGKAP.push({ label: `${t} ${j}`, value: `${t} ${j}` });
+  });
+});
+
+// 4. Kelas Spesifik / Rombel (X MIPA 1, XII IPS 2, dll)
+OPSI_KELAS_LENGKAP.push({ label: "KELAS SPESIFIK (ROMBEL)", isLabel: true });
+TINGKAT_SEKOLAH.forEach((t) => {
+  JURUSAN_SEKOLAH.forEach((j) => {
+    for (let i = 1; i <= MAKSIMAL_ROMBEL; i++) {
+      OPSI_KELAS_LENGKAP.push({
+        label: `${t} ${j} ${i}`,
+        value: `${t} ${j} ${i}`,
+      });
+    }
+  });
+});
 
 // ==========================================
 // 2. KONFIGURASI DINAMIS (SCHEMA)
@@ -492,6 +512,8 @@ const AdminDashboard = () => {
   const [tab, setTab] = useState("siswa");
   const [data, setData] = useState([]);
 
+  const currentConfig = TAB_CONFIG[tab];
+
   // State Loading & Sync
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -514,9 +536,7 @@ const AdminDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({});
   const [isEdit, setIsEdit] = useState(false);
-  const [originalId, setOriginalId] = useState(null); // REVISI: Track ID original untuk edit
-
-  const currentConfig = TAB_CONFIG[tab];
+  const [originalId, setOriginalId] = useState(null);
 
   // Helper Custom Alert
   const showAlert = (type, title, message, onConfirm = null) => {
@@ -587,6 +607,7 @@ const AdminDashboard = () => {
   const handleSave = async (e) => {
     e.preventDefault();
 
+    // 1. Validasi form kosong
     for (const field of currentConfig.form) {
       if (
         field.required &&
@@ -600,7 +621,7 @@ const AdminDashboard = () => {
       }
     }
 
-    // REVISI: Cek duplikat data. Jika Tambah Baru ATAU jika Edit tapi ID nya diubah.
+    // 2. Cek Duplikat ID
     if (!isEdit || (isEdit && String(originalId) !== String(formData.id))) {
       const isDuplicate = data.some(
         (item) => String(item.id) === String(formData.id),
@@ -620,11 +641,23 @@ const AdminDashboard = () => {
 
     setIsSaving(true);
     try {
-      // REVISI: Jika isEdit, pastikan update() mengincar originalId
-      if (isEdit) await api.update(currentConfig.sheet, originalId, formData);
-      else await api.create(currentConfig.sheet, formData);
+      // 3. Format data sebelum dikirim (Angka harus integer)
+      const payloadToSave = { ...formData };
+
+      if (payloadToSave.id) payloadToSave.id = parseInt(payloadToSave.id);
+      if (payloadToSave.durasi_menit)
+        payloadToSave.durasi_menit = parseInt(payloadToSave.durasi_menit);
+
+      // Eksekusi API
+      if (isEdit) {
+        await api.update(currentConfig.sheet, originalId, payloadToSave);
+      } else {
+        await api.create(currentConfig.sheet, payloadToSave);
+      }
+
       setIsModalOpen(false);
       await fetchData(false);
+      showAlert("success", "Berhasil", "Data berhasil disimpan ke database!");
     } catch (error) {
       showAlert("danger", "Gagal Menyimpan", error.message);
     } finally {
@@ -643,7 +676,7 @@ const AdminDashboard = () => {
 
   const openEditModal = (item) => {
     setIsEdit(true);
-    setOriginalId(item.id); // REVISI: Catat ID asli sebelum diedit
+    setOriginalId(item.id);
     setFormData(item);
     setIsModalOpen(true);
   };
@@ -796,11 +829,10 @@ const AdminDashboard = () => {
             <strong className="text-slate-800 font-black tracking-wide block mb-1">
               Manajemen Data Responsif
             </strong>
-            Tampilan tabel akan menyesuaikan secara otomatis. Di layar besar,
-            tabel berfungsi penuh dengan fitur <b>Double Sticky</b>. Namun jika
-            dibuka melalui HP, tampilan akan otomatis berubah menjadi gaya
-            **Kartu (Banking Style)**. ID Sistem kini terbuka bebas untuk
-            diedit.
+            Admin bisa edit/tambah user, pastikan selalu mencoba{" "}
+            <b>klik kolom apapun yang ada</b> untuk menjelajahi fitur. Anda juga
+            bisa menganti <b>mode desktop/mobile</b> lewat pengaturan chrome
+            (titik 3 diatas-kanan).
           </div>
         </motion.div>
 
@@ -1199,13 +1231,11 @@ const AdminDashboard = () => {
                     className="space-y-3 md:space-y-5"
                   >
                     <div className="space-y-1 md:space-y-2">
-                      {/* REVISI: Label diubah jadi "(Bisa Diedit)" tanpa memperhitungkan isEdit */}
                       <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">
                         ID Sistem (Bisa Diedit)
                       </label>
                       <input
                         type="number"
-                        // REVISI: disabled sekarang hanya mengandalkan isSaving, tidak lagi terkunci oleh isEdit
                         className={`w-full p-2.5 md:p-3.5 text-sm md:text-base rounded-lg md:rounded-xl font-bold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800 hover:border-emerald-300"}`}
                         value={formData.id}
                         onChange={(e) =>
