@@ -103,8 +103,9 @@ const SiswaDashboard = () => {
   const [cheatWarnings, setCheatWarnings] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // STATE UNTUK GAMBAR ZOOM
+  // STATE UNTUK GAMBAR ZOOM & MOBILE DRAWER
   const [zoomedImg, setZoomedImg] = useState(null);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   const [requireFullscreen, setRequireFullscreen] = useState(false);
 
@@ -152,9 +153,9 @@ const SiswaDashboard = () => {
     .toUpperCase()
     .trim();
   const userParts = userKelasFull.split(" ");
-  const userTingkat = userParts[0] || ""; // Contoh: "XII"
-  const userJurusan = userParts[1] || ""; // Contoh: "MIPA"
-  const userTingkatJurusan = `${userTingkat} ${userJurusan}`.trim(); // Contoh: "XII MIPA"
+  const userTingkat = userParts[0] || "";
+  const userJurusan = userParts[1] || "";
+  const userTingkatJurusan = `${userTingkat} ${userJurusan}`.trim();
 
   // ==========================================
   // 1. SILENT POLLING DATA
@@ -181,11 +182,11 @@ const SiswaDashboard = () => {
             const targetArray = jadwalKelasRaw.split(",").map((t) => t.trim());
             const isMatch = targetArray.some((target) => {
               return (
-                target === userKelasFull || // Spesifik (X MIPA 1)
-                target === userTingkatJurusan || // Rumpun (X MIPA)
-                target === userJurusan || // Jurusan (MIPA)
+                target === userKelasFull ||
+                target === userTingkatJurusan ||
+                target === userJurusan ||
                 target === userTingkat
-              ); // Angkatan (X / XII)
+              );
             });
 
             return isMatch;
@@ -237,7 +238,6 @@ const SiswaDashboard = () => {
     const inputToken = tokens[examId]?.toUpperCase() || "";
     const realToken = String(examToken || "").toUpperCase();
 
-    // Abaikan input token jika di server tidak disetting token (kosong)
     if (realToken && !inputToken) {
       return showAlert(
         "warning",
@@ -270,6 +270,7 @@ const SiswaDashboard = () => {
     setActiveExam(exam);
     setLoadingSoal(true);
     setRequireFullscreen(false);
+    setIsMobileDrawerOpen(false);
 
     // Otomatis Fullscreen saat mulai
     const elem = document.documentElement;
@@ -410,6 +411,7 @@ const SiswaDashboard = () => {
       setCurrentSoalIndex(0);
       setCheatWarnings(0);
       setRequireFullscreen(false);
+      setIsMobileDrawerOpen(false);
       setActiveTab("nilai");
 
       if (isCheating) {
@@ -743,7 +745,8 @@ const SiswaDashboard = () => {
           </div>
         </header>
 
-        <main className="flex-1 w-full max-w-7xl mx-auto p-3 md:p-5 flex flex-col justify-center animate-fade-in z-10 relative">
+        {/* MENGUBAH STRUKTUR LAYOUT UTAMA AGAR LEBIH BERSAHABAT DI MOBILE */}
+        <main className="flex-1 w-full max-w-7xl mx-auto p-2 md:p-5 flex flex-col justify-center animate-fade-in z-10 relative pb-20 lg:pb-5">
           {loadingSoal ? (
             <div className="flex flex-col items-center justify-center h-full m-auto">
               <RefreshCw
@@ -755,16 +758,16 @@ const SiswaDashboard = () => {
               </h2>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 w-full h-[calc(100vh-100px)] lg:h-[calc(100vh-120px)] min-h-[500px]">
-              {/* KIRI: SOAL */}
-              <div className="lg:col-span-8 flex flex-col h-full bg-white/80 backdrop-blur-2xl border border-white rounded-[2rem] shadow-xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-200/60 bg-white/40 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-3">
-                    <span className="bg-slate-800 text-white font-black px-4 py-1.5 rounded-lg text-sm shadow-md">
+            <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 w-full h-[calc(100vh-140px)] lg:h-[calc(100vh-120px)] min-h-[500px]">
+              {/* KIRI: SOAL (Flexible Content) */}
+              <div className="flex-1 flex flex-col h-full bg-white/80 backdrop-blur-2xl border border-white rounded-[1.5rem] lg:rounded-[2rem] shadow-xl overflow-hidden relative">
+                <div className="px-5 lg:px-6 py-3 lg:py-4 border-b border-slate-200/60 bg-white/40 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-2 lg:gap-3">
+                    <span className="bg-slate-800 text-white font-black px-3 py-1.5 lg:px-4 rounded-lg text-xs lg:text-sm shadow-md">
                       SOAL NO. {currentSoalIndex + 1}
                     </span>
                     {getVal(currentSoal, "Poin") && (
-                      <span className="bg-emerald-100 text-emerald-700 font-bold px-3 py-1.5 rounded-lg text-xs border border-emerald-200">
+                      <span className="bg-emerald-100 text-emerald-700 font-bold px-2 py-1.5 lg:px-3 rounded-lg text-[10px] lg:text-xs border border-emerald-200">
                         {getVal(currentSoal, "Poin")} POIN
                       </span>
                     )}
@@ -772,52 +775,51 @@ const SiswaDashboard = () => {
                   {isSubmitting && (
                     <span className="text-xs font-bold text-emerald-600 animate-pulse flex items-center gap-2">
                       <RefreshCw size={14} className="animate-spin" />{" "}
-                      Mengirim...
+                      <span className="hidden sm:inline">Mengirim...</span>
                     </span>
                   )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-8 flex flex-col">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-8 flex flex-col">
                   {getVal(currentSoal, "Wacana") && (
-                    <div className="p-5 bg-amber-50/70 border border-amber-200/80 rounded-2xl relative shadow-sm mb-6">
-                      <div className="absolute -top-3 left-5 bg-gradient-to-r from-amber-500 to-amber-600 text-white px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest shadow-md">
+                    <div className="p-4 lg:p-5 bg-amber-50/70 border border-amber-200/80 rounded-2xl relative shadow-sm mb-4 lg:mb-6 mt-1">
+                      <div className="absolute -top-3 left-4 lg:left-5 bg-gradient-to-r from-amber-500 to-amber-600 text-white px-2 py-1 lg:px-3 rounded-md text-[9px] lg:text-[10px] font-bold uppercase tracking-widest shadow-md">
                         Informasi Teks
                       </div>
-                      <p className="font-medium text-slate-700 leading-relaxed text-sm md:text-[15px] whitespace-pre-wrap mt-1">
+                      <p className="font-medium text-slate-700 leading-relaxed text-[13px] md:text-[15px] whitespace-pre-wrap mt-1">
                         {getVal(currentSoal, "Wacana")}
                       </p>
                     </div>
                   )}
 
-                  <p className="font-bold text-slate-800 leading-relaxed text-base md:text-lg mb-6 whitespace-pre-wrap flex-1">
+                  <p className="font-bold text-slate-800 leading-relaxed text-sm md:text-lg mb-5 lg:mb-6 whitespace-pre-wrap flex-1">
                     {getVal(currentSoal, "Pertanyaan")}
                   </p>
 
-                  {/* PERBAIKAN FITUR GAMBAR TERPOTONG & CLICK TO ZOOM */}
                   {getVal(currentSoal, "Link_Gambar") && (
-                    <div className="mb-6 w-full flex justify-start">
+                    <div className="mb-5 lg:mb-6 w-full flex justify-start">
                       <div
                         onClick={() =>
                           setZoomedImg(getVal(currentSoal, "Link_Gambar"))
                         }
-                        className="relative group cursor-pointer rounded-2xl border border-slate-200 shadow-sm bg-white p-1.5 md:p-2 inline-block w-fit max-w-full"
+                        className="relative group cursor-pointer rounded-2xl border border-slate-200 shadow-sm bg-white p-1.5 inline-block w-fit max-w-full"
                         title="Klik untuk memperbesar gambar"
                       >
                         <img
                           src={getVal(currentSoal, "Link_Gambar")}
                           alt="Gambar Pendukung"
-                          className="max-w-full h-auto max-h-[40vh] md:max-h-[50vh] object-contain rounded-xl"
+                          className="max-w-full h-auto max-h-[35vh] lg:max-h-[50vh] object-contain rounded-xl"
                         />
                         <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
-                          <span className="text-white font-bold bg-slate-900/80 px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg backdrop-blur-sm">
-                            <Maximize size={18} /> Klik Perbesar
+                          <span className="text-white font-bold bg-slate-900/80 px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg backdrop-blur-sm text-xs">
+                            <Maximize size={16} /> Klik Perbesar
                           </span>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-3 mt-auto">
+                  <div className="flex flex-col gap-2.5 lg:gap-3 mt-auto pb-2">
                     {["A", "B", "C", "D", "E"].map((opt) => {
                       const optText = getVal(currentSoal, `Opsi_${opt}`);
                       if (!optText) return null;
@@ -829,15 +831,15 @@ const SiswaDashboard = () => {
                           onClick={() =>
                             setAnswers({ ...answers, [currentSoalId]: opt })
                           }
-                          className={`w-full text-left px-5 py-3 md:py-4 rounded-2xl border-2 transition-all flex items-start gap-4 group ${isSelected ? "border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-500/20" : "border-slate-100 bg-white/60 hover:bg-white hover:border-emerald-300"}`}
+                          className={`w-full text-left px-4 py-3 md:px-5 md:py-4 rounded-[1.25rem] border-2 transition-all flex items-start gap-3 lg:gap-4 group ${isSelected ? "border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-500/20" : "border-slate-100 bg-white/60 hover:bg-white hover:border-emerald-300"}`}
                         >
                           <span
-                            className={`font-black text-sm md:text-base w-8 h-8 flex items-center justify-center rounded-xl shrink-0 transition-all ${isSelected ? "bg-emerald-500 text-white shadow-md scale-110" : "bg-slate-100 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-700"}`}
+                            className={`font-black text-xs md:text-base w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-[0.6rem] shrink-0 transition-all ${isSelected ? "bg-emerald-500 text-white shadow-md scale-110" : "bg-slate-100 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-700"}`}
                           >
                             {opt}
                           </span>
                           <span
-                            className={`text-sm md:text-base font-medium pt-1 leading-snug whitespace-pre-wrap ${isSelected ? "text-emerald-900 font-bold" : "text-slate-700"}`}
+                            className={`text-[13px] md:text-base font-medium pt-1 md:pt-1.5 leading-snug whitespace-pre-wrap ${isSelected ? "text-emerald-900 font-bold" : "text-slate-700"}`}
                           >
                             {optText}
                           </span>
@@ -847,7 +849,8 @@ const SiswaDashboard = () => {
                   </div>
                 </div>
 
-                <div className="px-6 py-4 border-t border-slate-200/60 bg-white/40 flex justify-between items-center shrink-0">
+                {/* DESKTOP NAVIGASI BAWAH (HIDDEN DI MOBILE) */}
+                <div className="hidden lg:flex px-6 py-4 border-t border-slate-200/60 bg-white/40 justify-between items-center shrink-0">
                   <button
                     onClick={() =>
                       setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
@@ -855,8 +858,7 @@ const SiswaDashboard = () => {
                     disabled={currentSoalIndex === 0}
                     className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-slate-50 disabled:opacity-40 flex items-center gap-2 shadow-sm"
                   >
-                    <ArrowLeft size={16} />{" "}
-                    <span className="hidden sm:block">Sebelumnya</span>
+                    <ArrowLeft size={16} /> Sebelumnya
                   </button>
                   <button
                     onClick={() =>
@@ -865,16 +867,15 @@ const SiswaDashboard = () => {
                       )
                     }
                     disabled={currentSoalIndex === soalData.length - 1}
-                    className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-bold shadow-lg uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-40"
+                    className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-bold shadow-lg uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-40 hover:scale-105 transition-transform"
                   >
-                    <span className="hidden sm:block">Selanjutnya</span>{" "}
-                    <ArrowRight size={16} />
+                    Selanjutnya <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
 
-              {/* KANAN: NAVIGASI NOMOR */}
-              <div className="lg:col-span-4 flex flex-col h-full bg-white/80 backdrop-blur-2xl border border-white rounded-[2rem] shadow-xl overflow-hidden">
+              {/* KANAN: NAVIGASI NOMOR GRID (HANYA MUNCUL DI DESKTOP) */}
+              <div className="hidden lg:flex w-[320px] xl:w-[380px] flex-col h-full bg-white/80 backdrop-blur-2xl border border-white rounded-[2rem] shadow-xl overflow-hidden shrink-0">
                 <div className="p-6 border-b border-slate-200/60 bg-white/40 shrink-0">
                   <div className="flex justify-between items-end mb-2">
                     <span className="text-xs font-black uppercase text-slate-500 tracking-widest">
@@ -896,7 +897,7 @@ const SiswaDashboard = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-5 content-start">
-                  <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-5 gap-2.5">
+                  <div className="grid grid-cols-5 gap-2.5">
                     {soalData.map((s, idx) => {
                       const isCurrent = idx === currentSoalIndex;
                       const sId = String(getVal(s, "id")).trim();
@@ -936,6 +937,130 @@ const SiswaDashboard = () => {
             </div>
           )}
         </main>
+
+        {/* BOTTOM ACTION BAR KHUSUS MOBILE (STICKY) */}
+        {!loadingSoal && (
+          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200 p-3 px-4 flex justify-between items-center z-40 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.15)] pb-6 sm:pb-4">
+            <button
+              onClick={() =>
+                setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
+              }
+              disabled={currentSoalIndex === 0}
+              className="p-3.5 bg-slate-100 text-slate-600 rounded-xl disabled:opacity-30 active:scale-95 transition-all shadow-sm border border-slate-200"
+            >
+              <ArrowLeft size={20} />
+            </button>
+
+            <button
+              onClick={() => setIsMobileDrawerOpen(true)}
+              className="flex flex-col items-center justify-center text-slate-700 group -mt-1 active:scale-95 transition-all"
+            >
+              <div className="bg-emerald-100 text-emerald-700 p-2.5 rounded-[14px] mb-1 shadow-sm border border-emerald-200">
+                <LayoutDashboard size={22} />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                {answeredCount}/{soalData.length} Dijawab
+              </span>
+            </button>
+
+            <button
+              onClick={() =>
+                setCurrentSoalIndex((prev) =>
+                  Math.min(soalData.length - 1, prev + 1),
+                )
+              }
+              disabled={currentSoalIndex === soalData.length - 1}
+              className="p-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl shadow-md disabled:opacity-30 active:scale-95 transition-all"
+            >
+              <ArrowRight size={20} />
+            </button>
+          </div>
+        )}
+
+        {/* LACI (DRAWER) NAVIGASI GRID KHUSUS MOBILE */}
+        <AnimatePresence>
+          {isMobileDrawerOpen && (
+            <>
+              {/* Overlay Hitam */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsMobileDrawerOpen(false)}
+                className="lg:hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100]"
+              />
+              {/* Box Putih Meluncur ke Atas */}
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 26, stiffness: 220 }}
+                className="lg:hidden fixed bottom-0 left-0 right-0 bg-white rounded-t-[2rem] z-[101] flex flex-col max-h-[85vh] shadow-2xl"
+              >
+                <div className="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
+                  <div>
+                    <h3 className="font-black text-slate-800 text-lg tracking-tight">
+                      Navigasi Soal
+                    </h3>
+                    <p className="text-[11px] font-bold text-emerald-600 mt-0.5 uppercase tracking-widest">
+                      Progress Pengerjaan: {Math.round(progressPercent)}%
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileDrawerOpen(false)}
+                    className="p-2 bg-slate-100 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
+                  <div className="grid grid-cols-5 sm:grid-cols-7 gap-3">
+                    {soalData.map((s, idx) => {
+                      const isCurrent = idx === currentSoalIndex;
+                      const sId = String(getVal(s, "id")).trim();
+                      const hasAnswered = !!answers[sId];
+
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setCurrentSoalIndex(idx);
+                            setIsMobileDrawerOpen(false); // Tutup drawer setelah memilih soal
+                          }}
+                          className={`aspect-square flex items-center justify-center rounded-[1rem] font-bold text-sm transition-all border-2 
+                            ${isCurrent ? "scale-110 shadow-md ring-2 ring-emerald-500/30 z-10 border-emerald-500" : "border-slate-100"} 
+                            ${hasAnswered ? (isCurrent ? "bg-emerald-500 text-white" : "bg-emerald-50 text-emerald-600 border-emerald-200") : isCurrent ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-400 shadow-sm"}
+                          `}
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="p-5 border-t border-slate-100 bg-slate-50 rounded-t-3xl shrink-0 pb-6 sm:pb-4 shadow-[0_-5px_15px_-10px_rgba(0,0,0,0.1)]">
+                  <button
+                    onClick={() => {
+                      setIsMobileDrawerOpen(false);
+                      handleEndExamClick(false, false);
+                    }}
+                    disabled={isSubmitting}
+                    className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 disabled:opacity-70"
+                  >
+                    {isSubmitting ? (
+                      <RefreshCw size={20} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={20} />
+                    )}
+                    Kumpulkan Ujian Sekarang
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
         {/* OVERLAY LAYAR PENUH UNTUK ZOOM GAMBAR */}
         <AnimatePresence>
@@ -986,7 +1111,7 @@ const SiswaDashboard = () => {
                       <AlertTriangle size={48} />
                     )}
                   </div>
-                  <h3 className="text-2xl font-black text-slate-800 mb-3">
+                  <h3 className="text-2xl font-black text-slate-800 mb-3 leading-tight">
                     {customAlert.title}
                   </h3>
                   <p className="text-sm text-slate-600 mb-8 font-medium px-2 leading-relaxed whitespace-pre-wrap">
@@ -1324,7 +1449,7 @@ const SiswaDashboard = () => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
             >
-              <Card className="w-full max-w-sm p-8 shadow-2xl border-0 rounded-[2rem] bg-white text-center flex flex-col items-center">
+              <Card className="w-full max-w-sm p-8 shadow-2xl border border-white/20 rounded-[2rem] bg-white/95 backdrop-blur-xl text-center flex flex-col items-center">
                 <div
                   className={`p-4 rounded-2xl mb-4 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500" : customAlert.type === "success" ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"}`}
                 >
