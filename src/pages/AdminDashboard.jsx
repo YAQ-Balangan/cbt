@@ -395,6 +395,7 @@ const TAB_CONFIG = {
       { key: "kelas", label: "Target Kelas", sortable: true, filterable: true },
       { key: "tanggal", label: "Tanggal", sortable: true },
       { key: "durasi_menit", label: "Durasi" },
+      { key: "token", label: "Token", sortable: true, filterable: true },
       { key: "status", label: "Status", sortable: true, filterable: true },
     ],
     form: [
@@ -425,6 +426,12 @@ const TAB_CONFIG = {
         required: true,
       },
       {
+        key: "token",
+        label: "Token",
+        type: "text",
+        required: true,
+      },
+      {
         key: "status",
         label: "Status Ujian",
         type: "select",
@@ -438,6 +445,7 @@ const TAB_CONFIG = {
       kelas: "",
       tanggal: "",
       durasi_menit: "90",
+      token: "",
       status: "Draft",
     },
   },
