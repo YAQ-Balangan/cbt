@@ -1,99 +1,111 @@
 // src/api/api.js
+import { createClient } from '@supabase/supabase-js';
+
 export const APP_NAME = "CBT-MASDA-2026";
 
-// Token Airtable SUDAH DIHAPUS dari sini demi keamanan!
-// Masukkan URL Cloudflare Worker Anda di bawah ini (Tanpa garis miring '/' di akhir)
-const API_URL = "https://api-masda.printeryaq.workers.dev"; // GANTI DENGAN URL CLOUDFLARE ANDA
+// 1. Masukkan kredensial dari gambar Bos di sini
+const supabaseUrl = 'https://mmtgtcjwedpfkivdakup.supabase.co';
+// Ganti dengan Copy-Paste full teks Publishable Key Bos yang diawali "sb_publishable_..."
+const supabaseKey = 'sb_publishable_5WrYJLYicZV_dmRLFXkfsw_fHnRF8sj';
 
-const headers = {
-    "Content-Type": "application/json"
-};
-
-// Fungsi cerdas penerjemah ID Angka -> ID Airtable
-const getAirtableRecordId = async (sheetName, numericId) => {
-    const tableName = sheetName.toLowerCase();
-    const formula = `id='${numericId}'`;
-    const res = await fetch(`${API_URL}/${tableName}?filterByFormula=${encodeURIComponent(formula)}`, { headers });
-    const data = await res.json();
-
-    if (data.records && data.records.length > 0) {
-        return data.records[0].id;
-    }
-    throw new Error(`Data dengan ID #${numericId} tidak ditemukan di database!`);
-};
+export const supabase = createClient(supabaseUrl, supabaseKey);
 
 export const api = {
     // 1. LOGIN
     login: async (username, password) => {
-        const formula = `AND({username}='${username}', {password}='${password}')`;
-        const url = `${API_URL}/users?filterByFormula=${encodeURIComponent(formula)}`;
+        const { data, error } = await supabase
+            .from('users') // Pastikan nama tabel di Supabase huruf kecil semua
+            .select('*')
+            .eq('username', username)
+            .eq('password', password);
 
-        const response = await fetch(url, { headers });
-        const result = await response.json();
-
-        if (result.records && result.records.length > 0) {
-            const user = result.records[0].fields;
-            delete user.password; // Keamanan
+        if (error) throw new Error(error.message);
+        if (data && data.length > 0) {
+            const user = data[0];
+            delete user.password; // Keamanan (jangan kirim password ke frontend)
             return user;
         }
         throw new Error("Gagal Login: Username atau Password Salah");
     },
 
-    // 2. READ (Tarik Data dengan Skala Besar)
+    // 2. READ (Tarik Data)
     read: async (sheet) => {
         const tableName = sheet.toLowerCase();
-        let allRecords = [];
-        let offset = '';
+        const { data, error } = await supabase
+            .from(tableName)
+            .select('*')
+            .order('id', { ascending: true }); // Otomatis diurutkan berdasarkan ID
 
-        do {
-            const url = `${API_URL}/${tableName}${offset ? `?offset=${offset}` : ''}`;
-            const response = await fetch(url, { headers });
-            const result = await response.json();
-
-            if (result.records) {
-                allRecords = [...allRecords, ...result.records.map(rec => rec.fields)];
-            }
-            offset = result.offset;
-        } while (offset);
-
-        return allRecords;
+        if (error) throw new Error(error.message);
+        return data || [];
     },
 
     // 3. CREATE (Tambah Data Baru)
-    create: async (sheet, data) => {
+    create: async (sheet, payloadData) => {
         const tableName = sheet.toLowerCase();
-        const payload = { records: [{ fields: data }] };
-        const response = await fetch(`${API_URL}/${tableName}`, {
-            method: "POST",
-            headers: headers,
-            body: JSON.stringify(payload)
-        });
-        return await response.json();
+        const { data, error } = await supabase
+            .from(tableName)
+            .insert([payloadData])
+            .select();
+
+        if (error) throw new Error(error.message);
+        return data;
     },
 
     // 4. UPDATE (Edit Data)
-    update: async (sheet, numericId, data) => {
+    update: async (sheet, numericId, payloadData) => {
         const tableName = sheet.toLowerCase();
-        const recordId = await getAirtableRecordId(tableName, numericId);
+        const { data, error } = await supabase
+            .from(tableName)
+            .update(payloadData)
+            .eq('id', numericId)
+            .select();
 
-        const payload = { records: [{ id: recordId, fields: data }] };
-        const response = await fetch(`${API_URL}/${tableName}`, {
-            method: "PATCH",
-            headers: headers,
-            body: JSON.stringify(payload)
-        });
-        return await response.json();
+        if (error) throw new Error(error.message);
+        return data;
     },
 
     // 5. DELETE (Hapus Data)
     delete: async (sheet, numericId) => {
         const tableName = sheet.toLowerCase();
-        const recordId = await getAirtableRecordId(tableName, numericId);
+        const { data, error } = await supabase
+            .from(tableName)
+            .delete()
+            .eq('id', numericId);
 
-        const response = await fetch(`${API_URL}/${tableName}/${recordId}`, {
-            method: "DELETE",
-            headers: headers
-        });
-        return await response.json();
+        if (error) throw new Error(error.message);
+        return data;
+    },
+
+    // ========================================================
+    // TAMBAHAN KHUSUS: FITUR HYBRID AUTO-SAVE UNTUK UJIAN
+    // ========================================================
+    saveSesi: async (username, idUjian, jawaban, sisaWaktu, cheatWarn) => {
+        const idSesi = `${username}_${idUjian}`;
+        const { error } = await supabase
+            .from('sesi_ujian')
+            .upsert({
+                id_sesi: idSesi, // Primary Key 
+                username_siswa: username,
+                id_ujian: idUjian,
+                jawaban_sementara: jawaban,
+                sisa_waktu: sisaWaktu,
+                peringatan_cheat: cheatWarn
+            }, { onConflict: 'id_sesi' });
+
+        if (error) console.error("Gagal auto-save ke server:", error.message);
+    },
+
+    getSesi: async (username, idUjian) => {
+        const idSesi = `${username}_${idUjian}`;
+        const { data, error } = await supabase
+            .from('sesi_ujian')
+            .select('*')
+            .eq('id_sesi', idSesi)
+            .single();
+
+        // PGRST116 adalah kode error Supabase jika data belum ada (siswa baru pertama kali mulai)
+        if (error && error.code !== 'PGRST116') console.error("Gagal tarik sesi:", error.message);
+        return data;
     }
 };
