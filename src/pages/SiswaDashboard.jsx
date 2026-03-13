@@ -279,19 +279,30 @@ const SiswaDashboard = () => {
         console.log("Sesi server baru.");
       }
 
+      // --- TAMBAHAN: CEK STATUS TERKUNCI ---
+      if (serverSession && serverSession.status === "LOCKED") {
+        setLoadingSoal(false);
+        setActiveExam(null); // Tutup panel ujian jika terkunci
+        return showAlert(
+          "danger",
+          "AKSES TERKUNCI",
+          "Sesi ujian Anda telah dikunci oleh sistem karena terdeteksi keluar aplikasi. Silakan lapor ke pengawas.",
+        );
+      }
+
       const localSession = JSON.parse(localStorage.getItem(sessionKey));
 
       let finalAnswers = {};
       let finalTimeLeft = examDurasi * 60;
       let finalCheat = 0;
 
-      // Prioritas 1: Server (Jika ada sisa waktu)
-      if (serverSession && serverSession.sisa_waktu > 0) {
+      // Prioritas 1: Ambil Data dari Server (Penting untuk Sinkronisasi Peringatan)
+      if (serverSession) {
         finalAnswers = serverSession.jawaban_sementara || {};
-        finalTimeLeft = serverSession.sisa_waktu;
-        finalCheat = serverSession.peringatan_cheat || 0;
+        finalTimeLeft = serverSession.sisa_waktu || examDurasi * 60;
+        finalCheat = serverSession.peringatan_cheat || 0; // Mengambil 1/3 atau 2/3 dari server
       }
-      // Prioritas 2: Lokal (Jika server kosong/mati)
+      // Prioritas 2: Lokal (Hanya jika server kosong/mati)
       else if (localSession && localSession.timeLeft > 0) {
         finalAnswers = localSession.answers || {};
         finalTimeLeft = localSession.timeLeft;
@@ -543,23 +554,15 @@ const SiswaDashboard = () => {
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // 1. Tambah jumlah peringatan
+        // 1. Tentukan angka pelanggaran berikutnya secara instan
         const newWarnings = cheatWarnings + 1;
         setCheatWarnings(newWarnings);
 
-        if (newWarnings === 1) {
-          // LAPIS 1: Peringatan Pertama (Hanya Alert)
-          showAlert(
-            "warning",
-            "PERINGATAN 1/3",
-            "Jangan keluar aplikasi! Jika sekali lagi melanggar, ujian akan TERKUNCI.",
-          );
-        } else if (newWarnings === 2) {
-          // LAPIS 2: Peringatan Kedua (KUNCI SESI)
-          const usernameSiswa = getVal(user, "Username");
-          const examId = getVal(activeExamRef.current, "ID");
+        const usernameSiswa = getVal(user, "Username");
+        const examId = getVal(activeExamRef.current, "ID");
 
-          // Kirim status LOCKED ke server agar tidak bisa masuk lagi
+        if (newWarnings === 1) {
+          // LAPIS 1: Langsung KUNCI di server agar state tidak reset jika reload
           api.saveSesi(
             usernameSiswa,
             examId,
@@ -569,16 +572,33 @@ const SiswaDashboard = () => {
             "LOCKED",
           );
 
-          // Lempar keluar ke dashboard
+          setActiveExam(null);
+          setRequireFullscreen(false);
+          showAlert(
+            "warning",
+            "SESI TERKUNCI (1/3)",
+            "Jangan keluar aplikasi! Sesi Anda dikunci. Silakan lapor pengawas untuk melanjutkan.",
+          );
+        } else if (newWarnings === 2) {
+          // LAPIS 2: Kunci lagi dengan peringatan lebih keras
+          api.saveSesi(
+            usernameSiswa,
+            examId,
+            answersRef.current,
+            timeLeft,
+            newWarnings,
+            "LOCKED",
+          );
+
           setActiveExam(null);
           setRequireFullscreen(false);
           showAlert(
             "danger",
             "SESI TERKUNCI (2/3)",
-            "Anda dilarang melanjutkan ujian, karena curang.",
+            "PELANGGARAN KEDUA! Satu kali lagi keluar, ujian Anda akan otomatis SELESAI/DISKUALIFIKASI.",
           );
         } else if (newWarnings >= 3) {
-          // LAPIS 3: Pelanggaran Ketiga (DISKUALIFIKASI)
+          // LAPIS 3: Pelanggaran Ketiga (Langsung DISKUALIFIKASI)
           executeEndExam(true, true);
         }
       }
