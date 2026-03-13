@@ -831,6 +831,29 @@ const GuruDashboard = () => {
     }
   };
 
+  const handleUnlockSesi = async (username, examId) => {
+    try {
+      setLoading(true);
+      // Kita panggil API untuk mengubah status di tabel Sesi
+      await api.updateSesiStatus(username, examId, "ACTIVE");
+
+      showAlert(
+        "success",
+        "Akses Dibuka",
+        `Siswa ${username} sekarang bisa melanjutkan ujiannya.`,
+      );
+      fetchData(true); // Segarkan data monitoring agar status berubah di layar guru
+    } catch (err) {
+      showAlert(
+        "danger",
+        "Gagal",
+        "Sistem gagal membuka kunci. Periksa koneksi internet.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openAddModal = () => {
     setIsEdit(false);
     let nextId = 1;

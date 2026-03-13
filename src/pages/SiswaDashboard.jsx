@@ -543,20 +543,44 @@ const SiswaDashboard = () => {
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        outOfTabTimer.current = setTimeout(() => {
-          executeEndExam(true, true);
+        // 1. Tambah jumlah peringatan
+        const newWarnings = cheatWarnings + 1;
+        setCheatWarnings(newWarnings);
+
+        if (newWarnings === 1) {
+          // LAPIS 1: Peringatan Pertama (Hanya Alert)
+          showAlert(
+            "warning",
+            "PERINGATAN 1/3",
+            "Jangan keluar aplikasi! Jika sekali lagi melanggar, ujian akan TERKUNCI.",
+          );
+        } else if (newWarnings === 2) {
+          // LAPIS 2: Peringatan Kedua (KUNCI SESI)
+          const usernameSiswa = getVal(user, "Username");
+          const examId = getVal(activeExamRef.current, "ID");
+
+          // Kirim status LOCKED ke server agar tidak bisa masuk lagi
+          api.saveSesi(
+            usernameSiswa,
+            examId,
+            answersRef.current,
+            timeLeft,
+            newWarnings,
+            "LOCKED",
+          );
+
+          // Lempar keluar ke dashboard
+          setActiveExam(null);
+          setRequireFullscreen(false);
           showAlert(
             "danger",
-            "WAKTU HABIS DI LUAR UJIAN!",
-            "Anda meninggalkan halaman lebih dari 5 detik. Ujian dikumpulkan paksa.",
+            "SESI TERKUNCI (2/3)",
+            "Anda dilarang melanjutkan ujian, karena curang.",
           );
-        }, 5000);
-      } else {
-        if (outOfTabTimer.current) {
-          clearTimeout(outOfTabTimer.current);
-          outOfTabTimer.current = null;
+        } else if (newWarnings >= 3) {
+          // LAPIS 3: Pelanggaran Ketiga (DISKUALIFIKASI)
+          executeEndExam(true, true);
         }
-        handleCheatDetected("Meninggalkan Aplikasi / Membuka Tab Lain");
       }
     };
 
