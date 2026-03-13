@@ -92,7 +92,7 @@ export const api = {
                 jawaban_sementara: jawaban,
                 sisa_waktu: sisaWaktu,
                 peringatan_cheat: cheatWarn,
-                status: status // Kolom status untuk mengunci/membuka sesi
+                status: status // Kolom penting untuk fitur kunci/buka sesi
             }, { onConflict: 'id_sesi' });
 
         if (error) console.error("Gagal auto-save ke server:", error.message);
@@ -107,6 +107,7 @@ export const api = {
             .eq('id_sesi', idSesi)
             .single();
 
+        // PGRST116 adalah error jika data belum ada (siswa baru mulai)
         if (error && error.code !== 'PGRST116') console.error("Gagal tarik sesi:", error.message);
         return data;
     },
