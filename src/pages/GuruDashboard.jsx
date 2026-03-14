@@ -572,10 +572,10 @@ const GuruDashboard = () => {
       // PENARIKAN DATA ANTI-CHEAT DI TAB NILAI
       if (tab === "nilai") {
         try {
-          const sesiRes = await api.read("sesi_ujian");
-          setSesiUjianData(sesiRes || []);
+          const lockedRes = await api.getSesiTerkunci();
+          setSesiUjianData(lockedRes || []);
         } catch (e) {
-          console.error("Gagal narik sesi:", e);
+          console.error("Gagal narik sesi ujian:", e);
         }
       }
     } catch (error) {
