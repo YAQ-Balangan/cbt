@@ -34,6 +34,9 @@ import {
   ImagePlus,
   Undo,
   Redo,
+  ShieldAlert,
+  Unlock,
+  UserX,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
@@ -404,6 +407,7 @@ const GuruDashboard = () => {
 
   const [tab, setTab] = useState("soal");
   const [data, setData] = useState([]);
+  const [sesiUjianData, setSesiUjianData] = useState([]); // State untuk Anti-Cheat
   const currentConfig = TAB_CONFIG[tab];
 
   // STATE & API GAMBAR
@@ -448,6 +452,7 @@ const GuruDashboard = () => {
   const [bulkPoin, setBulkPoin] = useState("2");
   const [bulkProgress, setBulkProgress] = useState(0);
 
+  // VIEW MODE: "rekap" | "log" | "pelanggaran"
   const [nilaiViewMode, setNilaiViewMode] = useState("rekap");
 
   const showAlert = (type, title, message, onConfirm = null) => {
@@ -563,6 +568,16 @@ const GuruDashboard = () => {
       setData((prev) =>
         JSON.stringify(prev) !== JSON.stringify(newData) ? newData : prev,
       );
+
+      // PENARIKAN DATA ANTI-CHEAT DI TAB NILAI
+      if (tab === "nilai") {
+        try {
+          const sesiRes = await api.read("sesi_ujian");
+          setSesiUjianData(sesiRes || []);
+        } catch (e) {
+          console.error("Gagal narik sesi:", e);
+        }
+      }
     } catch (error) {
       if (!isBackground) setData([]);
     } finally {
@@ -831,23 +846,24 @@ const GuruDashboard = () => {
     }
   };
 
+  // LOGIKA ANTI-CHEAT: GURU BUKA KUNCI
   const handleUnlockSesi = async (username, examId) => {
     try {
       setLoading(true);
-      // Kita panggil API untuk mengubah status di tabel Sesi
-      await api.updateSesiStatus(username, examId, "ACTIVE");
+      // Panggil API (status jadi ACTIVE, pelanggaran biarkan 1 agar tidak curang lagi)
+      await api.updateSesiStatus(username, examId, "ACTIVE", 1);
 
       showAlert(
         "success",
         "Akses Dibuka",
         `Siswa ${username} sekarang bisa melanjutkan ujiannya.`,
       );
-      fetchData(true); // Segarkan data monitoring agar status berubah di layar guru
+      fetchData(true);
     } catch (err) {
       showAlert(
         "danger",
         "Gagal",
-        "Sistem gagal membuka kunci. Periksa koneksi internet.",
+        "Sistem gagal membuka kunci. Periksa koneksi internet: " + err.message,
       );
     } finally {
       setLoading(false);
@@ -1057,6 +1073,13 @@ const GuruDashboard = () => {
     );
     return result;
   }, [data, search, filters]);
+
+  // VARIABEL DATA ANTI-CHEAT
+  const lockedSessions = sesiUjianData.filter((s) => s.status === "LOCKED");
+  const disqualifiedSessions = processedData.filter(
+    (d) =>
+      tab === "nilai" && String(d.status).toLowerCase() === "diskualifikasi",
+  );
 
   const isAllSelected =
     processedData.length > 0 && selectedIds.length === processedData.length;
@@ -1546,12 +1569,47 @@ const GuruDashboard = () => {
         variants={staggerContainer}
         initial="hidden"
         animate="visible"
-        className="space-y-6 max-w-7xl mx-auto pb-24"
+        className="space-y-6 max-w-7xl mx-auto pb-24 relative"
       >
         <style type="text/css">{`
           @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
           .header-live-bg { background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa); background-size: 400% 400%; animation: gradientBG 15s ease infinite; }
         `}</style>
+
+        {/* ============================================================== */}
+        {/* BANNER PERINGATAN GLOBAL (Jika Ada Siswa Terkunci - ANTI CHEAT) */}
+        {/* ============================================================== */}
+        <AnimatePresence>
+          {lockedSessions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-red-500 text-white px-5 py-4 rounded-2xl shadow-xl flex flex-col sm:flex-row justify-between items-center animate-pulse sticky top-4 z-[60]"
+            >
+              <div className="flex items-center gap-4 mb-3 sm:mb-0">
+                <ShieldAlert size={32} />
+                <div>
+                  <p className="font-black text-lg">Peringatan Anti-Cheat!</p>
+                  <p className="text-xs md:text-sm font-medium opacity-90">
+                    {lockedSessions.length} Siswa terkunci akibat keluar
+                    aplikasi dan menunggu persetujuan Anda.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setTab("nilai");
+                  setNilaiViewMode("pelanggaran");
+                  window.scrollTo(0, 0);
+                }}
+                className="w-full sm:w-auto bg-white text-red-600 px-5 py-2.5 rounded-xl font-bold text-sm shadow-md hover:scale-105 transition-transform"
+              >
+                Lihat & Tindak Siswa
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* HEADER ELEGAN */}
         <motion.header
@@ -1677,7 +1735,7 @@ const GuruDashboard = () => {
           </div>
         </motion.header>
 
-        {/* TOGGLE VIEW MODE & STATISTIK (KHUSUS NILAI) */}
+        {/* TOGGLE VIEW MODE & STATISTIK (KHUSUS NILAI + ANTI CHEAT) */}
         <AnimatePresence mode="wait">
           {tab === "nilai" && (
             <motion.div
@@ -1685,18 +1743,29 @@ const GuruDashboard = () => {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
             >
-              <div className="flex items-center w-full md:w-max p-1.5 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm mx-auto md:mx-0">
+              <div className="flex flex-col md:flex-row items-center w-full md:w-max p-1.5 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm mx-auto md:mx-0 gap-1 md:gap-0">
                 <button
                   onClick={() => setNilaiViewMode("rekap")}
-                  className={`flex-1 md:flex-none flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "rekap" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-800"}`}
+                  className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "rekap" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-800"}`}
                 >
                   <TableProperties size={16} /> Buku Nilai
                 </button>
                 <button
                   onClick={() => setNilaiViewMode("log")}
-                  className={`flex-1 md:flex-none flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "log" ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                  className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "log" ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
                 >
                   <LayoutList size={16} /> Log Riwayat
+                </button>
+                <button
+                  onClick={() => setNilaiViewMode("pelanggaran")}
+                  className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "pelanggaran" ? "bg-red-500 text-white shadow-sm" : "text-red-500 hover:bg-red-50"}`}
+                >
+                  <ShieldAlert size={16} /> Control Anti-Cheat
+                  {lockedSessions.length > 0 && (
+                    <span className="bg-white text-red-600 px-1.5 py-0.5 rounded-md text-[10px] ml-1">
+                      {lockedSessions.length}
+                    </span>
+                  )}
                 </button>
               </div>
 
@@ -1736,114 +1805,116 @@ const GuruDashboard = () => {
           )}
         </AnimatePresence>
 
-        {/* STATISTIK & TOOLBAR GLOBAL */}
-        <motion.div
-          variants={fadeUp}
-          className="flex flex-col xl:flex-row gap-4"
-        >
-          <Card className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden flex flex-col justify-center">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <Award size={56} className="text-amber-400" />
-            </div>
-            <div className="flex justify-between items-start relative z-10">
-              <p className="text-xs font-bold text-amber-400 uppercase tracking-widest">
-                Total{" "}
-                {tab === "nilai" && nilaiViewMode === "rekap"
-                  ? "Siswa"
-                  : "Data"}
-              </p>
-            </div>
-            <div className="flex items-baseline gap-2 mt-3 relative z-10">
-              <p className="text-4xl font-bold text-white">
-                {tab === "nilai" && nilaiViewMode === "rekap"
-                  ? pivotNilaiData.data.length
-                  : processedData.length}
-              </p>
-            </div>
-          </Card>
-
-          <Card className="flex-1 p-3 bg-white border border-slate-200 shadow-sm w-full rounded-[2rem] box-border flex flex-col justify-center">
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full min-w-0 px-2 py-2">
-              {tab === "soal" && processedData.length > 0 && (
-                <div className="flex gap-2 w-full md:w-auto shrink-0">
-                  <button
-                    onClick={handleSelectAll}
-                    className={`flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border ${isAllSelected ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-inner" : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"}`}
-                  >
-                    {isAllSelected ? (
-                      <CheckSquare size={16} />
-                    ) : (
-                      <ListChecks size={16} />
-                    )}{" "}
-                    {isAllSelected ? "Batal Pilih" : "Pilih Semua"}
-                  </button>
-                  <button
-                    onClick={handleDeleteAll}
-                    disabled={isDeletingBulk}
-                    className="flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-50"
-                    title="Hapus seluruh data yang tampil di tabel ini"
-                  >
-                    <Trash2 size={16} /> Sapu Bersih
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 w-full md:flex-1 md:border-l md:border-r border-slate-200 px-0 md:px-4">
-                <Search className="text-slate-400 shrink-0" size={20} />
-                <input
-                  className="w-full bg-transparent border-none outline-none font-medium text-base text-slate-700 placeholder:text-slate-400 min-w-0 py-2"
-                  placeholder={`Cari di ${tab === "soal" ? "soal" : "siswa"}...`}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+        {/* STATISTIK & TOOLBAR GLOBAL (Disembunyikan di mode Control Anti-Cheat) */}
+        {!(tab === "nilai" && nilaiViewMode === "pelanggaran") && (
+          <motion.div
+            variants={fadeUp}
+            className="flex flex-col xl:flex-row gap-4"
+          >
+            <Card className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden flex flex-col justify-center">
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <Award size={56} className="text-amber-400" />
               </div>
+              <div className="flex justify-between items-start relative z-10">
+                <p className="text-xs font-bold text-amber-400 uppercase tracking-widest">
+                  Total{" "}
+                  {tab === "nilai" && nilaiViewMode === "rekap"
+                    ? "Siswa"
+                    : "Data"}
+                </p>
+              </div>
+              <div className="flex items-baseline gap-2 mt-3 relative z-10">
+                <p className="text-4xl font-bold text-white">
+                  {tab === "nilai" && nilaiViewMode === "rekap"
+                    ? pivotNilaiData.data.length
+                    : processedData.length}
+                </p>
+              </div>
+            </Card>
 
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto min-w-0">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-2 w-full md:w-auto min-w-0">
-                  {currentConfig.filterKeys.map((key) => {
-                    if (
-                      tab === "nilai" &&
-                      nilaiViewMode === "rekap" &&
-                      key !== "kelas"
-                    )
-                      return null;
-                    return (
-                      <div key={key} className="w-full md:w-40">
-                        <PremiumSelect
-                          value={filters[key] || ""}
-                          onChange={(val) =>
-                            setFilters({ ...filters, [key]: val })
-                          }
-                          options={[
-                            { label: `Semua ${key}`, value: "" },
-                            ...getFilterOptions(key).map((opt) => ({
-                              label: opt,
-                              value: opt,
-                            })),
-                          ]}
-                          placeholder={`Filter ${key}`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                <button
-                  onClick={() => fetchData(false)}
-                  className="w-full md:w-auto flex justify-center items-center gap-2 p-3 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
-                  title="Sinkronkan Ulang"
-                >
-                  <RefreshCw
-                    size={18}
-                    className={loading || isSyncing ? "animate-spin" : ""}
+            <Card className="flex-1 p-3 bg-white border border-slate-200 shadow-sm w-full rounded-[2rem] box-border flex flex-col justify-center">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full min-w-0 px-2 py-2">
+                {tab === "soal" && processedData.length > 0 && (
+                  <div className="flex gap-2 w-full md:w-auto shrink-0">
+                    <button
+                      onClick={handleSelectAll}
+                      className={`flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border ${isAllSelected ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-inner" : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"}`}
+                    >
+                      {isAllSelected ? (
+                        <CheckSquare size={16} />
+                      ) : (
+                        <ListChecks size={16} />
+                      )}{" "}
+                      {isAllSelected ? "Batal Pilih" : "Pilih Semua"}
+                    </button>
+                    <button
+                      onClick={handleDeleteAll}
+                      disabled={isDeletingBulk}
+                      className="flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-50"
+                      title="Hapus seluruh data yang tampil di tabel ini"
+                    >
+                      <Trash2 size={16} /> Sapu Bersih
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 w-full md:flex-1 md:border-l md:border-r border-slate-200 px-0 md:px-4">
+                  <Search className="text-slate-400 shrink-0" size={20} />
+                  <input
+                    className="w-full bg-transparent border-none outline-none font-medium text-base text-slate-700 placeholder:text-slate-400 min-w-0 py-2"
+                    placeholder={`Cari di ${tab === "soal" ? "soal" : "siswa"}...`}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
                   />
-                  <span className="md:hidden font-bold text-sm">
-                    Refresh Data
-                  </span>
-                </button>
+                </div>
+
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto min-w-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-2 w-full md:w-auto min-w-0">
+                    {currentConfig.filterKeys.map((key) => {
+                      if (
+                        tab === "nilai" &&
+                        nilaiViewMode === "rekap" &&
+                        key !== "kelas"
+                      )
+                        return null;
+                      return (
+                        <div key={key} className="w-full md:w-40">
+                          <PremiumSelect
+                            value={filters[key] || ""}
+                            onChange={(val) =>
+                              setFilters({ ...filters, [key]: val })
+                            }
+                            options={[
+                              { label: `Semua ${key}`, value: "" },
+                              ...getFilterOptions(key).map((opt) => ({
+                                label: opt,
+                                value: opt,
+                              })),
+                            ]}
+                            placeholder={`Filter ${key}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => fetchData(false)}
+                    className="w-full md:w-auto flex justify-center items-center gap-2 p-3 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
+                    title="Sinkronkan Ulang"
+                  >
+                    <RefreshCw
+                      size={18}
+                      className={loading || isSyncing ? "animate-spin" : ""}
+                    />
+                    <span className="md:hidden font-bold text-sm">
+                      Refresh Data
+                    </span>
+                  </button>
+                </div>
               </div>
-            </div>
-          </Card>
-        </motion.div>
+            </Card>
+          </motion.div>
+        )}
 
         {/* PANEL AKSI MELAYANG (FLOATING BULK DELETE) */}
         <AnimatePresence>
@@ -1887,7 +1958,9 @@ const GuruDashboard = () => {
           )}
         </AnimatePresence>
 
-        {/* KONTEN UTAMA: BANK SOAL ATAU NILAI */}
+        {/* ============================================================== */}
+        {/* KONTEN UTAMA: BANK SOAL ATAU NILAI ATAU PELANGGARAN */}
+        {/* ============================================================== */}
         {loading && data.length === 0 ? (
           <div className="py-20 text-center flex flex-col items-center">
             <RefreshCw
@@ -1908,7 +1981,7 @@ const GuruDashboard = () => {
         ) : (
           <motion.div variants={fadeUp}>
             {/* VIEW NILAI REKAP */}
-            {nilaiViewMode === "rekap" ? (
+            {nilaiViewMode === "rekap" && (
               <>
                 <Card className="hidden md:block overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
                   <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
@@ -2019,6 +2092,8 @@ const GuruDashboard = () => {
                     )}
                   </div>
                 </Card>
+
+                {/* Tampilan Mobile Rekap */}
                 <div className="md:hidden flex flex-col gap-4">
                   {pivotNilaiData.data.length === 0 ? (
                     <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
@@ -2075,7 +2150,10 @@ const GuruDashboard = () => {
                   )}
                 </div>
               </>
-            ) : (
+            )}
+
+            {/* VIEW LOG RIWAYAT */}
+            {nilaiViewMode === "log" && (
               <>
                 <Card className="hidden md:block overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
                   <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
@@ -2192,6 +2270,8 @@ const GuruDashboard = () => {
                     )}
                   </div>
                 </Card>
+
+                {/* Tampilan Mobile Log */}
                 <div className="md:hidden flex flex-col gap-4">
                   {processedData.length === 0 ? (
                     <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
@@ -2262,6 +2342,153 @@ const GuruDashboard = () => {
                 </div>
               </>
             )}
+
+            {/* ============================================================== */}
+            {/* VIEW PELANGGARAN / ANTI-CHEAT CONTROL */}
+            {/* ============================================================== */}
+            {nilaiViewMode === "pelanggaran" && (
+              <div className="space-y-6 max-w-5xl mx-auto">
+                {/* KOTAK SISWA TERKUNCI (Perlu Tindakan) */}
+                <div className="bg-red-50 border border-red-200 rounded-[2rem] p-5 md:p-8 shadow-sm">
+                  <div className="flex items-center gap-3 mb-6 border-b border-red-100 pb-4">
+                    <div className="p-3 bg-red-100 text-red-600 rounded-xl">
+                      <Unlock size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-red-700">
+                        Membutuhkan Tindakan (Siswa Terkunci)
+                      </h3>
+                      <p className="text-red-500/80 text-sm font-semibold">
+                        Siswa di bawah ini keluar aplikasi untuk pertama
+                        kalinya. Ujian mereka dibekukan.
+                      </p>
+                    </div>
+                  </div>
+
+                  {lockedSessions.length === 0 ? (
+                    <div className="py-12 text-center text-red-400 font-bold bg-white/50 rounded-2xl border border-red-100">
+                      <CheckCircle2
+                        size={40}
+                        className="mx-auto mb-3 opacity-50"
+                      />
+                      Aman! Tidak ada siswa yang terkunci saat ini.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {lockedSessions.map((sesi) => (
+                        <Card
+                          key={sesi.id_sesi}
+                          className="p-5 bg-white border border-red-200 shadow-sm hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <p className="font-black text-slate-800 text-lg leading-tight">
+                                {sesi.username_siswa}
+                              </p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                ID Ujian: {sesi.id_ujian}
+                              </p>
+                            </div>
+                            <span className="bg-red-100 text-red-600 px-2.5 py-1 rounded-md text-[10px] font-black uppercase animate-pulse">
+                              LOCKED
+                            </span>
+                          </div>
+                          <button
+                            onClick={() =>
+                              handleUnlockSesi(
+                                sesi.username_siswa,
+                                sesi.id_ujian,
+                              )
+                            }
+                            className="w-full bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold py-3 rounded-xl text-sm transition-all flex justify-center items-center gap-2 shadow-sm"
+                          >
+                            <Unlock size={16} /> Buka Kunci Layar
+                          </button>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* KOTAK RIWAYAT DISKUALIFIKASI */}
+                <div className="bg-slate-800 border border-slate-700 rounded-[2rem] p-5 md:p-8 shadow-xl">
+                  <div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4">
+                    <div className="p-3 bg-slate-700 text-red-400 rounded-xl">
+                      <UserX size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-white">
+                        Riwayat Diskualifikasi
+                      </h3>
+                      <p className="text-slate-400 text-sm font-medium">
+                        Siswa di bawah ini ngeyel keluar aplikasi untuk kedua
+                        kalinya dan dihentikan paksa.
+                      </p>
+                    </div>
+                  </div>
+
+                  {disqualifiedSessions.length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 font-bold bg-slate-900/50 rounded-2xl border border-slate-700">
+                      Belum ada riwayat siswa yang didiskualifikasi.
+                    </div>
+                  ) : (
+                    <div className="overflow-auto max-h-[50vh] scrollbar-thin rounded-xl border border-slate-700">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-slate-900 sticky top-0 z-10 shadow-md">
+                          <tr>
+                            <th className="px-6 py-4 text-slate-400 font-bold text-xs uppercase tracking-wider">
+                              Nama Siswa
+                            </th>
+                            <th className="px-6 py-4 text-slate-400 font-bold text-xs uppercase tracking-wider">
+                              Kelas
+                            </th>
+                            <th className="px-6 py-4 text-slate-400 font-bold text-xs uppercase tracking-wider">
+                              Mapel
+                            </th>
+                            <th className="px-6 py-4 text-slate-400 font-bold text-xs uppercase tracking-wider">
+                              Skor Sementara
+                            </th>
+                            <th className="px-6 py-4 text-center text-slate-400 font-bold text-xs uppercase tracking-wider">
+                              Aksi
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700 bg-slate-800">
+                          {disqualifiedSessions.map((item, i) => (
+                            <tr
+                              key={i}
+                              className="hover:bg-slate-700/50 transition-colors"
+                            >
+                              <td className="px-6 py-4 font-black text-white">
+                                {item.nama_siswa}
+                              </td>
+                              <td className="px-6 py-4 text-slate-300 font-medium">
+                                {item.kelas}
+                              </td>
+                              <td className="px-6 py-4 text-slate-300 font-medium">
+                                {item.mapel}
+                              </td>
+                              <td className="px-6 py-4 font-black text-red-400 text-lg">
+                                {item.skor}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <button
+                                  onClick={() => openReviewModal(item)}
+                                  className="p-2 bg-slate-700 text-blue-400 hover:text-white hover:bg-blue-500 rounded-lg transition-colors"
+                                  title="Lihat Seberapa Jauh Ia Mengerjakan"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -2280,7 +2507,7 @@ const GuruDashboard = () => {
                   <div className="p-4 md:p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
                     <div>
                       <h3 className="text-lg md:text-xl font-bold text-slate-800">
-                        Analisis Jawaban Siswa
+                        Analisis Jawaban Asli
                       </h3>
                       <p className="text-xs md:text-sm text-slate-500 mt-0.5">
                         {reviewData.nama_siswa || reviewData.Nama_Siswa} •{" "}
@@ -2298,7 +2525,6 @@ const GuruDashboard = () => {
                   {/* Isi Detail (Pintar Membaca Nama Kolom) */}
                   <div className="p-4 md:p-6 overflow-y-auto bg-slate-50/50 scrollbar-thin">
                     {(() => {
-                      // 1. CARI KEY YANG MENGANDUNG KATA "detail" dan "jawaban" (ANTI HURUF BESAR/SPASI)
                       const key = Object.keys(reviewData).find(
                         (k) =>
                           k.toLowerCase().replace(/[^a-z0-9]/g, "") ===
@@ -2307,7 +2533,6 @@ const GuruDashboard = () => {
                       const rawData = key ? reviewData[key] : null;
                       let parsedDetail = null;
 
-                      // 2. PARSING JSON DENGAN AMAN
                       if (rawData) {
                         try {
                           parsedDetail =
@@ -2319,7 +2544,6 @@ const GuruDashboard = () => {
                         }
                       }
 
-                      // 3. RENDER JIKA DATA VALID
                       if (
                         parsedDetail &&
                         Array.isArray(parsedDetail) &&
@@ -2382,7 +2606,6 @@ const GuruDashboard = () => {
                         );
                       }
 
-                      // 4. JIKA DATA KOSONG ATAU GAGAL PARSE
                       return (
                         <div className="py-16 md:py-24 text-center">
                           <div className="w-20 h-20 bg-white border border-slate-200 rounded-full flex items-center justify-center mx-auto mb-5 text-slate-300 shadow-sm">
@@ -2393,9 +2616,7 @@ const GuruDashboard = () => {
                           </h4>
                           <p className="text-slate-500 text-sm max-w-sm mx-auto mt-2 leading-relaxed">
                             Log rincian jawaban belum direkam oleh sistem saat
-                            siswa ini mengerjakan ujian. Atau pastikan nama
-                            kolom di Airtable sama persis yaitu:{" "}
-                            <b className="text-slate-700">detail_jawaban</b>
+                            siswa ini mengerjakan ujian.
                           </p>
                         </div>
                       );

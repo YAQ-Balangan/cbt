@@ -39,7 +39,7 @@ export const api = {
         return data || [];
     },
 
-    // 3. CREATE (Tambah Data Baru)
+    // 3. CREATE (Buat Data Baru)
     create: async (sheet, payloadData) => {
         const tableName = sheet.toLowerCase();
         const { data, error } = await supabase
@@ -77,11 +77,11 @@ export const api = {
     },
 
     // ========================================================
-    // FITUR KEAMANAN: HYBRID AUTO-SAVE & SESSION LOCK
+    // FITUR AUTO-SAVE KE SERVER & ANTI-CHEAT
     // ========================================================
 
-    // Menyimpan progres sekaligus status (ACTIVE/LOCKED)
-    saveSesi: async (username, idUjian, jawaban, sisaWaktu, cheatWarn, status = "ACTIVE") => {
+    // Auto-Save setiap 15 Detik & Saat Pindah Soal
+    saveSesi: async (username, idUjian, jawaban, sisaWaktu, pelanggaran = 0, statusSesi = 'ACTIVE') => {
         const idSesi = `${username}_${idUjian}`;
         const { error } = await supabase
             .from('sesi_ujian')
@@ -91,14 +91,14 @@ export const api = {
                 id_ujian: idUjian,
                 jawaban_sementara: jawaban,
                 sisa_waktu: sisaWaktu,
-                peringatan_cheat: cheatWarn,
-                status: status // Kolom penting untuk fitur kunci/buka sesi
+                pelanggaran: pelanggaran,
+                status: statusSesi
             }, { onConflict: 'id_sesi' });
 
         if (error) console.error("Gagal auto-save ke server:", error.message);
     },
 
-    // Mengambil data sesi terakhir siswa
+    // Tarik progres sebelumnya saat Siswa mulai/melanjutkan ujian
     getSesi: async (username, idUjian) => {
         const idSesi = `${username}_${idUjian}`;
         const { data, error } = await supabase
@@ -107,21 +107,44 @@ export const api = {
             .eq('id_sesi', idSesi)
             .single();
 
-        // PGRST116 adalah error jika data belum ada (siswa baru mulai)
+        // Abaikan error jika sesi memang belum ada (belum pernah ngerjain)
         if (error && error.code !== 'PGRST116') console.error("Gagal tarik sesi:", error.message);
         return data;
     },
 
-    // Fitur Guru: Membuka kunci (Unlock) sesi siswa yang terblokir
-    updateSesiStatus: async (username, idUjian, statusBaru) => {
+    // GURU: Buka Kunci Siswa
+    updateSesiStatus: async (username, idUjian, status, pelanggaran = 0) => {
         const idSesi = `${username}_${idUjian}`;
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('sesi_ujian')
-            .update({ status: statusBaru })
-            .eq('id_sesi', idSesi)
-            .select();
+            .update({
+                status: status,
+                pelanggaran: pelanggaran
+            })
+            .eq('id_sesi', idSesi);
 
         if (error) throw new Error(error.message);
-        return data;
+    },
+
+    // GURU: Menarik daftar Siswa yang ngeyel keluar / Terkunci
+    getSesiTerkunci: async () => {
+        const { data, error } = await supabase
+            .from('sesi_ujian')
+            .select('*')
+            .eq('status', 'LOCKED');
+
+        if (error) throw new Error(error.message);
+        return data || [];
+    },
+
+    // SISWA: Menghapus sesi setelah ujian berhasil dikumpul agar reset
+    deleteSesi: async (username, idUjian) => {
+        const idSesi = `${username}_${idUjian}`;
+        const { error } = await supabase
+            .from('sesi_ujian')
+            .delete()
+            .eq('id_sesi', idSesi);
+
+        if (error) console.error("Gagal reset sesi ujian:", error.message);
     }
 };
