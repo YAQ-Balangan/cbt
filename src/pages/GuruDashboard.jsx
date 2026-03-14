@@ -45,6 +45,7 @@ import { AuthContext } from "../context/AuthContext";
 
 // IMPORT LIBRARY EXPORT
 import * as XLSX from "xlsx";
+import * as mammoth from "mammoth";
 import {
   Document,
   Packer,
@@ -446,6 +447,7 @@ const GuruDashboard = () => {
 
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
+  const [isReadingFile, setIsReadingFile] = useState(false);
   const [parsedBulkData, setParsedBulkData] = useState([]);
   const [bulkMapel, setBulkMapel] = useState("");
   const [bulkKelas, setBulkKelas] = useState("");
@@ -569,14 +571,12 @@ const GuruDashboard = () => {
         JSON.stringify(prev) !== JSON.stringify(newData) ? newData : prev,
       );
 
-      // PENARIKAN DATA ANTI-CHEAT DI TAB NILAI
-      if (tab === "nilai") {
-        try {
-          const lockedRes = await api.getSesiTerkunci();
-          setSesiUjianData(lockedRes || []);
-        } catch (e) {
-          console.error("Gagal narik sesi ujian:", e);
-        }
+      // PENARIKAN DATA ANTI-CHEAT SEKARANG GLOBAL (PANTAU 24/7)
+      try {
+        const lockedRes = await api.getSesiTerkunci();
+        setSesiUjianData(lockedRes || []);
+      } catch (e) {
+        console.error("Gagal menarik data sesi anti-cheat:", e);
       }
     } catch (error) {
       if (!isBackground) setData([]);
@@ -907,79 +907,200 @@ const GuruDashboard = () => {
     if (!bulkText.trim())
       return showAlert("warning", "Validasi", "Teks soal masih kosong.");
 
-    const blocks = bulkText.split(/(?:Jawaban|Kunci):\s*([A-E])/i);
+    // ==========================================
+    // 1. LOGIKA PEMISAH SOAL CERDAS (STATE MACHINE V3)
+    // Menutup celah Opsi Multi-baris & Soal tanpa nomor
+    // ==========================================
+    const lines = bulkText.split("\n");
+    const rawBlocks = [];
+    let currentBlock = [];
+    let phase = "q"; // 'q' = wacana/soal, 'o' = opsi, 'k' = kunci, 'split_ready' = siap dipotong
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      let lineTrimmed = line.trim();
+
+      // Memanfaatkan baris kosong sebagai sinyal transisi yang aman
+      if (!lineTrimmed) {
+        // Jika baris kosong muncul SETELAH opsi atau kunci, sistem siap memotong soal
+        if ((phase === "o" || phase === "k") && currentBlock.length > 0) {
+          phase = "split_ready";
+        }
+        continue;
+      }
+
+      let isOpt = /^\s*\*?[a-eA-E]\*?[\.\)]/.test(lineTrimmed);
+      let isKunci = /^\s*(?:Jawaban|Kunci)\s*:/i.test(lineTrimmed);
+      let isNumbered = /^\s*\d+[\.\)]\s/.test(lineTrimmed);
+      let isWacanaMarker =
+        /^\s*(perhatikan|cermatilah|bacalah|amatilah|wacana|teks|kutipan|dialog)/i.test(
+          lineTrimmed,
+        );
+
+      // Kapan kita memotong (split) blok menjadi soal baru?
+      if (currentBlock.length > 0) {
+        if (
+          isNumbered || // Sinyal 1: Jelas ada nomor urut baru
+          isWacanaMarker || // Sinyal 2: Jelas ada penanda instruksi wacana baru
+          (phase === "split_ready" && !isOpt && !isKunci) || // Sinyal 3: Habis baris kosong, dan bukan lanjutan opsi
+          (phase === "k" && !isKunci) // Sinyal 4: Tembok Kunci:A sudah terlewati
+        ) {
+          rawBlocks.push(currentBlock.join("\n"));
+          currentBlock = [];
+          phase = "q";
+        }
+      }
+
+      if (isOpt) phase = "o";
+      else if (isKunci) phase = "k";
+      else if (phase === "split_ready") phase = "q"; // Batal split, ternyata opsi multi-baris berparagraf
+
+      currentBlock.push(lineTrimmed);
+    }
+    if (currentBlock.length > 0) rawBlocks.push(currentBlock.join("\n"));
+
+    // ==========================================
+    // 2. LOGIKA EKSTRAKSI & COUNTDOWN WACANA
+    // ==========================================
     const parsed = [];
     let currentId =
       data.length > 0
         ? Math.max(...data.map((item) => parseInt(item.id) || 0))
         : 0;
+
     let wacanaTerakhir = "";
+    let sisaJatahWacana = 0;
 
-    for (let i = 0; i < blocks.length - 1; i += 2) {
+    for (let i = 0; i < rawBlocks.length; i++) {
+      let rawText = rawBlocks[i].trim();
+      if (!rawText) continue;
+
       currentId += 1;
-      let rawText = blocks[i].trim();
-      let kunci = blocks[i + 1].toUpperCase();
 
-      rawText = rawText.replace(/^\d+[\.\)]\s*/, "");
+      // Ekstrak Format "Kunci: A"
+      let kunci = "A";
+      const matchKunciBawah = rawText.match(
+        /\n\s*(?:Jawaban|Kunci)\s*:\s*([A-E])/i,
+      );
+      if (matchKunciBawah) {
+        kunci = matchKunciBawah[1].toUpperCase();
+        rawText = rawText.replace(/\n\s*(?:Jawaban|Kunci)\s*:\s*([A-E])/i, "");
+      }
 
-      let opsiA =
-        rawText
-          .match(/(?:^|\n)\s*[aA][\.\)]\s*(.+?)(?=\n\s*[bB][\.\)]|$)/is)?.[1]
-          ?.trim() || "";
-      let opsiB =
-        rawText
-          .match(/(?:^|\n)\s*[bB][\.\)]\s*(.+?)(?=\n\s*[cC][\.\)]|$)/is)?.[1]
-          ?.trim() || "";
-      let opsiC =
-        rawText
-          .match(/(?:^|\n)\s*[cC][\.\)]\s*(.+?)(?=\n\s*[dD][\.\)]|$)/is)?.[1]
-          ?.trim() || "";
-      let opsiD =
-        rawText
-          .match(/(?:^|\n)\s*[dD][\.\)]\s*(.+?)(?=\n\s*[eE][\.\)]|$)/is)?.[1]
-          ?.trim() || "";
-      let opsiE =
-        rawText.match(/(?:^|\n)\s*[eE][\.\)]\s*(.+?)(?=$)/is)?.[1]?.trim() ||
-        "";
+      // Hapus nomor soal di awal
+      rawText = rawText.replace(/^\s*\d+[\.\)]\s*/, "");
 
-      let teksSebelumOpsi = rawText.split(/(?:^|\n)\s*[aA][\.\)]\s*/)[0].trim();
+      // Ekstrak Opsi & Format Bintang (*)
+      const extractOption = (letter, nextLetter) => {
+        const nextRegex = nextLetter
+          ? `\\n\\s*\\*?[${nextLetter.toLowerCase()}${nextLetter.toUpperCase()}]\\*?[\\.\\)]`
+          : `$`;
+        const regex = new RegExp(
+          `(?:^|\\n)\\s*(\\*?)[${letter.toLowerCase()}${letter.toUpperCase()}](\\*?)[\\.\\)]\\s*(\\*?)(.+?)(?=${nextRegex})`,
+          "is",
+        );
+
+        const match = rawText.match(regex);
+        if (!match) return { text: "", isKey: false };
+
+        let isKey = match[1] === "*" || match[2] === "*" || match[3] === "*";
+        let text = match[4].trim();
+        if (text.startsWith("*")) {
+          isKey = true;
+          text = text.substring(1).trim();
+        }
+        return { text, isKey };
+      };
+
+      const optA = extractOption("A", "B");
+      const optB = extractOption("B", "C");
+      const optC = extractOption("C", "D");
+      const optD = extractOption("D", "E"); // Aman meski soal SMP cuma sampai D
+      const optE = extractOption("E", null);
+
+      if (optA.isKey) kunci = "A";
+      else if (optB.isKey) kunci = "B";
+      else if (optC.isKey) kunci = "C";
+      else if (optD.isKey) kunci = "D";
+      else if (optE.isKey) kunci = "E";
+
+      let teksSebelumOpsi = rawText
+        .split(/(?:^|\n)\s*\*?[aA]\*?[\.\)]\s*/)[0]
+        .trim();
       let wacana = "";
       let pertanyaan = "";
+
+      // Regex Hitung Wacana yang Jauh Lebih Kuat (Menutup Celah 2)
+      const hitungTargetWacana = (teks) => {
+        let remaining = 1;
+        const rangeMatch = teks.match(
+          /soal\s+(?:nomor\s+)?(\d+)\s*(?:-|s\.?\/d\.?|sampai|s\/d)\s*(\d+)/i,
+        );
+        const andMatch = teks.match(/soal\s+(?:nomor\s+)?(\d+)\s+dan\s+(\d+)/i);
+        // Menangkap "untuk 3 soal", "untuk menjawab 5 soal", "untuk sebanyak 2 soal"
+        const countMatch = teks.match(
+          /untuk\s+(?:menjawab\s+)?(?:sebanyak\s+)?(\d+)\s+soal/i,
+        );
+
+        if (rangeMatch) {
+          remaining = Math.max(
+            1,
+            parseInt(rangeMatch[2]) - parseInt(rangeMatch[1]) + 1,
+          );
+        } else if (andMatch) {
+          remaining = 2;
+        } else if (countMatch) {
+          remaining = Math.max(1, parseInt(countMatch[1]));
+        }
+        return remaining;
+      };
 
       if (teksSebelumOpsi.includes("\n\n")) {
         let paragraf = teksSebelumOpsi.split(/\n\s*\n/);
         pertanyaan = paragraf.pop().trim();
         wacana = paragraf.join("\n\n").trim();
+
+        sisaJatahWacana = hitungTargetWacana(wacana);
         wacanaTerakhir = wacana;
       } else {
-        let lines = teksSebelumOpsi
+        let linesInfo = teksSebelumOpsi
           .split("\n")
           .map((l) => l.trim())
           .filter(Boolean);
-        const firstLine = lines[0] || "";
-        const isWacanaMarker = /wacana|teks|kutipan|puisi|cerita/i.test(
+        const firstLine = linesInfo[0] || "";
+        const isWacanaMarker = /wacana|teks|kutipan|puisi|cerita|dialog/i.test(
           firstLine,
         );
         const isInstructionMarker =
           /perhatikan|cermatilah|bacalah|amatilah/i.test(firstLine);
 
-        if (lines.length >= 2 && (isWacanaMarker || isInstructionMarker)) {
-          pertanyaan = lines.pop().trim();
-          wacana = lines.join("\n").trim();
+        if (linesInfo.length >= 2 && (isWacanaMarker || isInstructionMarker)) {
+          pertanyaan = linesInfo.pop().trim();
+          wacana = linesInfo.join("\n").trim();
+
+          sisaJatahWacana = hitungTargetWacana(wacana);
           wacanaTerakhir = wacana;
         } else {
-          pertanyaan = lines.join("\n").trim();
-          wacana = wacanaTerakhir;
+          pertanyaan = linesInfo.join("\n").trim();
+
+          if (sisaJatahWacana > 0) {
+            wacana = wacanaTerakhir;
+          } else {
+            wacana = "";
+            wacanaTerakhir = "";
+          }
         }
       }
 
+      if (sisaJatahWacana > 0) sisaJatahWacana--;
+
       if (wacana) {
         wacana = wacana.replace(
-          /(untuk\s+(?:menjawab\s+)?soal\s+(?:nomor\s+)?\d+\s*(?:-|s\.?\/d\.?|sampai|dan)\s*\d+)/gi,
+          /(untuk\s+(?:menjawab\s+)?soal\s+(?:nomor\s+)?\d+\s*(?:-|s\.?\/d\.?|sampai|s\/d|dan)\s*\d+)/gi,
           "untuk menjawab soal di bawah ini",
         );
         wacana = wacana.replace(
-          /wacana\s+untuk\s+\d+\s+soal\s+di\s+bawah\s+ini:?/gi,
+          /wacana\s+untuk\s+(?:menjawab\s+)?\d+\s+soal\s+di\s+bawah\s+ini:?/gi,
           "",
         );
         wacana = wacana.trim();
@@ -993,16 +1114,136 @@ const GuruDashboard = () => {
         wacana,
         pertanyaan,
         link_gambar: "",
-        opsi_a: opsiA,
-        opsi_b: opsiB,
-        opsi_c: opsiC,
-        opsi_d: opsiD,
-        opsi_e: opsiE,
+        opsi_a:
+          optA.text ||
+          rawText
+            .match(/(?:^|\n)\s*[aA][\.\)]\s*(.+?)(?=\n\s*[bB][\.\)]|$)/is)?.[1]
+            ?.trim() ||
+          "",
+        opsi_b:
+          optB.text ||
+          rawText
+            .match(/(?:^|\n)\s*[bB][\.\)]\s*(.+?)(?=\n\s*[cC][\.\)]|$)/is)?.[1]
+            ?.trim() ||
+          "",
+        opsi_c:
+          optC.text ||
+          rawText
+            .match(/(?:^|\n)\s*[cC][\.\)]\s*(.+?)(?=\n\s*[dD][\.\)]|$)/is)?.[1]
+            ?.trim() ||
+          "",
+        opsi_d:
+          optD.text ||
+          rawText
+            .match(/(?:^|\n)\s*[dD][\.\)]\s*(.+?)(?=\n\s*[eE][\.\)]|$)/is)?.[1]
+            ?.trim() ||
+          "",
+        opsi_e:
+          optE.text ||
+          rawText.match(/(?:^|\n)\s*[eE][\.\)]\s*(.+?)(?=$)/is)?.[1]?.trim() ||
+          "",
         jawaban_benar: kunci,
         guru_pembuat: namaGuruLog,
       });
     }
+
     setParsedBulkData(parsed);
+  };
+
+  // ==========================================
+  // FUNGSI MALAS: BACA FILE WORD/TXT OTOMATIS
+  // ==========================================
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsReadingFile(true);
+    try {
+      const fileExt = file.name.split(".").pop().toLowerCase();
+
+      if (fileExt === "docx") {
+        const arrayBuffer = await file.arrayBuffer();
+
+        // 1. KUNCI PERUBAHAN: Gunakan convertToHtml agar format list (1,2,3 / A,B,C) tidak hilang
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+
+        // 2. Buat wadah virtual untuk menerjemahkan HTML kembali menjadi Teks biasa
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = result.value;
+
+        let extractedText = "";
+
+        // 3. Looping PINTAR untuk mendeteksi mana Soal dan mana Opsi
+        Array.from(tempDiv.children).forEach((el) => {
+          if (el.tagName === "P") {
+            extractedText += el.innerText + "\n";
+          } else if (el.tagName === "OL" || el.tagName === "UL") {
+            const lis = Array.from(el.children).filter(
+              (c) => c.tagName === "LI",
+            );
+
+            lis.forEach((li, idx) => {
+              const childList = li.querySelector("ol, ul");
+              if (childList) {
+                // KASUS A: Nested List (Soal dan Opsi menyatu di Word)
+                const questionClone = li.cloneNode(true);
+                const innerLists = questionClone.querySelectorAll("ol, ul");
+                innerLists.forEach((il) => il.remove()); // Buang opsi sementara
+
+                extractedText += `${idx + 1}. ${questionClone.innerText.trim()}\n`;
+
+                Array.from(childList.children).forEach((optLi, optIdx) => {
+                  const letter = String.fromCharCode(65 + optIdx); // 65 adalah kode ASCII untuk 'A'
+                  extractedText += `${letter}. ${optLi.innerText.trim()}\n`;
+                });
+              } else {
+                // KASUS B: Flat List (Soal dan Opsi terpisah paragrafnya)
+                // TRIK: Jika list ini berisi 2 hingga 5 baris, sistem menebak ini adalah OPSI JAWABAN (A, B, C, D, E)
+                if (lis.length >= 2 && lis.length <= 5) {
+                  const letter = String.fromCharCode(65 + idx);
+                  extractedText += `${letter}. ${li.innerText.trim()}\n`;
+                } else {
+                  // Jika listnya panjang tak wajar atau sendirian, jadikan angka biasa
+                  extractedText += `${idx + 1}. ${li.innerText.trim()}\n`;
+                }
+              }
+            });
+          } else {
+            extractedText += el.innerText + "\n";
+          }
+          extractedText += "\n"; // Jarak antar paragraf
+        });
+
+        // 4. Bersihkan spasi kosong yang berlebihan agar rapi
+        extractedText = extractedText.replace(/\n{3,}/g, "\n\n");
+
+        setBulkText(extractedText.trim());
+        showAlert(
+          "success",
+          "Berhasil Ekstrak",
+          "Auto-Numbering Word berhasil dikembalikan ke teks!",
+        );
+      } else if (fileExt === "txt") {
+        const text = await file.text();
+        setBulkText(text);
+        showAlert(
+          "success",
+          "Berhasil Ekstrak",
+          "Teks berhasil disalin otomatis.",
+        );
+      } else {
+        showAlert(
+          "warning",
+          "Format Ditolak",
+          "Silakan upload file Microsoft Word (.docx) atau Text (.txt).",
+        );
+      }
+    } catch (error) {
+      showAlert("danger", "Gagal Membaca File", "Detail: " + error.message);
+    } finally {
+      setIsReadingFile(false);
+      e.target.value = null;
+    }
   };
 
   const handleSaveBulk = async () => {
@@ -1582,31 +1823,35 @@ const GuruDashboard = () => {
         <AnimatePresence>
           {lockedSessions.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="bg-red-500 text-white px-5 py-4 rounded-2xl shadow-xl flex flex-col sm:flex-row justify-between items-center animate-pulse sticky top-4 z-[60]"
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.9 }}
+              // z-[45] memastikannya berada di bawah menu hamburger (z-50)
+              className="fixed bottom-4 md:bottom-8 right-4 md:right-8 z-[45] max-w-[calc(100vw-2rem)] md:max-w-sm"
             >
-              <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                <ShieldAlert size={32} />
-                <div>
-                  <p className="font-black text-lg">Peringatan Anti-Cheat!</p>
-                  <p className="text-xs md:text-sm font-medium opacity-90">
-                    {lockedSessions.length} Siswa terkunci akibat keluar
-                    aplikasi dan menunggu persetujuan Anda.
+              <div className="bg-gradient-to-r from-red-600 to-red-500 text-white p-3 md:p-4 rounded-[1.5rem] shadow-2xl shadow-red-500/30 flex items-center gap-3 md:gap-4 border border-red-400">
+                <div className="bg-white/20 p-2 rounded-full shrink-0 animate-pulse">
+                  <ShieldAlert size={20} className="md:w-6 md:h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-sm md:text-base leading-tight truncate">
+                    Siswa Curang!
+                  </p>
+                  <p className="text-[10px] md:text-xs font-medium text-red-100 truncate mt-0.5">
+                    {lockedSessions.length} perangkat dikunci.
                   </p>
                 </div>
+                <button
+                  onClick={() => {
+                    setTab("nilai");
+                    setNilaiViewMode("pelanggaran");
+                    window.scrollTo(0, 0);
+                  }}
+                  className="shrink-0 bg-white text-red-600 px-3 py-2 md:px-4 md:py-2.5 rounded-xl font-bold text-xs md:text-sm hover:scale-105 active:scale-95 transition-all shadow-sm border border-red-100"
+                >
+                  Tindak
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setTab("nilai");
-                  setNilaiViewMode("pelanggaran");
-                  window.scrollTo(0, 0);
-                }}
-                className="w-full sm:w-auto bg-white text-red-600 px-5 py-2.5 rounded-xl font-bold text-sm shadow-md hover:scale-105 transition-transform"
-              >
-                Lihat & Tindak Siswa
-              </button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -2948,9 +3193,35 @@ const GuruDashboard = () => {
                       />
                     </div>
                   </div>
+                  <div className="flex justify-between items-end mb-2 mt-2">
+                    <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
+                      Teks Soal Asli
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".docx,.txt"
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                        disabled={isReadingFile || isSaving}
+                        title="Upload file Ms. Word"
+                      />
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-[10px] md:text-xs font-bold hover:bg-blue-100 transition-colors shadow-sm"
+                      >
+                        {isReadingFile ? (
+                          <RefreshCw className="animate-spin" size={14} />
+                        ) : (
+                          <FileText size={14} />
+                        )}
+                        {isReadingFile ? "Membaca..." : "Upload Word (.docx)"}
+                      </button>
+                    </div>
+                  </div>
                   <textarea
                     className="w-full p-4 md:p-5 bg-slate-50 border border-slate-200 rounded-xl md:rounded-[1.5rem] font-mono text-[11px] md:text-[13px] outline-none focus:bg-white focus:border-emerald-500 transition-all resize-y h-48 md:h-64 text-slate-700 shadow-inner leading-relaxed"
-                    placeholder="Paste soal dari Ms.Word ke sini...&#10;&#10;Contoh Format:&#10;Teks wacana cerita diletakkan di awal paragraf (jika ada).&#10;Pertanyaan diletakkan sebelum opsi.&#10;a. opsi A&#10;b. opsi B&#10;c. opsi C&#10;d. opsi D&#10;e. opsi E&#10;Kunci: D"
+                    placeholder="Paste soal dari Ms.Word ke sini...&#10;&#10;Sistem Menerima 2 Format Kunci:&#10;&#10;FORMAT 1 (Tanda Bintang):&#10;1. Apa warna langit?&#10;A. Merah&#10;*B. Biru&#10;C. Hijau&#10;&#10;FORMAT 2 (Tulis Kunci di bawah):&#10;2. 1+1 = ?&#10;A. 1&#10;B. 2&#10;C. 3&#10;Kunci: B"
                     value={bulkText}
                     onChange={(e) => setBulkText(e.target.value)}
                     disabled={isSaving}

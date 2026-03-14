@@ -1,8 +1,9 @@
 // src/components/layout/Dashboard.jsx
 import React, { useState, useContext } from "react";
-import { ShieldCheck, LogOut, Menu } from "lucide-react";
+import { LogOut, Menu } from "lucide-react"; // ShieldCheck sudah dihapus
 import { AuthContext } from "../../context/AuthContext";
 import { Badge } from "../ui/Ui";
+import logoMasda from "../../assets/logo.svg"; // Import logo SVG
 
 const Dashboard = ({ children, menu = [], active, setActive }) => {
   const { user, logout } = useContext(AuthContext);
@@ -21,20 +22,26 @@ const Dashboard = ({ children, menu = [], active, setActive }) => {
 
       {/* SIDEBAR */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200 transition-transform duration-500 lg:translate-x-0 lg:static flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200 transition-transform duration-500 lg:translate-x-0 lg:static flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
       >
-        {/* LOGO AREA */}
+        {/* LOGO AREA SUDAH DIPERBARUI */}
         <div className="p-8 pb-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-linear-to-br from-emerald-500 to-emerald-700 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
-              <ShieldCheck size={28} />
+            <div className="w-14 h-14 flex items-center justify-center shrink-0">
+              <img
+                src={logoMasda}
+                alt="Logo MASDA PRO"
+                className="w-full h-full object-contain drop-shadow-md"
+              />
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-800 tracking-tight">
                 MASDA PRO
               </h2>
               <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest leading-none mt-1.5">
-                Version 1.0 (BETA)
+                Version 1.0
               </p>
             </div>
           </div>
