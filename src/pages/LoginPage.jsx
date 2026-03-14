@@ -1,8 +1,9 @@
 // src/pages/LoginPage.jsx
 import React, { useState, useContext } from "react";
 import { motion } from "framer-motion";
-import { ShieldCheck, User, Lock, ArrowRight, Loader2 } from "lucide-react";
+import { User, Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react"; // Impor Eye dan EyeOff
 import { AuthContext } from "../context/AuthContext";
+import logoMasda from "../assets/logo.svg";
 
 // Variabel Animasi
 const fadeUp = {
@@ -24,6 +25,9 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // State baru untuk mengatur tampilan password
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,15 +70,33 @@ const LoginPage = () => {
           animate="visible"
           className="flex flex-col items-center mb-6 sm:mb-8 text-center"
         >
+          {/* CONTAINER LOGO DENGAN EFEK SHIMMER (MENGKILAP) */}
           <motion.div
             variants={fadeUp}
-            className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl sm:rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-emerald-500/30 mb-4 sm:mb-6 transform -rotate-6 hover:rotate-0 transition-transform duration-500"
+            className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mb-4 sm:mb-6 transform hover:scale-105 transition-transform duration-500 relative overflow-hidden rounded-2xl group"
           >
-            <ShieldCheck
-              size={32}
-              className="sm:w-10 sm:h-10 rotate-6 hover:rotate-0 transition-transform duration-500"
+            {/* GAMBAR LOGO UTAMA */}
+            <img
+              src={logoMasda}
+              alt="Logo MASDA PRO"
+              className="w-full h-full object-contain drop-shadow-xl relative z-10"
+            />
+
+            {/* EFEK CAHAYA LEWAT (SHIMMER) */}
+            <motion.div
+              className="absolute top-0 left-[-100%] w-[50%] h-full bg-gradient-to-r from-transparent via-white/60 to-transparent skew-x-[-20deg] z-20 pointer-events-none"
+              animate={{
+                left: ["-100%", "200%"],
+              }}
+              transition={{
+                duration: 10,
+                ease: "easeInOut",
+                repeat: Infinity,
+                repeatDelay: 2,
+              }}
             />
           </motion.div>
+
           <motion.h1
             variants={fadeUp}
             className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight"
@@ -85,7 +107,7 @@ const LoginPage = () => {
             variants={fadeUp}
             className="text-[10px] sm:text-[11px] font-bold text-amber-500 uppercase tracking-widest mt-1.5 sm:mt-2"
           >
-            Computer Based Test 2026
+            Online Based Test 2026
           </motion.p>
         </motion.div>
 
@@ -100,6 +122,7 @@ const LoginPage = () => {
           </motion.div>
         )}
 
+        {/* Form menggunakan onSubmit agar Enter otomatis terdeteksi */}
         <motion.form
           variants={staggerContainer}
           initial="hidden"
@@ -135,21 +158,36 @@ const LoginPage = () => {
                 <Lock size={18} className="sm:w-5 sm:h-5" />
               </div>
               <input
-                type="password"
+                // Tipe input dinamis berdasarkan state
+                type={showPassword ? "text" : "password"}
                 required
-                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm sm:text-base text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-400 shadow-sm"
+                // Padding kanan ditambah (pr-12) agar teks tidak tertutup ikon mata
+                className="w-full pl-10 sm:pl-12 pr-12 py-2.5 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm sm:text-base text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-400 shadow-sm"
                 placeholder="Masukkan password..."
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              {/* Tombol Toggle Mata */}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-emerald-500 focus:outline-none transition-colors"
+              >
+                {showPassword ? (
+                  <EyeOff size={18} className="sm:w-5 sm:h-5" />
+                ) : (
+                  <Eye size={18} className="sm:w-5 sm:h-5" />
+                )}
+              </button>
             </div>
           </motion.div>
 
           <motion.div variants={fadeUp} className="pt-3 sm:pt-4">
+            {/* Tombol submit standar di dalam form akan selalu tertrigger oleh Enter */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold py-3 sm:py-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:from-emerald-700 hover:to-emerald-600 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold py-3 sm:py-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:from-emerald-700 hover:to-emerald-600 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 relative overflow-hidden group"
             >
               {loading ? (
                 <Loader2 size={18} className="animate-spin sm:w-5 sm:h-5" />
@@ -169,7 +207,7 @@ const LoginPage = () => {
           transition={{ delay: 0.8 }}
           className="text-center mt-6 sm:mt-8 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest"
         >
-          &copy; 2026 MASDA PRO System
+          &copy; 2026 MA Darussalam Awayan
         </motion.p>
       </motion.div>
     </div>
