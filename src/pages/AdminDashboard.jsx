@@ -22,6 +22,8 @@ import {
   Square,
   CheckSquare,
   Sparkles,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
