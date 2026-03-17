@@ -24,6 +24,7 @@ import {
   Sparkles,
   Lock,
   Unlock,
+  ListChecks,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
@@ -234,13 +235,13 @@ const PremiumMultiSelect = ({
           >
             <div className="p-2 border-b border-slate-100 bg-slate-50 sticky top-0 flex justify-between items-center z-10">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2">
-                Pilih Kategori Kelas
+                Pilih Sasaran Kelas
               </span>
               {selectedArray.length > 0 && (
                 <button
                   type="button"
                   onClick={() => onChange("")}
-                  className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded"
+                  className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
                 >
                   Reset
                 </button>
@@ -252,7 +253,7 @@ const PremiumMultiSelect = ({
                   return (
                     <div
                       key={index}
-                      className="px-3 pt-3 pb-1 text-[10px] font-black text-emerald-700 uppercase tracking-widest bg-white sticky top-0"
+                      className="px-3 pt-3 pb-1 text-[10px] font-black text-emerald-700 uppercase tracking-widest bg-white sticky top-0 z-10"
                     >
                       {opt.label}
                     </div>
@@ -544,11 +545,12 @@ const AdminDashboard = () => {
   const [sortConfig, setSortConfig] = useState({ key: "id", direction: "asc" });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [formData, setFormData] = useState({});
   const [isEdit, setIsEdit] = useState(false);
   const [originalId, setOriginalId] = useState(null);
 
-  // --- FITUR BARU: MASTER SWITCH ANTI-CHEAT ---
+  // --- MASTER SWITCH ANTI-CHEAT ---
   const antiCheatSetting = data.find((item) => item.kunci === "Mode_Ujian");
   const isAntiCheatOn = antiCheatSetting
     ? antiCheatSetting.nilai !== "OFF"
@@ -593,9 +595,8 @@ const AdminDashboard = () => {
       },
     );
   };
-  // --------------------------------------------
 
-  // --- FITUR BARU: MASTER SWITCH EKSKLUSIF APLIKASI ---
+  // --- MASTER SWITCH EKSKLUSIF APLIKASI ---
   const appOnlySetting = data.find((item) => item.kunci === "Mode_Aplikasi");
   const isAppOnlyOn = appOnlySetting ? appOnlySetting.nilai === "ON" : false;
 
@@ -638,7 +639,6 @@ const AdminDashboard = () => {
       },
     );
   };
-  // --------------------------------------------
 
   // Helper Custom Alert
   const showAlert = (type, title, message, onConfirm = null) => {
@@ -743,7 +743,7 @@ const AdminDashboard = () => {
 
     setIsSaving(true);
     try {
-      // 3. Format data sebelum dikirim (Angka harus integer)
+      // 3. Format data sebelum dikirim
       const payloadToSave = { ...formData };
 
       if (payloadToSave.id) payloadToSave.id = parseInt(payloadToSave.id);
@@ -866,10 +866,149 @@ const AdminDashboard = () => {
           }
         `}</style>
 
-        {/* HEADER ELEGAN */}
+        {/* ============================================================== */}
+        {/* TAMPILAN COMPACT KHUSUS MOBILE (SAT-SET) */}
+        {/* ============================================================== */}
+        <div className="md:hidden space-y-4 mb-2">
+          {/* 1. Header Ringkas Ala Desktop */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+            <div className="flex justify-between items-center relative z-10">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold mb-0.5">
+                  MASDA PRO
+                </p>
+                <h2 className="text-xl font-black leading-tight">
+                  Administrator
+                </h2>
+              </div>
+              <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center border border-slate-700">
+                <ShieldCheck size={20} className="text-emerald-400" />
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-end justify-between relative z-10">
+              <div>
+                <p className="text-3xl font-black leading-none mb-1">
+                  {processedData.length}
+                </p>
+                <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">
+                  Data {currentConfig.title}
+                </p>
+              </div>
+              <button
+                onClick={() => fetchData(false)}
+                className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors"
+              >
+                <RefreshCw
+                  size={16}
+                  className={
+                    loading || isSyncing
+                      ? "animate-spin text-emerald-400"
+                      : "text-slate-300"
+                  }
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* 2. Grid Menu Navigasi Padat */}
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => setTab("siswa")}
+              className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === "siswa" ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30" : "bg-white border-slate-200 text-slate-500"}`}
+            >
+              <ShieldCheck size={18} />
+              <span className="text-[9px] font-bold">User</span>
+            </button>
+            <button
+              onClick={() => setTab("jadwal")}
+              className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === "jadwal" ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30" : "bg-white border-slate-200 text-slate-500"}`}
+            >
+              <Calendar size={18} />
+              <span className="text-[9px] font-bold">Jadwal</span>
+            </button>
+            <button
+              onClick={() => setTab("mapel")}
+              className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === "mapel" ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30" : "bg-white border-slate-200 text-slate-500"}`}
+            >
+              <BookMarked size={18} />
+              <span className="text-[9px] font-bold">Mapel</span>
+            </button>
+            <button
+              onClick={() => setTab("settings")}
+              className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === "settings" ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30" : "bg-white border-slate-200 text-slate-500"}`}
+            >
+              <Settings size={18} />
+              <span className="text-[9px] font-bold">Setting</span>
+            </button>
+          </div>
+
+          {/* 3. Aksi Cepat Mobile */}
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={openAddModal}
+              className="w-full py-3.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
+            >
+              <Plus size={16} /> Tambah Data Baru
+            </button>
+
+            {/* Khusus Tab Settings */}
+            {tab === "settings" && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleToggleAntiCheat}
+                  className={`flex-1 py-3 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 transition-all text-[10px] border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}
+                >
+                  <ShieldCheck size={16} />
+                  <span className="text-center leading-tight">
+                    {isAntiCheatOn
+                      ? "Matikan Anti-Cheat"
+                      : "Hidupkan Anti-Cheat"}
+                  </span>
+                </button>
+                <button
+                  onClick={handleToggleAppOnly}
+                  className={`flex-1 py-3 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 transition-all text-[10px] border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}
+                >
+                  {isAppOnlyOn ? <Unlock size={16} /> : <Lock size={16} />}
+                  <span className="text-center leading-tight">
+                    {isAppOnlyOn ? "Buka Akses Web" : "Kunci APK Saja"}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* Search Bar Mobile & Filter Button */}
+            <div className="flex gap-2 mt-2">
+              <div className="bg-white rounded-xl p-2.5 shadow-sm border border-slate-200 flex-1 flex items-center gap-2">
+                <Search className="text-slate-400 ml-2 shrink-0" size={16} />
+                <input
+                  className="w-full bg-transparent border-none outline-none font-semibold text-sm text-slate-700 py-1 placeholder:text-slate-400"
+                  placeholder="Cari data..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="bg-white text-slate-600 p-3 rounded-xl shadow-sm border border-slate-200 flex items-center justify-center relative hover:bg-slate-50 transition-colors shrink-0"
+              >
+                <ListChecks size={20} />
+                {/* Indikator titik merah berkedip jika ada filter atau sort yang aktif */}
+                {(Object.values(filters).some(Boolean) ||
+                  sortConfig.key !== "id") && (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* HEADER ELEGAN (DISEMBUNYIKAN DI HP) */}
         <motion.header
           variants={fadeUp}
-          className="relative flex flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 gap-4 overflow-hidden header-live-bg z-0"
+          className="hidden md:flex relative flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 gap-4 overflow-hidden header-live-bg z-0"
         >
           <motion.div
             animate={{
@@ -938,31 +1077,12 @@ const AdminDashboard = () => {
           </div>
         </motion.header>
 
-        {/* INFO BANNER */}
+        {/* STATISTIK & TOOLBAR (DISEMBUNYIKAN DI HP) */}
         <motion.div
           variants={fadeUp}
-          className="relative overflow-hidden bg-white border border-slate-100 rounded-[1.5rem] p-5 text-sm text-slate-700 flex items-start gap-4 shadow-sm"
+          className="hidden md:flex flex-col xl:flex-row gap-4"
         >
-          <div className="p-2.5 bg-amber-50 rounded-full text-amber-500 shrink-0">
-            <Sparkles size={20} />
-          </div>
-          <div className="leading-relaxed pt-0.5">
-            <strong className="text-slate-800 font-black tracking-wide block mb-1">
-              Manajemen Data Responsif
-            </strong>
-            Admin bisa edit/tambah user, pastikan selalu mencoba{" "}
-            <b>klik kolom apapun yang ada</b> untuk menjelajahi fitur. Anda juga
-            bisa menganti <b>mode desktop/mobile</b> lewat pengaturan chrome
-            (titik 3 diatas-kanan).
-          </div>
-        </motion.div>
-
-        {/* STATISTIK & TOOLBAR */}
-        <motion.div
-          variants={fadeUp}
-          className="flex flex-col xl:flex-row gap-4"
-        >
-          <Card className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden">
+          <Card className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden flex flex-col justify-center">
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <ShieldCheck size={56} className="text-emerald-400" />
             </div>
@@ -1056,7 +1176,7 @@ const AdminDashboard = () => {
 
         {/* TAMPILAN DATA (RESPONSIVE) */}
         <motion.div variants={fadeUp}>
-          {/* DESKTOP VIEW */}
+          {/* DESKTOP VIEW (TABEL) */}
           <Card className="hidden md:block border border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem] overflow-hidden relative">
             <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
               <table className="w-full text-left text-sm whitespace-nowrap border-collapse">
@@ -1229,90 +1349,96 @@ const AdminDashboard = () => {
             </div>
           </Card>
 
-          {/* MOBILE VIEW */}
-          <div className="md:hidden flex flex-col gap-4">
+          {/* MOBILE VIEW (COMPACT LIST - MUDAH DIBACA - TEMA SLATE/EMERALD) */}
+          <div className="md:hidden bg-white border border-slate-200 rounded-[1.5rem] shadow-sm overflow-hidden divide-y divide-slate-100">
             {loading ? (
-              <div className="py-20 text-center bg-white rounded-2xl border border-slate-200">
+              <div className="py-16 text-center">
                 <RefreshCw
-                  className="animate-spin mx-auto text-emerald-500 mb-4"
-                  size={32}
+                  className="animate-spin mx-auto text-emerald-500 mb-3"
+                  size={28}
                 />
-                <span className="font-bold text-slate-400 text-sm tracking-widest uppercase">
+                <span className="font-bold text-slate-400 text-xs tracking-widest uppercase">
                   Memuat Data...
                 </span>
               </div>
             ) : processedData.length === 0 ? (
-              <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
+              <div className="py-16 text-center text-slate-400 font-medium text-sm px-4">
                 {data.length === 0
                   ? "Belum ada data di dalam sistem."
                   : "Pencarian tidak menemukan hasil."}
               </div>
             ) : (
               processedData.map((item, i) => (
-                <Card
+                <div
                   key={item.id || i}
-                  className="p-5 bg-white border border-slate-200 shadow-sm rounded-2xl relative overflow-hidden"
+                  className="p-4 hover:bg-slate-50 transition-colors flex flex-col gap-2"
                 >
-                  <div className="flex justify-between items-start gap-3 mb-4 pb-4 border-b border-slate-100">
-                    <span className="font-black text-slate-800 text-[17px] leading-tight line-clamp-2">
-                      {getPrimaryName(item)}
-                    </span>
-                    <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 shrink-0">
-                      #{item.id}
-                    </span>
-                  </div>
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      {/* Baris 1: Judul Utama & ID */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-black text-slate-800 text-sm truncate">
+                          {getPrimaryName(item)}
+                        </span>
+                        <span className="font-mono text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                          #{item.id}
+                        </span>
+                      </div>
 
-                  <div className="space-y-3 mb-5">
-                    {currentConfig.columns.map((col) => {
-                      const isPrimaryName =
-                        col.key === "id" ||
-                        col.key === "nama" ||
-                        col.key === "nama_ujian" ||
-                        col.key === "nama_mapel" ||
-                        col.key === "kunci";
-                      if (isPrimaryName) return null;
+                      {/* Baris 2: Informasi Sekunder Padat */}
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-slate-600 mt-1">
+                        {currentConfig.columns.map((col) => {
+                          const isPrimaryName =
+                            col.key === "id" ||
+                            col.key === "nama" ||
+                            col.key === "nama_ujian" ||
+                            col.key === "nama_mapel" ||
+                            col.key === "kunci";
+                          if (isPrimaryName) return null;
 
-                      return (
-                        <div
-                          key={col.key}
-                          className="flex justify-between items-center gap-4 text-sm"
-                        >
-                          <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wider shrink-0">
-                            {col.label}
-                          </span>
-                          <div className="text-right font-semibold text-slate-700 truncate max-w-[65%]">
-                            {col.key === "role" || col.key === "status" ? (
-                              <Badge type={item[col.key]} />
-                            ) : col.key === "tanggal" ? (
-                              <span className="tracking-wide text-[13px]">
-                                {formatTanggal(item[col.key])}
-                              </span>
-                            ) : (
-                              item[col.key] || (
-                                <span className="text-slate-300">-</span>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          return (
+                            <div key={col.key} className="flex items-center">
+                              {col.key === "role" || col.key === "status" ? (
+                                <Badge type={item[col.key]} />
+                              ) : col.key === "tanggal" ? (
+                                <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md text-[10px]">
+                                  {formatTanggal(item[col.key])}
+                                </span>
+                              ) : (
+                                <span className="bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md text-[10px] flex gap-1">
+                                  <span className="text-slate-400 font-bold uppercase">
+                                    {col.label.substring(0, 6)}:
+                                  </span>
+                                  <span className="font-semibold truncate max-w-[100px]">
+                                    {item[col.key] || "-"}
+                                  </span>
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                  <div className="flex gap-3 pt-4 border-t border-slate-100">
-                    <button
-                      onClick={() => openEditModal(item)}
-                      className="flex-1 py-3 bg-amber-50 text-amber-600 border border-amber-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-amber-100 transition-colors"
-                    >
-                      <Edit size={16} /> Edit
-                    </button>
-                    <button
-                      onClick={() => confirmDelete(item.id)}
-                      className="flex-1 py-3 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-red-100 transition-colors"
-                    >
-                      <Trash2 size={16} /> Hapus
-                    </button>
+                    {/* Tombol Aksi Mini (Kanan) */}
+                    <div className="flex flex-col gap-1.5 shrink-0 ml-1 border-l border-slate-100 pl-3">
+                      <button
+                        onClick={() => openEditModal(item)}
+                        className="p-2 text-amber-500 bg-amber-50 rounded-lg hover:bg-amber-500 hover:text-white transition-colors"
+                        title="Edit"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
+                        onClick={() => confirmDelete(item.id)}
+                        className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-500 hover:text-white transition-colors"
+                        title="Hapus"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                </Card>
+                </div>
               ))
             )}
           </div>
@@ -1423,7 +1549,7 @@ const AdminDashboard = () => {
                       <button
                         type="submit"
                         disabled={isSaving}
-                        className="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black text-sm md:text-base py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed border border-amber-400 uppercase tracking-widest"
+                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-black text-sm md:text-base py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/30 hover:from-emerald-700 hover:to-emerald-600 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed border border-emerald-400 uppercase tracking-widest"
                       >
                         {isSaving ? (
                           <RefreshCw size={18} className="animate-spin" />
@@ -1493,6 +1619,147 @@ const AdminDashboard = () => {
                     </button>
                   </div>
                 </Card>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ========================================================= */}
+        {/* LACI FILTER & SORT MOBILE (MUNCUL DARI BAWAH ALA E-COMMERCE) */}
+        {/* ========================================================= */}
+        <AnimatePresence>
+          {isMobileFilterOpen && (
+            <div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm md:hidden">
+              <motion.div
+                initial={{ opacity: 0, y: "100%" }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="w-full bg-white rounded-t-[2rem] p-6 shadow-2xl max-h-[85vh] flex flex-col"
+              >
+                <div className="flex justify-between items-center mb-6 shrink-0">
+                  <div>
+                    <h3 className="text-xl font-black text-slate-800">
+                      Filter & Urutkan
+                    </h3>
+                    <p className="text-xs font-medium text-slate-500 mt-1">
+                      Sesuaikan tampilan data.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileFilterOpen(false)}
+                    className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 scrollbar-hide pb-6 space-y-6">
+                  {/* Bagian Urutkan (Sort) */}
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 border-b border-emerald-100 pb-2 flex block">
+                      Urutkan Berdasarkan
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {currentConfig.columns
+                        .filter((c) => c.sortable)
+                        .map((col) => (
+                          <button
+                            key={`sort-${col.key}`}
+                            onClick={() => handleSort(col.key)}
+                            className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-colors ${sortConfig.key === col.key ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                          >
+                            <span className="truncate pr-1">{col.label}</span>
+                            {sortConfig.key === col.key &&
+                              (sortConfig.direction === "asc" ? (
+                                <ChevronUp size={14} className="shrink-0" />
+                              ) : (
+                                <ChevronDown size={14} className="shrink-0" />
+                              ))}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Bagian Filter */}
+                  {currentConfig.columns.some(
+                    (c) => c.filterable || c.key === "kelas",
+                  ) && (
+                    <div className="space-y-3">
+                      <label className="text-[11px] font-bold uppercase tracking-widest text-indigo-600 border-b border-indigo-100 pb-2 flex block">
+                        Saring Data
+                      </label>
+                      <div className="space-y-3">
+                        {currentConfig.columns.some(
+                          (c) => c.key === "kelas",
+                        ) && (
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold text-slate-500 ml-1">
+                              Kategori Jurusan
+                            </span>
+                            <PremiumSelect
+                              value={filters["jurusan"] || ""}
+                              onChange={(val) =>
+                                setFilters({ ...filters, jurusan: val })
+                              }
+                              options={[
+                                { label: "Semua Jurusan", value: "" },
+                                { label: "Jurusan MIPA", value: "MIPA" },
+                                { label: "Jurusan IPS", value: "IPS" },
+                              ]}
+                              placeholder="Filter Jurusan"
+                            />
+                          </div>
+                        )}
+                        {currentConfig.columns
+                          .filter((c) => c.filterable)
+                          .map((col) => (
+                            <div
+                              key={`filter-${col.key}`}
+                              className="space-y-1.5"
+                            >
+                              <span className="text-[10px] font-bold text-slate-500 ml-1">
+                                {col.label}
+                              </span>
+                              <PremiumSelect
+                                value={filters[col.key] || ""}
+                                onChange={(val) =>
+                                  setFilters({ ...filters, [col.key]: val })
+                                }
+                                options={[
+                                  { label: `Semua ${col.label}`, value: "" },
+                                  ...getFilterOptions(col.key).map((opt) => ({
+                                    label: opt,
+                                    value: opt,
+                                  })),
+                                ]}
+                                placeholder={`Filter ${col.label}`}
+                              />
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-5 border-t border-slate-100 flex gap-3 shrink-0 mt-2">
+                  <button
+                    onClick={() => {
+                      setFilters({});
+                      setSortConfig({ key: "id", direction: "asc" });
+                      setIsMobileFilterOpen(false);
+                    }}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-200 transition-colors"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => setIsMobileFilterOpen(false)}
+                    className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-500/30 hover:bg-emerald-600 transition-colors"
+                  >
+                    Terapkan
+                  </button>
+                </div>
               </motion.div>
             </div>
           )}
