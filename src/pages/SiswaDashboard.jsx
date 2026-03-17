@@ -27,6 +27,7 @@ import {
   Info,
   Maximize,
   X,
+  BookMarked,
 } from "lucide-react";
 import { AuthContext } from "../context/AuthContext";
 import { api } from "../api/api";
@@ -67,6 +68,21 @@ const formatTanggalLokal = (dateString) => {
   }
 };
 
+// Variasi Ukuran Font (Zoom In/Out)
+const fontClasses = {
+  wacana: [
+    "text-[13px] md:text-[15px]",
+    "text-[15px] md:text-[17px]",
+    "text-[17px] md:text-[19px]",
+  ],
+  soal: ["text-sm md:text-lg", "text-base md:text-xl", "text-lg md:text-2xl"],
+  opsi: [
+    "text-[13px] md:text-base",
+    "text-[15px] md:text-lg",
+    "text-base md:text-xl",
+  ],
+};
+
 const SiswaDashboard = () => {
   const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("home");
@@ -86,17 +102,24 @@ const SiswaDashboard = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // STATE ANTI-CHEAT
+  // STATE NAMA UJIAN DINAMIS DARI ADMIN
+  const [appSettings, setAppSettings] = useState({
+    title: "MASDA PRO",
+    desc: "Online Based Test 2026",
+  });
+
+  // STATE ANTI-CHEAT (DIPERBAIKI LOGIKANYA AGAR ANTI CRASH)
   const [isLocked, setIsLocked] = useState(false);
   const [pelanggaran, setPelanggaran] = useState(0);
-
-  // --- FITUR BARU: BACA STATUS MASTER SWITCH ---
   const [isAntiCheatActive, setIsAntiCheatActive] = useState(true);
   const isAntiCheatActiveRef = useRef(true);
+
   useEffect(() => {
     isAntiCheatActiveRef.current = isAntiCheatActive;
   }, [isAntiCheatActive]);
-  // ---------------------------------------------
+
+  // STATE UKURAN HURUF (0 = Normal, 1 = Besar, 2 = Sangat Besar)
+  const [fontLevel, setFontLevel] = useState(0);
 
   const [zoomedImg, setZoomedImg] = useState(null);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
@@ -155,21 +178,41 @@ const SiswaDashboard = () => {
   const userJurusan = userParts[1] || "";
   const userTingkatJurusan = `${userTingkat} ${userJurusan}`.trim();
 
-  // 1. POLLING DATA JADWAL & NILAI
+  // 1. POLLING DATA JADWAL, NILAI, & SETTINGS ANTI-CHEAT
   useEffect(() => {
     const fetchData = async (isBackground = false) => {
       if (!isBackground) setLoading(true);
       try {
+        // Tarik Settings Secara Terpisah (Anti Crash)
+        // Tarik Settings Secara Terpisah (Anti Crash)
+        try {
+          const settingsRes = await api.read("Settings");
+          if (settingsRes && Array.isArray(settingsRes)) {
+            // UBAH PENCARIAN KUNCI MENJADI "MODE_UJIAN"
+            const acSetting = settingsRes.find(
+              (s) => String(s.kunci).toUpperCase() === "MODE_UJIAN",
+            );
+            setIsAntiCheatActive(
+              acSetting
+                ? String(acSetting.nilai).toUpperCase() !== "OFF"
+                : true,
+            );
+
+            const titleConf = settingsRes.find((s) => s.kunci === "APP_TITLE");
+            const descConf = settingsRes.find((s) => s.kunci === "APP_DESC");
+            if (titleConf || descConf) {
+              setAppSettings({
+                title: titleConf ? titleConf.nilai : "MASDA PRO",
+                desc: descConf ? descConf.nilai : "Online Based Test 2026",
+              });
+            }
+          }
+        } catch (setErr) {
+          console.warn("Gagal menarik konfigurasi pengaturan admin:", setErr);
+        }
+
         const jadwalRes = await api.read("Jadwal");
         const nilaiRes = await api.read("Nilai");
-        const settingsRes = await api.read("Settings"); // <--- Tarik data Settings
-
-        // --- Cek Status Anti-Cheat ---
-        if (settingsRes) {
-          const acSetting = settingsRes.find((s) => s.kunci === "ANTI_CHEAT");
-          setIsAntiCheatActive(acSetting ? acSetting.nilai !== "OFF" : true);
-        }
-        // -----------------------------
 
         let finalJadwal = [];
         if (jadwalRes && jadwalRes.length > 0) {
@@ -210,7 +253,7 @@ const SiswaDashboard = () => {
             : prev,
         );
       } catch (err) {
-        if (!isBackground) setErrorMsg("Gagal terhubung ke database.");
+        if (!isBackground) setErrorMsg("Gagal terhubung ke database ujian.");
       } finally {
         if (!isBackground) setLoading(false);
       }
@@ -224,7 +267,9 @@ const SiswaDashboard = () => {
   // 2. LOGIKA ANTI-CHEAT (Keluar Aplikasi)
   useEffect(() => {
     const handleVisibilityChange = async () => {
+      // MASTER SWITCH (BYPASS SEMPURNA)
       if (!isAntiCheatActiveRef.current) return;
+
       if (
         document.hidden &&
         activeExamRef.current &&
@@ -236,7 +281,6 @@ const SiswaDashboard = () => {
         const examId = getVal(activeExamRef.current, "ID");
 
         if (currentPelanggaran === 0) {
-          // PELANGGARAN 1x -> KUNCI LAYAR
           setPelanggaran(1);
           setIsLocked(true);
           await api.saveSesi(
@@ -248,7 +292,6 @@ const SiswaDashboard = () => {
             "LOCKED",
           );
         } else if (currentPelanggaran >= 1) {
-          // PELANGGARAN 2x -> DISKUALIFIKASI PAKSA
           setPelanggaran(2);
           await api.saveSesi(
             username,
@@ -275,7 +318,6 @@ const SiswaDashboard = () => {
       const examId = getVal(activeExam, "ID");
       try {
         const sesi = await api.getSesi(username, examId);
-        // Jika Guru mengubah status jadi ACTIVE
         if (sesi && sesi.status === "ACTIVE") {
           setIsLocked(false);
           showAlert(
@@ -287,7 +329,7 @@ const SiswaDashboard = () => {
       } catch (err) {
         console.error(err);
       }
-    }, 5000); // Cek tiap 5 detik jika terkunci
+    }, 5000);
     return () => clearInterval(interval);
   }, [activeExam, isLocked, user, showAlert]);
 
@@ -360,11 +402,10 @@ const SiswaDashboard = () => {
       let finalAnswers = {};
       let finalTimeLeft = examDurasi * 60;
 
-      // Teruskan progres dari Backend jika ada
       if (serverSession) {
         finalAnswers = serverSession.jawaban_sementara || {};
         finalTimeLeft = serverSession.sisa_waktu || examDurasi * 60;
-        setPelanggaran(serverSession.pelanggaran || 0); // Ambil Pelanggaran dari Backend
+        setPelanggaran(serverSession.pelanggaran || 0);
         setIsLocked(serverSession.status === "LOCKED");
       } else {
         setPelanggaran(0);
@@ -386,7 +427,7 @@ const SiswaDashboard = () => {
     }
   };
 
-  // 5. KALKULASI SKOR & SUBMIT (Status Ditentukan Apakah Dipaksa atau Normal)
+  // 5. KALKULASI SKOR & SUBMIT
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
     setIsSubmitting(true);
     let skorSiswa = 0;
@@ -394,8 +435,6 @@ const SiswaDashboard = () => {
     let detailJawabanArray = [];
 
     const currentAnswers = answersRef.current;
-
-    // KEMBALIKAN URUTAN SOAL SEPERTI SEMULA SEBELUM DIKIRIM KE GURU
     const originalSoalData = [...soalDataRef.current].sort(
       (a, b) => parseInt(getVal(a, "id")) - parseInt(getVal(b, "id")),
     );
@@ -446,13 +485,11 @@ const SiswaDashboard = () => {
         benar: benarCount,
         salah: salahCount,
         total_soal: totalSoal,
-        status: forcedStatus, // Akan menjadi "Diskualifikasi" jika kecurangan kedua
+        status: forcedStatus,
         detail_jawaban: JSON.stringify(detailJawabanArray),
       };
 
       await api.create("Nilai", dataNilai);
-
-      // HAPUS SESI UJIAN SAAT BERHASIL DIKUMPUL (Agar bersih)
       await api.deleteSesi(
         getVal(user, "Username"),
         getVal(activeExamRef.current, "ID"),
@@ -488,7 +525,7 @@ const SiswaDashboard = () => {
       showAlert(
         "danger",
         "Gagal Mengirim",
-        "Server sedang sibuk. Pastikan internet Anda stabil dan lapor ke pengawas.",
+        "Server sedang sibuk. Pastikan internet stabil dan lapor ke pengawas.",
       );
       setIsSubmitting(false);
     }
@@ -511,7 +548,7 @@ const SiswaDashboard = () => {
     }
   };
 
-  // 6. TIMER & SAVE SERVER (Tiap 15 Detik & Simpan Pelanggaran Terakhir)
+  // 6. TIMER & SAVE SERVER
   useEffect(() => {
     if (!activeExam || timeLeft <= 0 || isSubmitting || isLocked) return;
 
@@ -585,7 +622,7 @@ const SiswaDashboard = () => {
   }
 
   // ==============================================================
-  // TAMPILAN KETIKA SEDANG UJIAN (NORMAL)
+  // TAMPILAN KETIKA SEDANG UJIAN (RUANGGURU STYLE)
   // ==============================================================
   if (activeExam) {
     const examMapel = getVal(activeExam, "Mapel");
@@ -627,24 +664,43 @@ const SiswaDashboard = () => {
               <ClipboardCheck size={20} />
             </div>
             <div>
-              <h1 className="text-base md:text-lg font-black text-slate-800 uppercase tracking-tighter leading-tight">
+              <h1 className="text-base md:text-lg font-black text-slate-800 uppercase tracking-tighter leading-tight truncate max-w-[120px] sm:max-w-xs">
                 {examMapel}
               </h1>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-1">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-1 truncate max-w-[120px] sm:max-w-xs">
                 {getVal(user, "Nama")}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* --- LABEL MODE DEV --- */}
+          <div className="flex items-center gap-2 md:gap-3">
+            {/* TOMBOL ZOOM FONT */}
+            <button
+              onClick={() => setFontLevel((prev) => (prev + 1) % 3)}
+              className="flex items-center justify-center p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors border border-slate-200 relative"
+              title="Perbesar Ukuran Teks"
+            >
+              <span className="font-black text-xs md:text-sm">A</span>
+              <span className="font-black text-[10px] md:text-xs">A</span>
+              {fontLevel > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+              )}
+            </button>
+
+            {/* LABEL MODE UJI COBA (Sekarang terlihat di HP) */}
             {!isAntiCheatActive && (
-              <div className="hidden md:flex items-center gap-1.5 bg-amber-100 text-amber-700 px-3 py-2 rounded-xl border border-amber-200 text-[9px] font-black uppercase tracking-widest animate-pulse">
-                <ShieldAlert size={14} /> Mode Uji Coba
+              <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 md:px-3 py-2 rounded-xl border border-amber-200 text-[9px] font-black uppercase tracking-widest animate-pulse shadow-sm">
+                <ShieldAlert size={14} />{" "}
+                <span className="hidden sm:inline">Mode Uji Coba</span>
+                <span className="sm:hidden">DEV</span>
               </div>
             )}
+
             <div
-              className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border shadow-sm transition-colors ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-slate-800 text-white border-slate-700"}`}
+              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl border shadow-sm transition-colors ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-slate-800 text-white border-slate-700"}`}
             >
               <Timer size={18} />
               <div className="flex flex-col">
@@ -686,88 +742,116 @@ const SiswaDashboard = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-8 flex flex-col">
-                  {getVal(currentSoal, "Wacana") && (
-                    <div className="p-4 lg:p-5 bg-amber-50 border border-amber-100 rounded-2xl relative shadow-sm mb-4 lg:mb-6 mt-1">
-                      <div className="absolute -top-3 left-4 lg:left-5 bg-amber-500 text-white px-2 py-1 lg:px-3 rounded-md text-[9px] lg:text-[10px] font-bold uppercase tracking-widest shadow-sm">
-                        Informasi Teks
+                {/* NASKAH SOAL (NATURAL FLOW BUBBLE UI) */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-8">
+                  <div className="max-w-4xl mx-auto pb-6">
+                    {getVal(currentSoal, "Wacana") && (
+                      <div className="p-5 md:p-6 bg-amber-50/50 border border-amber-200 rounded-[1.5rem] relative shadow-sm mb-6 mt-2">
+                        <div className="absolute -top-3 left-6 bg-amber-500 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1.5">
+                          <BookMarked size={14} /> Bacaan / Wacana
+                        </div>
+                        <p
+                          className={`font-medium text-slate-700 leading-relaxed whitespace-pre-wrap mt-1 transition-all ${fontClasses.wacana[fontLevel]}`}
+                        >
+                          {getVal(currentSoal, "Wacana")}
+                        </p>
                       </div>
-                      <p className="font-medium text-slate-700 leading-relaxed text-[13px] md:text-[15px] whitespace-pre-wrap mt-1">
-                        {getVal(currentSoal, "Wacana")}
-                      </p>
-                    </div>
-                  )}
+                    )}
 
-                  <p className="font-bold text-slate-800 leading-relaxed text-sm md:text-lg mb-5 lg:mb-6 whitespace-pre-wrap flex-1">
-                    {getVal(currentSoal, "Pertanyaan")}
-                  </p>
+                    <p
+                      className={`font-bold text-slate-800 leading-relaxed whitespace-pre-wrap mb-6 md:mb-8 transition-all ${fontClasses.soal[fontLevel]}`}
+                    >
+                      {getVal(currentSoal, "Pertanyaan")}
+                    </p>
 
-                  {getVal(currentSoal, "Link_Gambar") && (
-                    <div className="mb-5 lg:mb-6 w-full flex justify-start">
-                      <div
-                        onClick={() =>
-                          setZoomedImg(getVal(currentSoal, "Link_Gambar"))
-                        }
-                        className="relative group cursor-pointer rounded-2xl border border-slate-200 shadow-sm bg-white p-1.5 inline-block w-fit max-w-full"
-                        title="Klik untuk memperbesar gambar"
-                      >
-                        <img
-                          src={getVal(currentSoal, "Link_Gambar")}
-                          alt="Gambar Pendukung"
-                          className="max-w-full h-auto max-h-[35vh] lg:max-h-[50vh] object-contain rounded-xl"
-                        />
-                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
-                          <span className="text-white font-bold bg-slate-900/80 px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm text-xs">
-                            <Maximize size={16} /> Klik Perbesar
-                          </span>
+                    {getVal(currentSoal, "Link_Gambar") && (
+                      <div className="mb-8 w-full flex justify-start">
+                        <div
+                          onClick={() =>
+                            setZoomedImg(getVal(currentSoal, "Link_Gambar"))
+                          }
+                          className="relative group cursor-pointer rounded-2xl border-2 border-slate-200 shadow-sm bg-slate-50 p-2 inline-block w-fit max-w-full hover:border-emerald-400 transition-colors"
+                          title="Klik untuk memperbesar gambar"
+                        >
+                          <img
+                            src={getVal(currentSoal, "Link_Gambar")}
+                            alt="Gambar Pendukung"
+                            className="max-w-full h-auto max-h-[35vh] lg:max-h-[45vh] object-contain rounded-xl"
+                          />
+                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                            <span className="text-white font-bold bg-slate-900/90 px-4 py-2 rounded-xl flex items-center gap-2 shadow-xl text-sm">
+                              <Maximize size={18} /> Perbesar Gambar
+                            </span>
+                          </div>
                         </div>
                       </div>
+                    )}
+
+                    {/* PILIHAN GANDA */}
+                    <div className="flex flex-col gap-3 md:gap-4">
+                      {["A", "B", "C", "D", "E"].map((opt) => {
+                        const optText = getVal(currentSoal, `Opsi_${opt}`);
+                        if (!optText) return null;
+                        const isSelected = answers[currentSoalId] === opt;
+
+                        return (
+                          <button
+                            key={opt}
+                            onClick={() => {
+                              const newAnswers = {
+                                ...answers,
+                                [currentSoalId]: opt,
+                              };
+                              setAnswers(newAnswers);
+                              api.saveSesi(
+                                getVal(user, "Username"),
+                                getVal(activeExam, "ID"),
+                                newAnswers,
+                                timeLeft,
+                                pelanggaranRef.current,
+                                isLockedRef.current ? "LOCKED" : "ACTIVE",
+                              );
+                            }}
+                            className={`w-full text-left px-5 py-4 md:px-6 md:py-5 rounded-[1.5rem] border-2 transition-all flex items-start gap-4 md:gap-5 group relative overflow-hidden outline-none ${
+                              isSelected
+                                ? "border-emerald-500 bg-emerald-50/50 shadow-md shadow-emerald-500/10 scale-[1.01]"
+                                : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50 hover:shadow-sm"
+                            }`}
+                          >
+                            {isSelected && (
+                              <CheckCircle2
+                                size={120}
+                                className="absolute -right-6 -bottom-6 text-emerald-100 opacity-50 z-0 pointer-events-none"
+                              />
+                            )}
+
+                            <span
+                              className={`font-black text-sm md:text-base w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full shrink-0 transition-all z-10 ${
+                                isSelected
+                                  ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30"
+                                  : "bg-slate-100 text-slate-500 border border-slate-200 group-hover:bg-emerald-100 group-hover:text-emerald-700 group-hover:border-emerald-200"
+                              }`}
+                            >
+                              {opt}
+                            </span>
+
+                            <span
+                              className={`font-medium pt-1 md:pt-2 leading-relaxed whitespace-pre-wrap transition-all z-10 ${fontClasses.opsi[fontLevel]} ${
+                                isSelected
+                                  ? "text-emerald-900 font-bold"
+                                  : "text-slate-700"
+                              }`}
+                            >
+                              {optText}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  )}
-
-                  <div className="flex flex-col gap-2.5 lg:gap-3 mt-auto pb-2">
-                    {["A", "B", "C", "D", "E"].map((opt) => {
-                      const optText = getVal(currentSoal, `Opsi_${opt}`);
-                      if (!optText) return null;
-                      const isSelected = answers[currentSoalId] === opt;
-
-                      return (
-                        <button
-                          key={opt}
-                          onClick={() => {
-                            const newAnswers = {
-                              ...answers,
-                              [currentSoalId]: opt,
-                            };
-                            setAnswers(newAnswers);
-                            // Simpan jawaban terbaru ke DB
-                            api.saveSesi(
-                              getVal(user, "Username"),
-                              getVal(activeExam, "ID"),
-                              newAnswers,
-                              timeLeft,
-                              pelanggaranRef.current,
-                              isLockedRef.current ? "LOCKED" : "ACTIVE",
-                            );
-                          }}
-                          className={`w-full text-left px-4 py-3 md:px-5 md:py-4 rounded-[1.25rem] border-2 transition-colors flex items-start gap-3 lg:gap-4 group ${isSelected ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-100 bg-slate-50/50 hover:bg-white hover:border-emerald-300"}`}
-                        >
-                          <span
-                            className={`font-black text-xs md:text-base w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-[0.6rem] shrink-0 transition-colors ${isSelected ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-700"}`}
-                          >
-                            {opt}
-                          </span>
-                          <span
-                            className={`text-[13px] md:text-base font-medium pt-1 md:pt-1.5 leading-snug whitespace-pre-wrap ${isSelected ? "text-emerald-900 font-bold" : "text-slate-700"}`}
-                          >
-                            {optText}
-                          </span>
-                        </button>
-                      );
-                    })}
                   </div>
                 </div>
 
+                {/* Navigasi Desktop */}
                 <div className="hidden lg:flex px-6 py-4 border-t border-slate-100 bg-slate-50/50 justify-between items-center shrink-0">
                   <button
                     onClick={() =>
@@ -792,6 +876,7 @@ const SiswaDashboard = () => {
                 </div>
               </div>
 
+              {/* Sidebar Kanan Desktop */}
               <div className="hidden lg:flex w-[320px] xl:w-[380px] flex-col h-full bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden shrink-0">
                 <div className="p-6 border-b border-slate-100 bg-slate-50/50 shrink-0">
                   <div className="flex justify-between items-end mb-2">
@@ -849,6 +934,7 @@ const SiswaDashboard = () => {
           )}
         </main>
 
+        {/* BOTTOM NAVIGATION (MOBILE) */}
         {!loadingSoal && (
           <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 px-4 flex justify-between items-center z-40 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] pb-6 sm:pb-4">
             <button
@@ -867,7 +953,7 @@ const SiswaDashboard = () => {
               <div className="bg-emerald-50 text-emerald-600 p-2.5 rounded-[14px] mb-1 border border-emerald-100">
                 <LayoutDashboard size={22} />
               </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 shadow-sm">
                 {answeredCount}/{soalData.length} Dijawab
               </span>
             </button>
@@ -930,7 +1016,7 @@ const SiswaDashboard = () => {
                             setCurrentSoalIndex(idx);
                             setIsMobileDrawerOpen(false);
                           }}
-                          className={`aspect-square flex items-center justify-center rounded-[1rem] font-bold text-sm transition-colors border-2 ${isCurrent ? "border-emerald-500 z-10" : "border-slate-100"} ${hasAnswered ? (isCurrent ? "bg-emerald-500 text-white" : "bg-emerald-50 text-emerald-600 border-emerald-200") : isCurrent ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-400"}`}
+                          className={`aspect-square flex items-center justify-center rounded-[1rem] font-bold text-sm transition-colors border-2 ${isCurrent ? "border-emerald-500 z-10" : "border-slate-100"} ${hasAnswered ? (isCurrent ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") : isCurrent ? "bg-slate-800 text-white border-slate-800 shadow-md" : "bg-white text-slate-400"}`}
                         >
                           {idx + 1}
                         </button>
@@ -1064,26 +1150,45 @@ const SiswaDashboard = () => {
           animate="visible"
           className="max-w-5xl mx-auto space-y-6 pb-24 relative z-10"
         >
+          {/* DIGITAL ID CARD HEADER */}
           <motion.header
             variants={fadeUp}
-            className="relative flex flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm bg-emerald-50 border border-emerald-100 gap-4"
+            className="relative p-6 md:p-8 rounded-[2rem] shadow-lg bg-gradient-to-br from-emerald-600 to-emerald-800 border border-emerald-500 overflow-hidden text-white"
           >
-            <div className="z-10">
-              <h2 className="text-3xl md:text-4xl font-black mb-1.5 tracking-tighter text-slate-800">
-                Halo, {getVal(user, "Nama")?.split(" ")[0] || "Siswa"}!
-              </h2>
-              <p className="text-slate-600 font-bold flex items-center gap-2 text-sm">
-                <Sparkles size={16} className="text-emerald-500" /> Pilih jadwal
-                ujian di bawah untuk memulai.
-              </p>
-            </div>
-            <div className="z-10 bg-white px-6 py-3 rounded-2xl border border-slate-100 text-center shadow-sm w-full md:w-auto">
-              <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest mb-0.5">
-                Kelas Anda
-              </p>
-              <p className="font-black text-xl text-slate-800 leading-none">
-                {userKelasFull || "-"}
-              </p>
+            <div className="absolute -top-12 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+            <div className="absolute bottom-[-20%] left-[-10%] w-32 h-32 bg-amber-400/20 rounded-full blur-2xl pointer-events-none"></div>
+            <div className="relative z-10 flex flex-col gap-4 md:gap-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-emerald-200 mb-1">
+                    {appSettings.desc}
+                  </p>
+                  <h2 className="text-2xl md:text-4xl font-black tracking-tight drop-shadow-md">
+                    {appSettings.title}
+                  </h2>
+                </div>
+                <div className="p-2.5 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
+                  <Award size={24} className="text-amber-300" />
+                </div>
+              </div>
+              <div className="flex items-center gap-4 pt-4 border-t border-white/10">
+                <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-black text-xl border-2 border-white shadow-sm shrink-0">
+                  {getVal(user, "Nama")?.charAt(0)?.toUpperCase() || "S"}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-sm md:text-base leading-tight truncate">
+                    {getVal(user, "Nama") || "Siswa"}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                    <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-md uppercase tracking-wider border border-white/10">
+                      KLS: {userKelasFull || "-"}
+                    </span>
+                    <span className="text-[10px] font-bold bg-amber-400/20 text-amber-200 px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-400/20">
+                      {getVal(user, "Username")}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.header>
 
@@ -1274,7 +1379,7 @@ const SiswaDashboard = () => {
                         </div>
                         <div className="bg-red-50 border border-red-100 rounded-xl p-2 text-center">
                           <p className="text-[9px] font-black uppercase text-red-500/80 tracking-widest">
-                            Salah/Kosong
+                            Salah
                           </p>
                           <p className="text-lg font-black text-red-500">
                             {salahCount !== "" ? salahCount : "-"}
@@ -1289,6 +1394,8 @@ const SiswaDashboard = () => {
           )}
         </motion.div>
       )}
+
+      {/* MODAL CUSTOM ALERT */}
       <AnimatePresence>
         {customAlert.isOpen && (
           <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -1316,12 +1423,33 @@ const SiswaDashboard = () => {
                   {customAlert.message}
                 </p>
                 <div className="flex gap-3 w-full">
-                  <button
-                    onClick={closeAlert}
-                    className={`w-full py-3.5 rounded-xl font-bold text-white shadow-sm text-sm uppercase tracking-widest transition-colors ${customAlert.type === "danger" ? "bg-red-500 hover:bg-red-600" : customAlert.type === "warning" ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-600 hover:bg-emerald-700"}`}
-                  >
-                    Mengerti
-                  </button>
+                  {customAlert.type === "confirm" ? (
+                    <>
+                      <button
+                        onClick={closeAlert}
+                        className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm uppercase tracking-widest"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        onClick={
+                          customAlert.onConfirm
+                            ? customAlert.onConfirm
+                            : closeAlert
+                        }
+                        className="flex-1 py-3.5 rounded-xl font-bold text-white shadow-sm transition-colors text-sm uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600"
+                      >
+                        Ya, Kumpulkan
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={closeAlert}
+                      className={`w-full py-3.5 rounded-xl font-bold text-white shadow-sm text-sm uppercase tracking-widest transition-colors ${customAlert.type === "danger" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                    >
+                      Mengerti
+                    </button>
+                  )}
                 </div>
               </Card>
             </motion.div>

@@ -1880,8 +1880,9 @@ const GuruDashboard = () => {
           .header-live-bg { background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa); background-size: 400% 400%; animation: gradientBG 15s ease infinite; }
         `}</style>
 
-        {/* // BANNER PERINGATAN GLOBAL (Jika Ada Siswa Terkunci - ANTI CHEAT)//
-       
+        {/* ============================================================== */}
+        {/* BANNER PERINGATAN GLOBAL (Jika Ada Siswa Terkunci - ANTI CHEAT) */}
+        {/* ============================================================== */}
         <AnimatePresence>
           {lockedSessions.length > 0 && (
             <motion.div
