@@ -1,9 +1,8 @@
 // src/pages/LoginPage.jsx
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext } from "react";
 import { motion } from "framer-motion";
 import { User, Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react"; // Impor Eye dan EyeOff
 import { AuthContext } from "../context/AuthContext";
-import { api } from "../api/api";
 import logoMasda from "../assets/logo.svg";
 
 // Variabel Animasi
@@ -30,35 +29,6 @@ const LoginPage = () => {
   // State baru untuk mengatur tampilan password
   const [showPassword, setShowPassword] = useState(false);
 
-  const [isBlocked, setIsBlocked] = useState(false);
-  const [checkingAccess, setCheckingAccess] = useState(true);
-
-  const isWebView = () => {
-    const userAgent = navigator.userAgent.toLowerCase();
-    return (
-      userAgent.includes("wv") ||
-      (userAgent.includes("android") && userAgent.includes("version/"))
-    );
-  };
-
-  useEffect(() => {
-    const checkSettings = async () => {
-      try {
-        const settings = await api.read("Settings");
-        const appOnlySet = settings.find((s) => s.kunci === "Mode_Aplikasi");
-
-        if (appOnlySet && appOnlySet.nilai === "ON") {
-          if (!isWebView()) setIsBlocked(true);
-        }
-      } catch (error) {
-        console.error("Gagal cek setting keamanan:", error);
-      } finally {
-        setCheckingAccess(false);
-      }
-    };
-    checkSettings();
-  }, []);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -72,40 +42,6 @@ const LoginPage = () => {
       setLoading(false);
     }
   };
-
-  if (checkingAccess) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-emerald-500 w-10 h-10 mb-4" />
-        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">
-          Memeriksa Keamanan...
-        </p>
-      </div>
-    );
-  }
-
-  if (isBlocked) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden">
-        <div className="relative z-10 flex flex-col items-center max-w-md">
-          <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mb-6">
-            <Lock size={48} className="text-red-500 animate-pulse" />
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black mb-4 tracking-tight">
-            AKSES DITOLAK
-          </h1>
-          <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-            Sistem saat ini berada dalam <b>Mode Eksklusif Aplikasi</b>. Anda
-            tidak diizinkan masuk melalui Browser (Chrome/Safari).
-            <br />
-            <br />
-            Silakan buka melalui <b>Aplikasi Resmi MASDA PRO</b> yang telah
-            terinstal di perangkat Anda.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">

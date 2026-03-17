@@ -87,6 +87,14 @@ const SiswaDashboard = () => {
   const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("home");
   const [loading, setLoading] = useState(true);
+  const [isAppBlocked, setIsAppBlocked] = useState(false);
+  const isWebView = () => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    return (
+      userAgent.includes("wv") ||
+      (userAgent.includes("android") && userAgent.includes("version/"))
+    );
+  };
   const [errorMsg, setErrorMsg] = useState("");
 
   const [exams, setExams] = useState([]);
@@ -184,7 +192,6 @@ const SiswaDashboard = () => {
       if (!isBackground) setLoading(true);
       try {
         // Tarik Settings Secara Terpisah (Anti Crash)
-        // Tarik Settings Secara Terpisah (Anti Crash)
         try {
           const settingsRes = await api.read("Settings");
           if (settingsRes && Array.isArray(settingsRes)) {
@@ -197,6 +204,22 @@ const SiswaDashboard = () => {
                 ? String(acSetting.nilai).toUpperCase() !== "OFF"
                 : true,
             );
+
+            const appOnlySetting = settingsRes.find(
+              (s) => String(s.kunci).toUpperCase() === "MODE_APLIKASI",
+            );
+            if (
+              appOnlySetting &&
+              String(appOnlySetting.nilai).toUpperCase() === "ON"
+            ) {
+              if (!isWebView()) {
+                setIsAppBlocked(true);
+              } else {
+                setIsAppBlocked(false);
+              }
+            } else {
+              setIsAppBlocked(false);
+            }
 
             const titleConf = settingsRes.find((s) => s.kunci === "APP_TITLE");
             const descConf = settingsRes.find((s) => s.kunci === "APP_DESC");
@@ -588,6 +611,51 @@ const SiswaDashboard = () => {
       return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
+
+  // ==============================================================
+  // TAMPILAN BLOKIR EKSKLUSIF APLIKASI
+  // ==============================================================
+  if (isAppBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white flex-col p-6 z-[99999] fixed inset-0 select-none">
+        <Lock size={80} className="text-red-500 mb-6 animate-pulse" />
+        <h1 className="text-3xl md:text-5xl font-black mb-3 text-center tracking-tight">
+          AKSES DIBLOKIR
+        </h1>
+        <p className="text-center text-slate-300 max-w-lg text-sm md:text-base leading-relaxed mb-8">
+          Admin baru saja mengaktifkan <strong>Mode Eksklusif Aplikasi</strong>.
+          Anda tidak dapat melanjutkan ujian menggunakan Browser
+          (Chrome/Safari/dll).
+          <br />
+          <br />
+          Silakan tutup browser ini dan buka melalui{" "}
+          <strong>Aplikasi Resmi MASDA PRO</strong> yang ada di HP Anda.
+        </p>
+      </div>
+    );
+  }
+
+  // ==============================================================
+  // TAMPILAN BLOKIR EKSKLUSIF APLIKASI
+  // ==============================================================
+  if (isAppBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white flex-col p-6 z-[99999] fixed inset-0 select-none">
+        <Lock size={80} className="text-red-500 mb-6 animate-pulse" />
+        <h1 className="text-3xl md:text-5xl font-black mb-3 text-center tracking-tight">
+          AKSES DIBLOKIR
+        </h1>
+        <p className="text-center text-slate-300 max-w-lg text-sm md:text-base leading-relaxed mb-8">
+          Admin baru saja mengaktifkan <strong>Mode Eksklusif Aplikasi</strong>.
+          Anda tidak dapat melanjutkan ujian menggunakan Browser apapun.
+          <br />
+          <br />
+          Silakan tutup browser ini dan buka melalui{" "}
+          <strong>Aplikasi Resmi MASDA PRO</strong> yang ada di HP Anda.
+        </p>
+      </div>
+    );
+  }
 
   // ==============================================================
   // TAMPILAN LOCK SCREEN (PELANGGARAN PERTAMA)
