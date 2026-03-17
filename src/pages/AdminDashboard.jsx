@@ -546,6 +546,53 @@ const AdminDashboard = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [originalId, setOriginalId] = useState(null);
 
+  // --- FITUR BARU: MASTER SWITCH ANTI-CHEAT ---
+  const antiCheatSetting = data.find((item) => item.kunci === "Mode_Ujian");
+  const isAntiCheatOn = antiCheatSetting
+    ? antiCheatSetting.nilai !== "OFF"
+    : true;
+
+  const handleToggleAntiCheat = async () => {
+    showAlert(
+      "confirm",
+      "Ubah Mode Ujian?",
+      `Yakin ingin ${isAntiCheatOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Anti-Cheat?`,
+      async () => {
+        closeAlert();
+        setIsSaving(true);
+        try {
+          if (antiCheatSetting) {
+            await api.update(currentConfig.sheet, antiCheatSetting.id, {
+              ...antiCheatSetting,
+              nilai: isAntiCheatOn ? "OFF" : "ON",
+            });
+          } else {
+            const maxId =
+              data.length > 0
+                ? Math.max(...data.map((item) => parseInt(item.id) || 0))
+                : 0;
+            await api.create(currentConfig.sheet, {
+              id: maxId + 1,
+              kunci: "Mode_Ujian",
+              nilai: "OFF",
+            });
+          }
+          await fetchData(false);
+          showAlert(
+            "success",
+            "Berhasil!",
+            `Anti-Cheat sekarang ${isAntiCheatOn ? "NONAKTIF (Mode Uji Coba)" : "AKTIF (Mode Ujian Ketat)"}.`,
+          );
+        } catch (error) {
+          showAlert("danger", "Gagal", error.message);
+        } finally {
+          setIsSaving(false);
+        }
+      },
+    );
+  };
+  // --------------------------------------------
+
   // Helper Custom Alert
   const showAlert = (type, title, message, onConfirm = null) => {
     setCustomAlert({ isOpen: true, type, title, message, onConfirm });
@@ -816,13 +863,23 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
-
-          <button
-            onClick={openAddModal}
-            className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400 z-10"
-          >
-            <Plus size={20} /> Tambah Data Baru
-          </button>
+          <div className="w-full md:w-auto flex flex-col md:flex-row gap-3 z-10">
+            {tab === "settings" && (
+              <button
+                onClick={handleToggleAntiCheat}
+                className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 shadow-red-500/10" : "bg-gradient-to-r from-blue-600 to-blue-500 text-white border-blue-400 hover:scale-105 shadow-blue-500/30"}`}
+              >
+                <ShieldCheck size={20} />{" "}
+                {isAntiCheatOn ? "Matikan Anti-Cheat" : "Hidupkan Anti-Cheat"}
+              </button>
+            )}
+            <button
+              onClick={openAddModal}
+              className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400 z-10"
+            >
+              <Plus size={20} /> Tambah Data Baru
+            </button>
+          </div>
         </motion.header>
 
         {/* INFO BANNER */}

@@ -436,7 +436,8 @@ const GuruDashboard = () => {
 
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewData, setReviewData] = useState(null);
-
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [customAlert, setCustomAlert] = useState({
     isOpen: false,
     type: "info",
@@ -1607,122 +1608,182 @@ const GuruDashboard = () => {
   }, [pivotNilaiData, tab, nilaiViewMode]);
 
   const handleExport = async (type) => {
-    if (type === "print" || type === "pdf") {
-      if (
-        (nilaiViewMode === "rekap" && pivotNilaiData.data.length === 0) ||
-        (nilaiViewMode === "log" && processedData.length === 0)
-      ) {
-        return showAlert("warning", "Kosong", "Tidak ada data untuk dicetak!");
+    setIsExportMenuOpen(false); // Tutup modal jika terbuka
+    let dataToExport = [];
+    let mapelsToExport = [];
+    let isLogMode = tab === "nilai" && nilaiViewMode === "log";
+
+    // 1. KUMPULKAN DATA (Cerdas Mendeteksi Lokasi Tab)
+    if (tab === "nilai") {
+      if (isLogMode) {
+        if (processedData.length === 0)
+          return showAlert(
+            "warning",
+            "Kosong",
+            "Tidak ada log ujian untuk dicetak!",
+          );
+        dataToExport = processedData;
+      } else {
+        if (pivotNilaiData.data.length === 0)
+          return showAlert(
+            "warning",
+            "Kosong",
+            "Tidak ada nilai untuk dicetak!",
+          );
+        dataToExport = pivotNilaiData.data;
+        mapelsToExport = pivotNilaiData.mapels;
       }
-      const tableElement = document.getElementById("data-table-guru");
-      if (!tableElement) return;
-      const title =
-        nilaiViewMode === "rekap"
-          ? "REKAPITULASI BUKU NILAI SISWA"
-          : "LOG RIWAYAT UJIAN SISWA";
-      const subtitle = `Total Data: ${nilaiViewMode === "rekap" ? pivotNilaiData.data.length : processedData.length} | Waktu Cetak: ${new Date().toLocaleString("id-ID")}`;
-      const printContent = `
-          <!DOCTYPE html>
-          <html lang="id">
-            <head>
-              <meta charset="UTF-8">
-              <title>Cetak Data Nilai</title>
-              <style>
-                @page { size: auto; margin: 15mm; } 
-                body { font-family: Arial, sans-serif; color: #000; margin: 0; padding: 0; }
-                .header-print { text-align: center; margin-bottom: 25px; }
-                .header-print h1 { font-size: 22pt; font-weight: 900; margin: 0 0 5px 0; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 10px; display: inline-block; }
-                .header-print p { font-size: 11pt; color: #444; margin: 10px 0 0 0; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                th, td { border: 1px solid #000; padding: 8px; font-size: 10pt; text-align: center; }
-                th { background-color: #f1f5f9 !important; font-weight: bold; -webkit-print-color-adjust: exact; color: #000; }
-                td.col-nama { text-align: left; font-weight: bold; text-transform: uppercase; }
-                .text-red-500, .text-red-600 { color: #dc2626 !important; font-weight: bold; }
-                .text-blue-600 { color: #2563eb !important; font-weight: bold; }
-                .text-emerald-600 { color: #059669 !important; font-weight: bold; }
-                .bg-red-50 { background-color: #fef2f2 !important; -webkit-print-color-adjust: exact; }
-                .print-hidden { display: none !important; }
-              </style>
-            </head>
-            <body>
-              <div class="header-print">
-                <h1>${title}</h1>
-                <p>${subtitle}</p>
-              </div>
-              ${tableElement.outerHTML}
-            </body>
-          </html>
-        `;
+    } else {
+      // JIKA DI TAB SOAL: Tarik data nilai secara diam-diam dari Backend
+      showAlert(
+        "info",
+        "Sinkronisasi...",
+        "Menarik rekap nilai dari server di latar belakang...",
+      );
+      try {
+        const dataNilai = await api.read("Nilai");
+        if (!dataNilai || dataNilai.length === 0) {
+          return showAlert(
+            "warning",
+            "Kosong",
+            "Belum ada data nilai ujian yang masuk.",
+          );
+        }
+        const mapels = [
+          ...new Set(dataNilai.map((item) => item.mapel).filter(Boolean)),
+        ].sort();
+        const grouped = {};
+        dataNilai.forEach((row) => {
+          if (!row.nama_siswa) return;
+          const key = `${row.nama_siswa}_${row.kelas}`;
+          if (!grouped[key])
+            grouped[key] = { nama_siswa: row.nama_siswa, kelas: row.kelas };
+          grouped[key][row.mapel] = parseFloat(row.skor) || 0;
+        });
+
+        dataToExport = Object.values(grouped).map((student) => {
+          let total = 0,
+            count = 0;
+          mapels.forEach((m) => {
+            if (student[m] !== undefined) {
+              total += student[m];
+              count++;
+            }
+          });
+          student.RataRata = count > 0 ? (total / count).toFixed(1) : 0;
+          return student;
+        });
+        dataToExport.sort(
+          (a, b) =>
+            String(a.kelas).localeCompare(String(b.kelas)) ||
+            String(a.nama_siswa).localeCompare(String(b.nama_siswa)),
+        );
+        mapelsToExport = mapels;
+        closeAlert();
+      } catch (err) {
+        return showAlert("danger", "Gagal Menarik Data", err.message);
+      }
+    }
+
+    // 2. LOGIKA GENERATE PDF & PRINT (HTML Dibuat Manual, Bebas Tab)
+    if (type === "print" || type === "pdf") {
+      const title = isLogMode
+        ? "LOG RIWAYAT UJIAN SISWA"
+        : "REKAPITULASI BUKU NILAI SISWA";
+      const subtitle = `Total Data: ${dataToExport.length} | Waktu Cetak: ${new Date().toLocaleString("id-ID")}`;
+
+      let tableHtml = `<table border="1" style="width:100%; border-collapse: collapse; text-align: center; margin-top: 15px; font-size: 10pt;">`;
+      if (isLogMode) {
+        tableHtml += `<thead><tr><th style="padding:8px; background:#f1f5f9;">ID</th><th style="padding:8px; background:#f1f5f9; text-align:left;">Nama Siswa</th><th style="padding:8px; background:#f1f5f9;">Kelas</th><th style="padding:8px; background:#f1f5f9;">Mapel</th><th style="padding:8px; background:#f1f5f9;">Skor</th><th style="padding:8px; background:#f1f5f9;">Status</th></tr></thead><tbody>`;
+        dataToExport.forEach((item) => {
+          tableHtml += `<tr><td style="padding:8px;">${item.id || "-"}</td><td style="padding:8px; text-align:left; font-weight:bold;">${item.nama_siswa || "-"}</td><td style="padding:8px;">${item.kelas || "-"}</td><td style="padding:8px;">${item.mapel || "-"}</td><td style="padding:8px; font-weight:bold;">${item.skor || "-"}</td><td style="padding:8px;">${item.status || "-"}</td></tr>`;
+        });
+      } else {
+        tableHtml += `<thead><tr><th style="padding:8px; background:#f1f5f9;">No</th><th style="padding:8px; background:#f1f5f9; text-align:left;">Nama Siswa</th><th style="padding:8px; background:#f1f5f9;">Kelas</th>`;
+        mapelsToExport.forEach(
+          (m) =>
+            (tableHtml += `<th style="padding:8px; background:#f1f5f9;">${m}</th>`),
+        );
+        tableHtml += `<th style="padding:8px; background:#d1fae5;">Rata-Rata</th></tr></thead><tbody>`;
+        dataToExport.forEach((item, idx) => {
+          tableHtml += `<tr><td style="padding:8px;">${idx + 1}</td><td style="padding:8px; text-align:left; font-weight:bold; text-transform:uppercase;">${item.nama_siswa}</td><td style="padding:8px;">${item.kelas}</td>`;
+          mapelsToExport.forEach(
+            (m) =>
+              (tableHtml += `<td style="padding:8px;">${item[m] !== undefined ? item[m] : "-"}</td>`),
+          );
+          tableHtml += `<td style="padding:8px; font-weight:bold;">${item.RataRata}</td></tr>`;
+        });
+      }
+      tableHtml += `</tbody></table>`;
+
+      const printContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Cetak Data</title><style>@page { size: auto; margin: 15mm; } body { font-family: Arial, sans-serif; color: #000; } .header { text-align: center; margin-bottom: 20px; } .header h1 { margin:0 0 5px 0; font-size: 20pt; text-transform: uppercase; border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px; } .header p { margin:0; font-size: 11pt; color: #444; }</style></head><body><div class="header"><h1>${title}</h1><p>${subtitle}</p></div>${tableHtml}</body></html>`;
+
       let printIframe = document.getElementById("print-iframe-cerdas");
       if (!printIframe) {
         printIframe = document.createElement("iframe");
         printIframe.id = "print-iframe-cerdas";
-        printIframe.style.position = "absolute";
-        printIframe.style.width = "0px";
-        printIframe.style.height = "0px";
-        printIframe.style.border = "none";
+        printIframe.style.cssText =
+          "position:absolute; width:0; height:0; border:none;";
         document.body.appendChild(printIframe);
       }
-      const iframeDoc = printIframe.contentWindow.document;
-      iframeDoc.open();
-      iframeDoc.write(printContent);
-      iframeDoc.close();
+      printIframe.contentWindow.document.open();
+      printIframe.contentWindow.document.write(printContent);
+      printIframe.contentWindow.document.close();
       printIframe.contentWindow.focus();
-      setTimeout(() => {
-        printIframe.contentWindow.print();
-      }, 500);
+      setTimeout(() => printIframe.contentWindow.print(), 500);
       return;
     }
 
-    let exportData = [];
+    // 3. LOGIKA GENERATE EXCEL & WORD
     let exportHeaders = [];
+    let exportDataMatrix = [];
     let wscols = [];
-    if (nilaiViewMode === "rekap") {
-      if (pivotNilaiData.data.length === 0)
-        return showAlert("warning", "Kosong", "Tidak ada data untuk diekspor!");
+    let fileName = isLogMode ? "Log_Riwayat_Ujian" : "Rekap_Nilai_Siswa";
+
+    if (isLogMode) {
+      exportHeaders = currentConfig.columns.map((c) => c.label);
+      exportDataMatrix = dataToExport.map((item) =>
+        currentConfig.columns.map((c) => item[c.key] || "-"),
+      );
+      wscols = exportHeaders.map(() => ({ wch: 20 }));
+    } else {
       exportHeaders = [
         "No",
         "Nama Murid",
         "Kelas",
-        ...pivotNilaiData.mapels,
+        ...mapelsToExport,
         "Rata-Rata",
       ];
-      exportData = pivotNilaiData.data.map((item, idx) => [
+      exportDataMatrix = dataToExport.map((item, idx) => [
         idx + 1,
         item.nama_siswa,
         item.kelas,
-        ...pivotNilaiData.mapels.map((m) =>
-          item[m] !== undefined ? item[m] : "-",
-        ),
+        ...mapelsToExport.map((m) => (item[m] !== undefined ? item[m] : "-")),
         item.RataRata,
       ]);
       wscols = [
         { wch: 5 },
         { wch: 35 },
         { wch: 15 },
-        ...pivotNilaiData.mapels.map(() => ({ wch: 15 })),
+        ...mapelsToExport.map(() => ({ wch: 15 })),
         { wch: 15 },
       ];
-    } else {
-      if (processedData.length === 0)
-        return showAlert("warning", "Kosong", "Tidak ada data untuk diekspor!");
-      exportHeaders = currentConfig.columns.map((c) => c.label);
-      exportData = processedData.map((item) =>
-        currentConfig.columns.map((c) => item[c.key] || "-"),
-      );
-      wscols = exportHeaders.map(() => ({ wch: 20 }));
     }
 
     if (type === "xls") {
-      const worksheet = XLSX.utils.aoa_to_sheet([exportHeaders, ...exportData]);
+      const worksheet = XLSX.utils.aoa_to_sheet([
+        exportHeaders,
+        ...exportDataMatrix,
+      ]);
       worksheet["!cols"] = wscols;
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Nilai");
-      XLSX.writeFile(workbook, `Rekap_Nilai_CBT_${new Date().getTime()}.xlsx`);
-      return;
-    }
-
-    if (type === "doc") {
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        isLogMode ? "Log Ujian" : "Rekap Nilai",
+      );
+      XLSX.writeFile(workbook, `${fileName}_${new Date().getTime()}.xlsx`);
+    } else if (type === "doc") {
       try {
         const headerCells = exportHeaders.map(
           (text) =>
@@ -1737,7 +1798,7 @@ const GuruDashboard = () => {
               margins: { top: 100, bottom: 100, left: 100, right: 100 },
             }),
         );
-        const dataRows = exportData.map(
+        const dataRows = exportDataMatrix.map(
           (rowData) =>
             new TableRow({
               children: rowData.map(
@@ -1779,7 +1840,9 @@ const GuruDashboard = () => {
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: "REKAPITULASI NILAI AKADEMIK",
+                      text: isLogMode
+                        ? "LOG RIWAYAT UJIAN SISWA"
+                        : "REKAPITULASI NILAI AKADEMIK",
                       bold: true,
                       size: 28,
                     }),
@@ -1793,12 +1856,12 @@ const GuruDashboard = () => {
           ],
         });
         const blob = await Packer.toBlob(doc);
-        saveAs(blob, `Rekap_Nilai_CBT_${new Date().getTime()}.docx`);
+        saveAs(blob, `${fileName}_${new Date().getTime()}.docx`);
       } catch (error) {
         showAlert(
           "danger",
           "Kesalahan",
-          "Terjadi kesalahan saat membuat file DOCX.",
+          "Terjadi kesalahan saat membuat DOCX.",
         );
       }
     }
@@ -1817,9 +1880,8 @@ const GuruDashboard = () => {
           .header-live-bg { background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa); background-size: 400% 400%; animation: gradientBG 15s ease infinite; }
         `}</style>
 
-        {/* ============================================================== */}
-        {/* BANNER PERINGATAN GLOBAL (Jika Ada Siswa Terkunci - ANTI CHEAT) */}
-        {/* ============================================================== */}
+        {/* // BANNER PERINGATAN GLOBAL (Jika Ada Siswa Terkunci - ANTI CHEAT)//
+       
         <AnimatePresence>
           {lockedSessions.length > 0 && (
             <motion.div
@@ -1856,10 +1918,289 @@ const GuruDashboard = () => {
           )}
         </AnimatePresence>
 
-        {/* HEADER ELEGAN */}
+        {/* ============================================================== */}
+        {/* TAMPILAN M-BANKING (KHUSUS HP) - SAT SET SAT SET */}
+        {/* ============================================================== */}
+        <div className="md:hidden space-y-4 mb-2">
+          {/* 1. Kartu Identitas & Saldo */}
+          <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-3xl p-5 text-white shadow-lg shadow-emerald-600/30 relative overflow-hidden">
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+            <div className="flex justify-between items-center relative z-10 mb-6">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest opacity-80 font-bold mb-0.5">
+                  Selamat Datang,
+                </p>
+                <h2 className="text-xl font-black leading-tight">
+                  {namaGuruLog}
+                </h2>
+              </div>
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20">
+                <Target size={20} className="text-white" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 relative z-10">
+              <div className="bg-black/20 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
+                <p className="text-[10px] uppercase tracking-widest opacity-80 font-bold mb-1">
+                  Total Soal
+                </p>
+                <p className="text-2xl font-black">{data.length}</p>
+              </div>
+              <div className="bg-black/20 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
+                <p className="text-[10px] uppercase tracking-widest opacity-80 font-bold mb-1">
+                  Siswa Sudah Ujian
+                </p>
+                <p className="text-2xl font-black">
+                  {pivotNilaiData?.data?.length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Grid Menu M-Banking (Tombol Besar) */}
+          <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">
+              Menu
+            </h3>
+            <div className="grid grid-cols-4 gap-y-6 gap-x-2">
+              <button
+                onClick={() => {
+                  setTab("soal");
+                  openAddModal();
+                }}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-[1rem] flex items-center justify-center shadow-inner">
+                  <Plus size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Buat
+                  <br />
+                  Soal
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setTab("soal");
+                  setIsBulkOpen(true);
+                }}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-[1rem] flex items-center justify-center shadow-inner">
+                  <UploadCloud size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Import Soal
+                  <br />
+                  (Sekaligus)
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setTab("soal");
+                  setTimeout(
+                    () => window.scrollTo({ top: 600, behavior: "smooth" }),
+                    100,
+                  );
+                }}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-[1rem] flex items-center justify-center shadow-inner">
+                  <Layers size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Daftar
+                  <br />
+                  Soal
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setTab("nilai");
+                  setNilaiViewMode("rekap");
+                  setTimeout(
+                    () => window.scrollTo({ top: 600, behavior: "smooth" }),
+                    100,
+                  );
+                }}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-[1rem] flex items-center justify-center shadow-inner">
+                  <TableProperties size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Buku
+                  <br />
+                  Nilai
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setTab("nilai");
+                  setNilaiViewMode("log");
+                  setTimeout(
+                    () => window.scrollTo({ top: 600, behavior: "smooth" }),
+                    100,
+                  );
+                }}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className="w-12 h-12 bg-slate-100 text-slate-700 rounded-[1rem] flex items-center justify-center shadow-inner">
+                  <LayoutList size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Log
+                  <br />
+                  Riwayat
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setTab("nilai");
+                  setNilaiViewMode("pelanggaran");
+                  setTimeout(
+                    () => window.scrollTo({ top: 600, behavior: "smooth" }),
+                    100,
+                  );
+                }}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform relative"
+              >
+                {lockedSessions.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse border-2 border-white">
+                    {lockedSessions.length}
+                  </span>
+                )}
+                <div className="w-12 h-12 bg-red-100 text-red-600 rounded-[1rem] flex items-center justify-center shadow-inner">
+                  <ShieldAlert size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Pelanggaran
+                  <br />
+                  Siswa
+                </span>
+              </button>
+
+              {/* TOMBOL SMART EXPORT YANG BARU */}
+              <button
+                onClick={() => setIsExportMenuOpen(true)}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className="w-12 h-12 bg-teal-100 text-teal-600 rounded-[1rem] flex items-center justify-center shadow-inner">
+                  <Download size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Unduh /<br />
+                  Cetak
+                </span>
+              </button>
+
+              <button
+                onClick={() => fetchData(false)}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className="w-12 h-12 bg-slate-50 border border-slate-200 text-slate-500 rounded-[1rem] flex items-center justify-center">
+                  <RefreshCw
+                    size={24}
+                    className={loading || isSyncing ? "animate-spin" : ""}
+                  />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Refresh
+                  <br />
+                  Data
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* 3. Bar Pencarian Pintas HP Mobile Smart */}
+          <div className="space-y-3">
+            {/* Baris 1: Pencarian & Tombol Filter (Gaya E-Commerce) */}
+            <div className="flex gap-2">
+              <div className="flex-1 bg-white rounded-2xl p-2.5 shadow-sm border border-slate-100 flex items-center gap-2">
+                <Search className="text-slate-400 ml-2 shrink-0" size={18} />
+                <input
+                  className="w-full bg-transparent border-none outline-none font-bold text-sm text-slate-700 py-1.5 placeholder:text-slate-400 placeholder:font-medium"
+                  placeholder={
+                    tab === "soal" ? "Cari soal..." : "Cari siswa..."
+                  }
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="bg-white text-slate-600 p-3.5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center relative hover:bg-slate-50 transition-colors"
+              >
+                <ListChecks size={20} />
+                {Object.values(filters).some(Boolean) && (
+                  <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                )}
+              </button>
+            </div>
+
+            {/* Baris 2: Undo/Redo & Aksi Massal (Khusus Tab Bank Soal) */}
+            {tab === "soal" && (
+              <div className="flex justify-between items-center gap-2">
+                {/* Undo Redo Mini */}
+                <div className="flex bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden shrink-0">
+                  <button
+                    onClick={handleUndo}
+                    disabled={isDoingHistory || actionHistory.undo.length === 0}
+                    className="p-2.5 text-slate-500 disabled:opacity-30 hover:bg-emerald-50 border-r border-slate-100 transition-colors"
+                  >
+                    <Undo size={16} />
+                  </button>
+                  <button
+                    onClick={handleRedo}
+                    disabled={isDoingHistory || actionHistory.redo.length === 0}
+                    className="p-2.5 text-slate-500 disabled:opacity-30 hover:bg-emerald-50 transition-colors"
+                  >
+                    <Redo size={16} />
+                  </button>
+                </div>
+
+                {/* Pilih Semua & Sapu Bersih Mini */}
+                {processedData.length > 0 && (
+                  <div className="flex gap-2 flex-1">
+                    <button
+                      onClick={handleSelectAll}
+                      className={`flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider border transition-colors ${isAllSelected ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-inner" : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {isAllSelected ? (
+                        <CheckSquare size={14} />
+                      ) : (
+                        <Square size={14} />
+                      )}
+                      {isAllSelected ? "Batal" : "Semua"}
+                    </button>
+                    <button
+                      onClick={handleDeleteAll}
+                      disabled={isDeletingBulk}
+                      className="flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider border bg-red-50 border-red-100 text-red-600 disabled:opacity-50 hover:bg-red-500 hover:text-white transition-colors"
+                    >
+                      <Trash2 size={14} /> Bersihkan
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 4. Pemisah / Label Scroll */}
+          <div className="flex justify-center items-center mt-6 mb-2">
+            <div className="bg-slate-200 h-1 w-12 rounded-full mb-2"></div>
+          </div>
+        </div>
+
+        {/* HEADER ELEGAN (DISEMBUNYIKAN DI HP) */}
         <motion.header
           variants={fadeUp}
-          className="relative flex flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 gap-4 overflow-hidden header-live-bg z-0"
+          className="hidden md:flex relative flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 gap-4 overflow-hidden header-live-bg z-0"
         >
           <motion.div
             animate={{
@@ -1988,7 +2329,8 @@ const GuruDashboard = () => {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
             >
-              <div className="flex flex-col md:flex-row items-center w-full md:w-max p-1.5 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm mx-auto md:mx-0 gap-1 md:gap-0">
+              {/* DI HP DISEMBUNYIKAN KARENA SUDAH ADA DI GRID M-BANKING */}
+              <div className="hidden md:flex flex-col md:flex-row items-center w-full md:w-max p-1.5 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm mx-auto md:mx-0 gap-1 md:gap-0">
                 <button
                   onClick={() => setNilaiViewMode("rekap")}
                   className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "rekap" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-800"}`}
@@ -2054,7 +2396,7 @@ const GuruDashboard = () => {
         {!(tab === "nilai" && nilaiViewMode === "pelanggaran") && (
           <motion.div
             variants={fadeUp}
-            className="flex flex-col xl:flex-row gap-4"
+            className="hidden md:flex flex-col xl:flex-row gap-4"
           >
             <Card className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden flex flex-col justify-center">
               <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -3392,6 +3734,154 @@ const GuruDashboard = () => {
                     )}
                   </div>
                 </Card>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {isExportMenuOpen && (
+            <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+              <motion.div
+                initial={{ opacity: 0, y: 100 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 100 }}
+                className="w-full max-w-sm bg-white rounded-t-[2rem] md:rounded-[2rem] p-6 shadow-2xl"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-xl font-black text-slate-800">
+                      Export Nilai
+                    </h3>
+                    <p className="text-xs font-medium text-slate-500 mt-1">
+                      Pilih format laporan yang diinginkan.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsExportMenuOpen(false)}
+                    className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleExport("xls")}
+                    className="flex flex-col items-center justify-center p-4 bg-emerald-50 border border-emerald-100 rounded-2xl hover:bg-emerald-100 transition-colors active:scale-95"
+                  >
+                    <Download size={28} className="text-emerald-600 mb-2" />
+                    <span className="font-bold text-emerald-800 text-sm">
+                      Ms. Excel
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleExport("doc")}
+                    className="flex flex-col items-center justify-center p-4 bg-blue-50 border border-blue-100 rounded-2xl hover:bg-blue-100 transition-colors active:scale-95"
+                  >
+                    <FileText size={28} className="text-blue-600 mb-2" />
+                    <span className="font-bold text-blue-800 text-sm">
+                      Ms. Word
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleExport("pdf")}
+                    className="flex flex-col items-center justify-center p-4 bg-rose-50 border border-rose-100 rounded-2xl hover:bg-rose-100 transition-colors active:scale-95"
+                  >
+                    <FileText size={28} className="text-rose-600 mb-2" />
+                    <span className="font-bold text-rose-800 text-sm">
+                      File PDF
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleExport("print")}
+                    className="flex flex-col items-center justify-center p-4 bg-slate-100 border border-slate-200 rounded-2xl hover:bg-slate-200 transition-colors active:scale-95"
+                  >
+                    <Printer size={28} className="text-slate-700 mb-2" />
+                    <span className="font-bold text-slate-800 text-sm">
+                      Print / Cetak
+                    </span>
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {isMobileFilterOpen && (
+            <div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm md:hidden">
+              <motion.div
+                initial={{ opacity: 0, y: "100%" }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="w-full bg-white rounded-t-[2rem] p-6 shadow-2xl max-h-[85vh] flex flex-col"
+              >
+                <div className="flex justify-between items-center mb-6 shrink-0">
+                  <div>
+                    <h3 className="text-xl font-black text-slate-800">
+                      Filter Data
+                    </h3>
+                    <p className="text-xs font-medium text-slate-500 mt-1">
+                      Saring tampilan sesuai kebutuhan.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileFilterOpen(false)}
+                    className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 scrollbar-thin pb-6 space-y-5">
+                  {currentConfig.filterKeys.map((key) => {
+                    if (
+                      tab === "nilai" &&
+                      nilaiViewMode === "rekap" &&
+                      key !== "kelas"
+                    )
+                      return null;
+                    return (
+                      <div key={key} className="space-y-2">
+                        <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 ml-1">
+                          Saring Berdasarkan {key}
+                        </label>
+                        <PremiumSelect
+                          value={filters[key] || ""}
+                          onChange={(val) =>
+                            setFilters({ ...filters, [key]: val })
+                          }
+                          options={[
+                            { label: `Semua ${key}`, value: "" },
+                            ...getFilterOptions(key).map((opt) => ({
+                              label: opt,
+                              value: opt,
+                            })),
+                          ]}
+                          placeholder={`Pilih ${key}...`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-5 border-t border-slate-100 flex gap-3 shrink-0">
+                  <button
+                    onClick={() => {
+                      setFilters({});
+                      setIsMobileFilterOpen(false);
+                    }}
+                    className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-200"
+                  >
+                    Reset Ulang
+                  </button>
+                  <button
+                    onClick={() => setIsMobileFilterOpen(false)}
+                    className="flex-1 py-4 bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-500/30 hover:bg-emerald-600"
+                  >
+                    Terapkan Filter
+                  </button>
+                </div>
               </motion.div>
             </div>
           )}

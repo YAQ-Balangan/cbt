@@ -90,6 +90,14 @@ const SiswaDashboard = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [pelanggaran, setPelanggaran] = useState(0);
 
+  // --- FITUR BARU: BACA STATUS MASTER SWITCH ---
+  const [isAntiCheatActive, setIsAntiCheatActive] = useState(true);
+  const isAntiCheatActiveRef = useRef(true);
+  useEffect(() => {
+    isAntiCheatActiveRef.current = isAntiCheatActive;
+  }, [isAntiCheatActive]);
+  // ---------------------------------------------
+
   const [zoomedImg, setZoomedImg] = useState(null);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [customAlert, setCustomAlert] = useState({
@@ -154,6 +162,14 @@ const SiswaDashboard = () => {
       try {
         const jadwalRes = await api.read("Jadwal");
         const nilaiRes = await api.read("Nilai");
+        const settingsRes = await api.read("Settings"); // <--- Tarik data Settings
+
+        // --- Cek Status Anti-Cheat ---
+        if (settingsRes) {
+          const acSetting = settingsRes.find((s) => s.kunci === "ANTI_CHEAT");
+          setIsAntiCheatActive(acSetting ? acSetting.nilai !== "OFF" : true);
+        }
+        // -----------------------------
 
         let finalJadwal = [];
         if (jadwalRes && jadwalRes.length > 0) {
@@ -208,6 +224,7 @@ const SiswaDashboard = () => {
   // 2. LOGIKA ANTI-CHEAT (Keluar Aplikasi)
   useEffect(() => {
     const handleVisibilityChange = async () => {
+      if (!isAntiCheatActiveRef.current) return;
       if (
         document.hidden &&
         activeExamRef.current &&
@@ -620,6 +637,12 @@ const SiswaDashboard = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* --- LABEL MODE DEV --- */}
+            {!isAntiCheatActive && (
+              <div className="hidden md:flex items-center gap-1.5 bg-amber-100 text-amber-700 px-3 py-2 rounded-xl border border-amber-200 text-[9px] font-black uppercase tracking-widest animate-pulse">
+                <ShieldAlert size={14} /> Mode Uji Coba
+              </div>
+            )}
             <div
               className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border shadow-sm transition-colors ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-slate-800 text-white border-slate-700"}`}
             >
@@ -1266,6 +1289,45 @@ const SiswaDashboard = () => {
           )}
         </motion.div>
       )}
+      <AnimatePresence>
+        {customAlert.isOpen && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+            >
+              <Card className="w-full max-w-md p-8 shadow-2xl border-0 rounded-[2rem] bg-white text-center flex flex-col items-center">
+                <div
+                  className={`p-4 rounded-2xl mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500" : customAlert.type === "success" ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"}`}
+                >
+                  {customAlert.type === "success" ? (
+                    <CheckCircle2 size={48} />
+                  ) : customAlert.type === "info" ? (
+                    <Info size={48} />
+                  ) : (
+                    <AlertTriangle size={48} />
+                  )}
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 mb-3 leading-tight">
+                  {customAlert.title}
+                </h3>
+                <p className="text-sm text-slate-600 mb-8 font-medium px-2 leading-relaxed whitespace-pre-wrap">
+                  {customAlert.message}
+                </p>
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={closeAlert}
+                    className={`w-full py-3.5 rounded-xl font-bold text-white shadow-sm text-sm uppercase tracking-widest transition-colors ${customAlert.type === "danger" ? "bg-red-500 hover:bg-red-600" : customAlert.type === "warning" ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                  >
+                    Mengerti
+                  </button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </Dashboard>
   );
 };
