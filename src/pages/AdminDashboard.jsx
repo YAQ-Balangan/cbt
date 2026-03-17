@@ -593,6 +593,51 @@ const AdminDashboard = () => {
   };
   // --------------------------------------------
 
+  // --- FITUR BARU: MASTER SWITCH EKSKLUSIF APLIKASI ---
+  const appOnlySetting = data.find((item) => item.kunci === "Mode_Aplikasi");
+  const isAppOnlyOn = appOnlySetting ? appOnlySetting.nilai === "ON" : false;
+
+  const handleToggleAppOnly = async () => {
+    showAlert(
+      "confirm",
+      "Ubah Mode Akses?",
+      `Yakin ingin ${isAppOnlyOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Akses Khusus Aplikasi? Jika hidup, siswa tidak bisa login via browser biasa.`,
+      async () => {
+        closeAlert();
+        setIsSaving(true);
+        try {
+          if (appOnlySetting) {
+            await api.update(currentConfig.sheet, appOnlySetting.id, {
+              ...appOnlySetting,
+              nilai: isAppOnlyOn ? "OFF" : "ON",
+            });
+          } else {
+            const maxId =
+              data.length > 0
+                ? Math.max(...data.map((item) => parseInt(item.id) || 0))
+                : 0;
+            await api.create(currentConfig.sheet, {
+              id: maxId + 1,
+              kunci: "Mode_Aplikasi",
+              nilai: "ON",
+            });
+          }
+          await fetchData(false);
+          showAlert(
+            "success",
+            "Berhasil!",
+            `Akses Khusus Aplikasi sekarang ${isAppOnlyOn ? "NONAKTIF (Bisa via Browser)" : "AKTIF (Hanya via APK)"}.`,
+          );
+        } catch (error) {
+          showAlert("danger", "Gagal", error.message);
+        } finally {
+          setIsSaving(false);
+        }
+      },
+    );
+  };
+  // --------------------------------------------
+
   // Helper Custom Alert
   const showAlert = (type, title, message, onConfirm = null) => {
     setCustomAlert({ isOpen: true, type, title, message, onConfirm });
@@ -865,13 +910,22 @@ const AdminDashboard = () => {
           </div>
           <div className="w-full md:w-auto flex flex-col md:flex-row gap-3 z-10">
             {tab === "settings" && (
-              <button
-                onClick={handleToggleAntiCheat}
-                className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 shadow-red-500/10" : "bg-gradient-to-r from-blue-600 to-blue-500 text-white border-blue-400 hover:scale-105 shadow-blue-500/30"}`}
-              >
-                <ShieldCheck size={20} />{" "}
-                {isAntiCheatOn ? "Matikan Anti-Cheat" : "Hidupkan Anti-Cheat"}
-              </button>
+              <div className="flex flex-col md:flex-row gap-2 w-full">
+                <button
+                  onClick={handleToggleAntiCheat}
+                  className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 shadow-red-500/10" : "bg-gradient-to-r from-blue-600 to-blue-500 text-white border-blue-400 hover:scale-105 shadow-blue-500/30"}`}
+                >
+                  <ShieldCheck size={20} />{" "}
+                  {isAntiCheatOn ? "Matikan Anti-Cheat" : "Hidupkan Anti-Cheat"}
+                </button>
+                <button
+                  onClick={handleToggleAppOnly}
+                  className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 shadow-amber-500/10" : "bg-slate-800 text-white border-slate-700 hover:scale-105 shadow-slate-500/30"}`}
+                >
+                  {isAppOnlyOn ? <Unlock size={20} /> : <Lock size={20} />}
+                  {isAppOnlyOn ? "Buka Akses Browser" : "Kunci Hanya Aplikasi"}
+                </button>
+              </div>
             )}
             <button
               onClick={openAddModal}
