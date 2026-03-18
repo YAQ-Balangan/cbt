@@ -101,7 +101,7 @@ const LoginPage = () => {
             variants={fadeUp}
             className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight"
           >
-            MASDA PRO
+            M-HANIF
           </motion.h1>
           <motion.p
             variants={fadeUp}
