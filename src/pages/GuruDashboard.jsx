@@ -3877,7 +3877,7 @@ const GuruDashboard = () => {
                     Reset Ulang
                   </button>
                   <button
-                    onClick={() => setIsMobileFilterOpen(false)}
+                    onClick={() => snetIsMobileFilterOpen(false)}
                     className="flex-1 py-4 bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-500/30 hover:bg-emerald-600"
                   >
                     Terapkan Filter
