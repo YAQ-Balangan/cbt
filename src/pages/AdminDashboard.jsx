@@ -11,7 +11,6 @@ import {
   Edit,
   Trash2,
   X,
-  Save,
   ShieldCheck,
   ChevronUp,
   ChevronDown,
@@ -21,7 +20,6 @@ import {
   Info,
   Square,
   CheckSquare,
-  Sparkles,
   Lock,
   Unlock,
   ListChecks,
@@ -56,19 +54,6 @@ const formatTanggal = (isoString) => {
     }
   }
   return isoString;
-};
-
-// ==========================================
-// ANIMASI FRAMER MOTION
-// ==========================================
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
 // ==========================================
@@ -126,6 +111,7 @@ const PremiumSelect = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.2 }}
             className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl max-h-52 md:max-h-60 overflow-y-auto py-1"
           >
             {options.map((opt, index) => {
@@ -231,6 +217,7 @@ const PremiumMultiSelect = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.2 }}
             className="absolute z-50 w-full md:w-80 mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl flex flex-col max-h-64 md:max-h-72 overflow-hidden max-w-[90vw]"
           >
             <div className="p-2 border-b border-slate-100 bg-slate-50 sticky top-0 flex justify-between items-center z-10">
@@ -293,14 +280,13 @@ const PremiumMultiSelect = ({
 // ==========================================
 const TINGKAT_SEKOLAH = ["X", "XI", "XII"];
 const JURUSAN_SEKOLAH = ["MIPA", "IPS"];
-const MAKSIMAL_ROMBEL = 2; // Berarti ada kelas 1 dan 2
+const MAKSIMAL_ROMBEL = 2;
 
 const OPSI_KELAS_LENGKAP = [
   { label: "KATEGORI GLOBAL", isLabel: true },
   { label: "Semua Kelas (Umum)", value: "SEMUA" },
 ];
 
-// 1. Kategori Tingkat (X, XI, XII)
 OPSI_KELAS_LENGKAP.push({
   label: "KATEGORI TINGKAT (GABUNGAN JURUSAN)",
   isLabel: true,
@@ -312,13 +298,11 @@ TINGKAT_SEKOLAH.forEach((t) => {
   });
 });
 
-// 2. Kategori Jurusan Global (Semua MIPA, Semua IPS)
 OPSI_KELAS_LENGKAP.push({ label: "KATEGORI JURUSAN GLOBAL", isLabel: true });
 JURUSAN_SEKOLAH.forEach((j) => {
   OPSI_KELAS_LENGKAP.push({ label: `Semua ${j} (X, XI, XII)`, value: j });
 });
 
-// 3. Kategori Tingkat + Jurusan (X MIPA, XII IPS, dll)
 OPSI_KELAS_LENGKAP.push({ label: "KATEGORI TINGKAT & JURUSAN", isLabel: true });
 TINGKAT_SEKOLAH.forEach((t) => {
   JURUSAN_SEKOLAH.forEach((j) => {
@@ -326,7 +310,6 @@ TINGKAT_SEKOLAH.forEach((t) => {
   });
 });
 
-// 4. Kelas Spesifik / Rombel (X MIPA 1, XII IPS 2, dll)
 OPSI_KELAS_LENGKAP.push({ label: "KELAS SPESIFIK (ROMBEL)", isLabel: true });
 TINGKAT_SEKOLAH.forEach((t) => {
   JURUSAN_SEKOLAH.forEach((j) => {
@@ -339,6 +322,11 @@ TINGKAT_SEKOLAH.forEach((t) => {
   });
 });
 
+// Array datar untuk Combobox Autocomplete (Tanpa Label Kategori)
+const FLAT_OPSI_KELAS = OPSI_KELAS_LENGKAP.filter((opt) => !opt.isLabel).map(
+  (opt) => opt.value,
+);
+
 // ==========================================
 // 2. KONFIGURASI DINAMIS (SCHEMA)
 // ==========================================
@@ -348,46 +336,34 @@ const TAB_CONFIG = {
     title: "Database User",
     subtitle: "Manajemen Akses Siswa & Guru",
     columns: [
-      { key: "id", label: "ID", sortable: true },
+      { key: "id", label: "ID", isNumber: true, sortable: true },
       { key: "nama", label: "Nama Lengkap", sortable: true },
       { key: "username", label: "Username", sortable: true },
       { key: "password", label: "Password" },
-      { key: "role", label: "Role", sortable: true, filterable: true },
-      { key: "kelas", label: "Kelas", sortable: true, filterable: true },
-    ],
-    form: [
-      { key: "nama", label: "Nama Lengkap", type: "text", required: true },
-      { key: "username", label: "Username", type: "text", required: true },
-      { key: "password", label: "Password", type: "text", required: true },
       {
         key: "role",
         label: "Role",
-        type: "select",
+        isSelect: true,
         options: ["siswa", "guru", "admin"],
-        required: true,
+        sortable: true,
+        filterable: true,
       },
       {
         key: "kelas",
-        label: "Kelas (Kosongkan jika bukan Siswa)",
-        type: "multi-select",
-        options: OPSI_KELAS_LENGKAP,
-        required: false,
+        label: "Kelas",
+        isCombobox: true,
+        options: FLAT_OPSI_KELAS,
+        sortable: true,
+        filterable: true,
       },
     ],
-    defaultValues: {
-      nama: "",
-      username: "",
-      password: "",
-      role: "siswa",
-      kelas: "",
-    },
   },
   jadwal: {
     sheet: "Jadwal",
     title: "Jadwal Ujian",
     subtitle: "Manajemen Sesi Ujian CBT",
     columns: [
-      { key: "id", label: "ID", sortable: true },
+      { key: "id", label: "ID", isNumber: true, sortable: true },
       { key: "nama_ujian", label: "Nama Ujian", sortable: true },
       {
         key: "mapel",
@@ -395,69 +371,33 @@ const TAB_CONFIG = {
         sortable: true,
         filterable: true,
       },
-      { key: "kelas", label: "Target Kelas", sortable: true, filterable: true },
-      { key: "tanggal", label: "Tanggal", sortable: true },
-      { key: "durasi_menit", label: "Durasi" },
-      { key: "token", label: "Token", sortable: true, filterable: true },
-      { key: "status", label: "Status", sortable: true, filterable: true },
-    ],
-    form: [
-      {
-        key: "nama_ujian",
-        label: "Nama Ujian (Contoh: UM 2026)",
-        type: "text",
-        required: true,
-      },
-      { key: "mapel", label: "Mata Pelajaran", type: "text", required: true },
       {
         key: "kelas",
-        label: "Target Peserta Ujian",
-        type: "multi-select",
-        options: OPSI_KELAS_LENGKAP,
-        required: true,
+        label: "Target Kelas",
+        isCombobox: true,
+        options: FLAT_OPSI_KELAS,
+        sortable: true,
+        filterable: true,
       },
-      {
-        key: "tanggal",
-        label: "Tanggal Pelaksanaan",
-        type: "date",
-        required: true,
-      },
-      {
-        key: "durasi_menit",
-        label: "Durasi (Menit)",
-        type: "number",
-        required: true,
-      },
-      {
-        key: "token",
-        label: "Token",
-        type: "text",
-        required: true,
-      },
+      { key: "tanggal", label: "Tanggal", isDate: true, sortable: true },
+      { key: "durasi_menit", label: "Durasi (Menit)", isNumber: true },
+      { key: "token", label: "Token", sortable: true },
       {
         key: "status",
-        label: "Status Ujian",
-        type: "select",
+        label: "Status",
+        isSelect: true,
         options: ["Draft", "Aktif", "Selesai"],
-        required: true,
+        sortable: true,
+        filterable: true,
       },
     ],
-    defaultValues: {
-      nama_ujian: "",
-      mapel: "",
-      kelas: "",
-      tanggal: "",
-      durasi_menit: "90",
-      token: "",
-      status: "Draft",
-    },
   },
   mapel: {
     sheet: "Mapel",
     title: "Mata Pelajaran",
     subtitle: "Daftar Mata Pelajaran Aktif",
     columns: [
-      { key: "id", label: "ID", sortable: true },
+      { key: "id", label: "ID", isNumber: true, sortable: true },
       { key: "nama_mapel", label: "Nama Mapel", sortable: true },
       {
         key: "guru_pengampu",
@@ -466,28 +406,13 @@ const TAB_CONFIG = {
         filterable: true,
       },
     ],
-    form: [
-      {
-        key: "nama_mapel",
-        label: "Nama Mata Pelajaran",
-        type: "text",
-        required: true,
-      },
-      {
-        key: "guru_pengampu",
-        label: "Nama Guru Pengampu",
-        type: "text",
-        required: true,
-      },
-    ],
-    defaultValues: { nama_mapel: "", guru_pengampu: "" },
   },
   settings: {
     sheet: "Settings",
     title: "Konfigurasi Sistem",
     subtitle: "Pengaturan Global Aplikasi CBT",
     columns: [
-      { key: "id", label: "ID", sortable: true },
+      { key: "id", label: "ID", isNumber: true, sortable: true },
       {
         key: "kunci",
         label: "Nama Pengaturan",
@@ -496,16 +421,6 @@ const TAB_CONFIG = {
       },
       { key: "nilai", label: "Isi / Keterangan", sortable: true },
     ],
-    form: [
-      { key: "kunci", label: "Nama Pengaturan", type: "text", required: true },
-      {
-        key: "nilai",
-        label: "Isi / Keterangan Pengaturan",
-        type: "text",
-        required: true,
-      },
-    ],
-    defaultValues: { kunci: "", nilai: "" },
   },
 };
 
@@ -517,20 +432,139 @@ const MENU_ITEMS = [
 ];
 
 // ==========================================
-// 3. KOMPONEN UTAMA
+// KOMPONEN INLINE EDIT (GOOGLE SHEETS STYLE)
+// Mendukung Teks, Angka, Dropdown, Kalender, dan Autocomplete!
+// ==========================================
+const EditableCell = ({ item, column, onSave }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [val, setVal] = useState(item[column.key] || "");
+
+  useEffect(() => {
+    setVal(item[column.key] || "");
+  }, [item[column.key]]);
+
+  const triggerSave = () => {
+    setIsEditing(false);
+    if (String(val).trim() !== String(item[column.key] || "").trim()) {
+      onSave(item.id, column.key, val);
+    }
+  };
+
+  if (isEditing) {
+    if (column.isSelect) {
+      return (
+        <select
+          autoFocus
+          className="w-full p-1.5 border-2 border-emerald-500 rounded outline-none text-sm text-emerald-900 bg-emerald-50 font-bold shadow-sm"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={triggerSave}
+          onKeyDown={(e) => e.key === "Enter" && triggerSave()}
+        >
+          <option value="">Pilih...</option>
+          {column.options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (column.isDate) {
+      return (
+        <input
+          autoFocus
+          type="date"
+          className="w-full p-1.5 border-2 border-emerald-500 rounded outline-none text-sm text-emerald-900 bg-emerald-50 font-bold shadow-sm"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={triggerSave}
+          onKeyDown={(e) => e.key === "Enter" && triggerSave()}
+        />
+      );
+    }
+
+    if (column.isCombobox) {
+      const listId = `list-${column.key}-${item.id}`;
+      return (
+        <>
+          <input
+            autoFocus
+            list={listId}
+            type="text"
+            className="w-full p-1.5 border-2 border-emerald-500 rounded outline-none text-sm text-emerald-900 bg-emerald-50 font-bold shadow-sm"
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            onBlur={triggerSave}
+            onKeyDown={(e) => e.key === "Enter" && triggerSave()}
+            placeholder="Ketik atau pilih..."
+          />
+          <datalist id={listId}>
+            {column.options.map((opt) => (
+              <option key={opt} value={opt} />
+            ))}
+          </datalist>
+        </>
+      );
+    }
+
+    return (
+      <input
+        autoFocus
+        type={column.isNumber ? "number" : "text"}
+        className="w-full p-1.5 border-2 border-emerald-500 rounded outline-none text-sm text-emerald-900 bg-emerald-50 font-bold shadow-sm"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={triggerSave}
+        onKeyDown={(e) => e.key === "Enter" && triggerSave()}
+        placeholder="Ketik lalu Enter..."
+      />
+    );
+  }
+
+  // Tampilan Default
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      className={`w-full min-h-[28px] cursor-text hover:bg-emerald-50 hover:ring-1 hover:ring-emerald-200 rounded px-1.5 flex items-center transition-colors ${column.key === "id" ? "font-mono text-xs text-slate-500 bg-slate-100 border border-slate-200 hover:border-emerald-300 w-max" : "text-slate-700"}`}
+      title="Klik untuk mengubah"
+    >
+      {column.key === "role" || column.key === "status" ? (
+        <Badge type={val || "Kosong"} />
+      ) : column.key === "id" ? (
+        `#${val}`
+      ) : (
+        val || <span className="text-slate-300 italic text-xs">Kosong...</span>
+      )}
+    </div>
+  );
+};
+
+// ==========================================
+// KOMPONEN UTAMA
 // ==========================================
 const AdminDashboard = () => {
   const [tab, setTab] = useState("siswa");
-  const [data, setData] = useState([]);
+
+  // STATE CACHE GLOBAL
+  const [allData, setAllData] = useState({
+    siswa: [],
+    jadwal: [],
+    mapel: [],
+    settings: [],
+  });
 
   const currentConfig = TAB_CONFIG[tab];
+  const data = allData[tab] || [];
 
-  // State Loading & Sync
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: "id", direction: "asc" });
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  // State Custom Alert
   const [customAlert, setCustomAlert] = useState({
     isOpen: false,
     type: "info",
@@ -538,155 +572,161 @@ const AdminDashboard = () => {
     message: "",
     onConfirm: null,
   });
-
-  // State Search, Filter, Sort
-  const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState({ key: "id", direction: "asc" });
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
-  const [formData, setFormData] = useState({});
-  const [isEdit, setIsEdit] = useState(false);
-  const [originalId, setOriginalId] = useState(null);
-
-  // --- MASTER SWITCH ANTI-CHEAT ---
-  const antiCheatSetting = data.find((item) => item.kunci === "Mode_Ujian");
-  const isAntiCheatOn = antiCheatSetting
-    ? antiCheatSetting.nilai !== "OFF"
-    : true;
-
-  const handleToggleAntiCheat = async () => {
-    showAlert(
-      "confirm",
-      "Ubah Mode Ujian?",
-      `Yakin ingin ${isAntiCheatOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Anti-Cheat?`,
-      async () => {
-        closeAlert();
-        setIsSaving(true);
-        try {
-          if (antiCheatSetting) {
-            await api.update(currentConfig.sheet, antiCheatSetting.id, {
-              ...antiCheatSetting,
-              nilai: isAntiCheatOn ? "OFF" : "ON",
-            });
-          } else {
-            const maxId =
-              data.length > 0
-                ? Math.max(...data.map((item) => parseInt(item.id) || 0))
-                : 0;
-            await api.create(currentConfig.sheet, {
-              id: maxId + 1,
-              kunci: "Mode_Ujian",
-              nilai: "OFF",
-            });
-          }
-          await fetchData(false);
-          showAlert(
-            "success",
-            "Berhasil!",
-            `Anti-Cheat sekarang ${isAntiCheatOn ? "NONAKTIF (Mode Uji Coba)" : "AKTIF (Mode Ujian Ketat)"}.`,
-          );
-        } catch (error) {
-          showAlert("danger", "Gagal", error.message);
-        } finally {
-          setIsSaving(false);
-        }
-      },
-    );
-  };
-
-  // --- MASTER SWITCH EKSKLUSIF APLIKASI ---
-  const appOnlySetting = data.find((item) => item.kunci === "Mode_Aplikasi");
-  const isAppOnlyOn = appOnlySetting ? appOnlySetting.nilai === "ON" : false;
-
-  const handleToggleAppOnly = async () => {
-    showAlert(
-      "confirm",
-      "Ubah Mode Akses?",
-      `Yakin ingin ${isAppOnlyOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Akses Khusus Aplikasi? Jika hidup, siswa tidak bisa login via browser biasa.`,
-      async () => {
-        closeAlert();
-        setIsSaving(true);
-        try {
-          if (appOnlySetting) {
-            await api.update(currentConfig.sheet, appOnlySetting.id, {
-              ...appOnlySetting,
-              nilai: isAppOnlyOn ? "OFF" : "ON",
-            });
-          } else {
-            const maxId =
-              data.length > 0
-                ? Math.max(...data.map((item) => parseInt(item.id) || 0))
-                : 0;
-            await api.create(currentConfig.sheet, {
-              id: maxId + 1,
-              kunci: "Mode_Aplikasi",
-              nilai: "ON",
-            });
-          }
-          await fetchData(false);
-          showAlert(
-            "success",
-            "Berhasil!",
-            `Akses Khusus Aplikasi sekarang ${isAppOnlyOn ? "NONAKTIF (Bisa via Browser)" : "AKTIF (Hanya via APK)"}.`,
-          );
-        } catch (error) {
-          showAlert("danger", "Gagal", error.message);
-        } finally {
-          setIsSaving(false);
-        }
-      },
-    );
-  };
-
-  // Helper Custom Alert
-  const showAlert = (type, title, message, onConfirm = null) => {
+  const showAlert = (type, title, message, onConfirm = null) =>
     setCustomAlert({ isOpen: true, type, title, message, onConfirm });
-  };
   const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
 
-  // FUNGSI FETCH DATA
-  const fetchData = async (isBackground = false) => {
+  // --- FETCH DATA DI AWAL (BACKGROUND) ---
+  const fetchAllData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    if (isBackground) setIsSyncing(true);
+
+    try {
+      const [resSiswa, resJadwal, resMapel, resSettings] = await Promise.all([
+        api.read(TAB_CONFIG.siswa.sheet),
+        api.read(TAB_CONFIG.jadwal.sheet),
+        api.read(TAB_CONFIG.mapel.sheet),
+        api.read(TAB_CONFIG.settings.sheet),
+      ]);
+
+      setAllData((prev) => {
+        const newData = {
+          siswa: resSiswa || [],
+          jadwal: resJadwal || [],
+          mapel: resMapel || [],
+          settings: resSettings || [],
+        };
+        return JSON.stringify(prev) !== JSON.stringify(newData)
+          ? newData
+          : prev;
+      });
+    } catch (error) {
+      console.error("Gagal menarik semua data:", error);
+    } finally {
+      setLoading(false);
+      setIsSyncing(false);
+    }
+  };
+
+  const refreshCurrentTab = async (isBackground = false) => {
     if (!currentConfig) return;
     if (!isBackground) setLoading(true);
+    if (isBackground) setIsSyncing(true);
 
     try {
       const result = await api.read(currentConfig.sheet);
-      const newData = result || [];
-      setData((prevData) => {
-        const isDataChanged =
-          JSON.stringify(prevData) !== JSON.stringify(newData);
-        return isDataChanged ? newData : prevData;
-      });
+      setAllData((prev) => ({ ...prev, [tab]: result || [] }));
     } catch (error) {
-      console.error("Gagal menarik data:", error);
-      if (!isBackground) setData([]);
+      console.error(`Gagal merefresh data ${tab}:`, error);
     } finally {
-      if (isBackground) setIsSyncing(false);
-      else setLoading(false);
+      setLoading(false);
+      setIsSyncing(false);
     }
   };
+
+  useEffect(() => {
+    fetchAllData(false);
+    const intervalId = setInterval(() => fetchAllData(true), 30000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     setSearch("");
     setFilters({});
     setSortConfig({ key: "id", direction: "asc" });
-    fetchData(false);
-    const intervalId = setInterval(() => fetchData(true), 30000);
-    return () => clearInterval(intervalId);
   }, [tab]);
 
-  const handleSort = (key) => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc")
-      direction = "desc";
-    else if (sortConfig.key === key && sortConfig.direction === "desc")
-      return setSortConfig({ key: null, direction: "asc" });
-    setSortConfig({ key, direction });
+  const handleAddNewRow = () => {
+    const maxId =
+      data.length > 0 ? Math.max(...data.map((d) => parseInt(d.id) || 0)) : 0;
+    const newRow = { id: maxId + 1, isNew: true };
+
+    currentConfig.columns.forEach((col) => {
+      if (col.key !== "id") newRow[col.key] = "";
+    });
+    if (tab === "siswa") newRow.role = "siswa";
+    if (tab === "jadwal") newRow.status = "Draft";
+
+    setAllData((prev) => ({
+      ...prev,
+      [tab]: [...prev[tab], newRow],
+    }));
+  };
+
+  const handleSaveCell = async (oldId, key, newValue) => {
+    const item = data.find((d) => d.id === oldId);
+    if (!item) return;
+
+    let parsedValue = newValue;
+    if (
+      currentConfig.columns.find((c) => c.key === key)?.isNumber ||
+      key === "id"
+    ) {
+      parsedValue =
+        key === "id" ? parseInt(newValue) || 0 : parseFloat(newValue) || 0;
+    }
+
+    if (key === "id" && parsedValue !== oldId) {
+      const isDuplicate = data.some((d) => d.id === parsedValue);
+      if (isDuplicate) {
+        return showAlert(
+          "warning",
+          "ID Duplikat",
+          `ID #${parsedValue} sudah digunakan oleh data lain. Mohon gunakan ID berbeda.`,
+        );
+      }
+    }
+
+    const updatedItem = { ...item, [key]: parsedValue };
+
+    setAllData((prev) => ({
+      ...prev,
+      [tab]: prev[tab].map((d) => (d.id === oldId ? updatedItem : d)),
+    }));
+
+    setIsSyncing(true);
+    try {
+      if (updatedItem.isNew) {
+        const payload = { ...updatedItem };
+        delete payload.isNew;
+        await api.create(currentConfig.sheet, payload);
+
+        setAllData((prev) => ({
+          ...prev,
+          [tab]: prev[tab].map((d) =>
+            d.id === updatedItem.id ? { ...payload } : d,
+          ),
+        }));
+      } else {
+        const payload = { ...updatedItem };
+        delete payload.isNew;
+        await api.update(currentConfig.sheet, oldId, payload);
+      }
+    } catch (err) {
+      setAllData((prev) => ({
+        ...prev,
+        [tab]: prev[tab].map((d) => (d.id === updatedItem.id ? item : d)),
+      }));
+      showAlert(
+        "danger",
+        "Gagal Auto-Save",
+        `Sistem gagal menyimpan: ${err.message}`,
+      );
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const confirmDelete = (id) => {
+    const item = data.find((d) => d.id === id);
+    if (item && item.isNew) {
+      setAllData((prev) => ({
+        ...prev,
+        [tab]: prev[tab].filter((d) => d.id !== id),
+      }));
+      return;
+    }
+
     showAlert(
       "confirm",
       "Hapus Data?",
@@ -696,7 +736,7 @@ const AdminDashboard = () => {
         setLoading(true);
         try {
           await api.delete(currentConfig.sheet, id);
-          await fetchData(false);
+          await refreshCurrentTab(false);
         } catch (error) {
           showAlert("danger", "Gagal Menghapus", error.message);
         } finally {
@@ -706,81 +746,13 @@ const AdminDashboard = () => {
     );
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-
-    // 1. Validasi form kosong
-    for (const field of currentConfig.form) {
-      if (
-        field.required &&
-        (!formData[field.key] || String(formData[field.key]).trim() === "")
-      ) {
-        return showAlert(
-          "warning",
-          "Validasi Gagal",
-          `Harap isi kolom ${field.label} terlebih dahulu.`,
-        );
-      }
-    }
-
-    // 2. Cek Duplikat ID
-    if (!isEdit || (isEdit && String(originalId) !== String(formData.id))) {
-      const isDuplicate = data.some(
-        (item) => String(item.id) === String(formData.id),
-      );
-      if (isDuplicate) {
-        const maxId = Math.max(...data.map((item) => parseInt(item.id) || 0));
-        const safeId = maxId + 1;
-        showAlert(
-          "warning",
-          "ID Duplikat",
-          `ID "#${formData.id}" sudah dipakai. Sistem telah menyesuaikan ke ID #${safeId}. Silakan simpan kembali.`,
-        );
-        setFormData({ ...formData, id: safeId });
-        return;
-      }
-    }
-
-    setIsSaving(true);
-    try {
-      // 3. Format data sebelum dikirim
-      const payloadToSave = { ...formData };
-
-      if (payloadToSave.id) payloadToSave.id = parseInt(payloadToSave.id);
-      if (payloadToSave.durasi_menit)
-        payloadToSave.durasi_menit = parseInt(payloadToSave.durasi_menit);
-
-      // Eksekusi API
-      if (isEdit) {
-        await api.update(currentConfig.sheet, originalId, payloadToSave);
-      } else {
-        await api.create(currentConfig.sheet, payloadToSave);
-      }
-
-      setIsModalOpen(false);
-      await fetchData(false);
-      showAlert("success", "Berhasil", "Data berhasil disimpan ke database!");
-    } catch (error) {
-      showAlert("danger", "Gagal Menyimpan", error.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const openAddModal = () => {
-    setIsEdit(false);
-    let nextId = 1;
-    if (data.length > 0)
-      nextId = Math.max(...data.map((item) => parseInt(item.id) || 0)) + 1;
-    setFormData({ id: nextId, ...currentConfig.defaultValues });
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (item) => {
-    setIsEdit(true);
-    setOriginalId(item.id);
-    setFormData(item);
-    setIsModalOpen(true);
+  const handleSort = (key) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc")
+      direction = "desc";
+    else if (sortConfig.key === key && sortConfig.direction === "desc")
+      return setSortConfig({ key: null, direction: "asc" });
+    setSortConfig({ key, direction });
   };
 
   const processedData = useMemo(() => {
@@ -835,42 +807,102 @@ const AdminDashboard = () => {
       .sort();
   };
 
-  const getPrimaryName = (item) => {
-    return (
-      item.nama ||
-      item.nama_ujian ||
-      item.nama_mapel ||
-      item.kunci ||
-      "Tanpa Nama"
+  const antiCheatSetting = allData.settings.find(
+    (item) => item.kunci === "Mode_Ujian",
+  );
+  const isAntiCheatOn = antiCheatSetting
+    ? antiCheatSetting.nilai !== "OFF"
+    : true;
+  const handleToggleAntiCheat = async () => {
+    showAlert(
+      "confirm",
+      "Ubah Mode Ujian?",
+      `Yakin ingin ${isAntiCheatOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Anti-Cheat?`,
+      async () => {
+        closeAlert();
+        setIsSyncing(true);
+        try {
+          if (antiCheatSetting)
+            await api.update("Settings", antiCheatSetting.id, {
+              ...antiCheatSetting,
+              nilai: isAntiCheatOn ? "OFF" : "ON",
+            });
+          else
+            await api.create("Settings", {
+              id: (Math.max(...allData.settings.map((s) => s.id)) || 0) + 1,
+              kunci: "Mode_Ujian",
+              nilai: "OFF",
+            });
+          await refreshCurrentTab(false);
+          showAlert(
+            "success",
+            "Berhasil!",
+            `Anti-Cheat ${isAntiCheatOn ? "NONAKTIF" : "AKTIF"}.`,
+          );
+        } catch (e) {
+          showAlert("danger", "Gagal", e.message);
+        } finally {
+          setIsSyncing(false);
+        }
+      },
+    );
+  };
+
+  const appOnlySetting = allData.settings.find(
+    (item) => item.kunci === "Mode_Aplikasi",
+  );
+  const isAppOnlyOn = appOnlySetting ? appOnlySetting.nilai === "ON" : false;
+  const handleToggleAppOnly = async () => {
+    showAlert(
+      "confirm",
+      "Ubah Mode Akses?",
+      `Yakin ingin ${isAppOnlyOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Akses Khusus Aplikasi?`,
+      async () => {
+        closeAlert();
+        setIsSyncing(true);
+        try {
+          if (appOnlySetting)
+            await api.update("Settings", appOnlySetting.id, {
+              ...appOnlySetting,
+              nilai: isAppOnlyOn ? "OFF" : "ON",
+            });
+          else
+            await api.create("Settings", {
+              id: (Math.max(...allData.settings.map((s) => s.id)) || 0) + 1,
+              kunci: "Mode_Aplikasi",
+              nilai: "ON",
+            });
+          await refreshCurrentTab(false);
+          showAlert(
+            "success",
+            "Berhasil!",
+            `Akses Khusus Aplikasi ${isAppOnlyOn ? "NONAKTIF" : "AKTIF"}.`,
+          );
+        } catch (e) {
+          showAlert("danger", "Gagal", e.message);
+        } finally {
+          setIsSyncing(false);
+        }
+      },
     );
   };
 
   return (
     <Dashboard menu={MENU_ITEMS} active={tab} setActive={setTab}>
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="space-y-6 max-w-7xl mx-auto pb-20"
-      >
-        <style type="text/css">{`
-          @keyframes gradientBG {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-          }
-          .header-live-bg {
-            background: linear-gradient(-45deg, #d1fae5, #fef3c7, #ecfdf5, #f0fdfa);
-            background-size: 400% 400%;
-            animation: gradientBG 15s ease infinite;
-          }
-        `}</style>
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
 
+      {/* STRUKTUR UTAMA YANG TERKUNCI UKURANNYA (100vh) */}
+      <div className="flex flex-col gap-4 md:gap-5 w-full max-w-[100vw] md:max-w-7xl mx-auto h-[calc(100vh-90px)] md:h-[calc(100vh-125px)] overflow-hidden">
         {/* ============================================================== */}
-        {/* TAMPILAN COMPACT KHUSUS MOBILE (SAT-SET) */}
+        {/* BAGIAN ATAS MOBILE (SHRINK-0) */}
         {/* ============================================================== */}
-        <div className="md:hidden space-y-4 mb-2">
-          {/* 1. Header Ringkas Ala Desktop */}
+        <div className="md:hidden flex flex-col gap-4 shrink-0 px-2 pt-2">
+          {/* Header Mobile */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
             <div className="flex justify-between items-center relative z-10">
@@ -886,7 +918,6 @@ const AdminDashboard = () => {
                 <ShieldCheck size={20} className="text-emerald-400" />
               </div>
             </div>
-
             <div className="mt-6 flex items-end justify-between relative z-10">
               <div>
                 <p className="text-3xl font-black leading-none mb-1">
@@ -897,7 +928,7 @@ const AdminDashboard = () => {
                 </p>
               </div>
               <button
-                onClick={() => fetchData(false)}
+                onClick={() => refreshCurrentTab(false)}
                 className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors"
               >
                 <RefreshCw
@@ -912,55 +943,41 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          {/* 2. Grid Menu Navigasi Padat */}
+          {/* Menus Mobile */}
           <div className="grid grid-cols-4 gap-2">
-            <button
-              onClick={() => setTab("siswa")}
-              className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === "siswa" ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30" : "bg-white border-slate-200 text-slate-500"}`}
-            >
-              <ShieldCheck size={18} />
-              <span className="text-[9px] font-bold">User</span>
-            </button>
-            <button
-              onClick={() => setTab("jadwal")}
-              className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === "jadwal" ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30" : "bg-white border-slate-200 text-slate-500"}`}
-            >
-              <Calendar size={18} />
-              <span className="text-[9px] font-bold">Jadwal</span>
-            </button>
-            <button
-              onClick={() => setTab("mapel")}
-              className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === "mapel" ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30" : "bg-white border-slate-200 text-slate-500"}`}
-            >
-              <BookMarked size={18} />
-              <span className="text-[9px] font-bold">Mapel</span>
-            </button>
-            <button
-              onClick={() => setTab("settings")}
-              className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === "settings" ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/30" : "bg-white border-slate-200 text-slate-500"}`}
-            >
-              <Settings size={18} />
-              <span className="text-[9px] font-bold">Setting</span>
-            </button>
+            {MENU_ITEMS.map((menu) => {
+              const Icon = menu.icon;
+              return (
+                <button
+                  key={menu.id}
+                  onClick={() => setTab(menu.id)}
+                  className={`py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all border ${tab === menu.id ? "bg-emerald-500 border-emerald-500 text-white shadow-md" : "bg-white border-slate-200 text-slate-500"}`}
+                >
+                  <Icon size={18} />
+                  <span className="text-[9px] font-bold">
+                    {menu.label.split(" ")[1] || menu.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* 3. Aksi Cepat Mobile */}
+          {/* Aksi Mobile */}
           <div className="flex flex-col gap-2">
             <button
-              onClick={openAddModal}
+              onClick={handleAddNewRow}
               className="w-full py-3.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
             >
-              <Plus size={16} /> Tambah Data Baru
+              <Plus size={16} /> Tambah Baris Kosong
             </button>
 
-            {/* Khusus Tab Settings */}
             {tab === "settings" && (
               <div className="flex gap-2">
                 <button
                   onClick={handleToggleAntiCheat}
                   className={`flex-1 py-3 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 transition-all text-[10px] border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}
                 >
-                  <ShieldCheck size={16} />
+                  <ShieldCheck size={16} />{" "}
                   <span className="text-center leading-tight">
                     {isAntiCheatOn
                       ? "Matikan Anti-Cheat"
@@ -971,7 +988,7 @@ const AdminDashboard = () => {
                   onClick={handleToggleAppOnly}
                   className={`flex-1 py-3 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 transition-all text-[10px] border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}
                 >
-                  {isAppOnlyOn ? <Unlock size={16} /> : <Lock size={16} />}
+                  {isAppOnlyOn ? <Unlock size={16} /> : <Lock size={16} />}{" "}
                   <span className="text-center leading-tight">
                     {isAppOnlyOn ? "Buka Akses Web" : "Kunci APK Saja"}
                   </span>
@@ -979,8 +996,7 @@ const AdminDashboard = () => {
               </div>
             )}
 
-            {/* Search Bar Mobile & Filter Button */}
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2">
               <div className="bg-white rounded-xl p-2.5 shadow-sm border border-slate-200 flex-1 flex items-center gap-2">
                 <Search className="text-slate-400 ml-2 shrink-0" size={16} />
                 <input
@@ -995,7 +1011,6 @@ const AdminDashboard = () => {
                 className="bg-white text-slate-600 p-3 rounded-xl shadow-sm border border-slate-200 flex items-center justify-center relative hover:bg-slate-50 transition-colors shrink-0"
               >
                 <ListChecks size={20} />
-                {/* Indikator titik merah berkedip jika ada filter atau sort yang aktif */}
                 {(Object.values(filters).some(Boolean) ||
                   sortConfig.key !== "id") && (
                   <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
@@ -1005,32 +1020,93 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* HEADER ELEGAN (DISEMBUNYIKAN DI HP) */}
-        <motion.header
-          variants={fadeUp}
-          className="hidden md:flex relative flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 gap-4 overflow-hidden header-live-bg z-0"
-        >
-          <motion.div
-            animate={{
-              x: [0, 60, -30, 0],
-              y: [0, -40, 50, 0],
-              rotate: [0, 180, 360],
-            }}
-            transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-            className="absolute -top-20 -left-10 w-72 h-72 bg-white/40 rounded-[40%] backdrop-blur-md -z-10"
-          />
-          <motion.div
-            animate={{
-              x: [0, -50, 40, 0],
-              y: [0, 60, -20, 0],
-              rotate: [360, 180, 0],
-            }}
-            transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-            className="absolute -bottom-20 right-10 w-80 h-80 bg-emerald-100/40 rounded-[35%] backdrop-blur-md -z-10"
-          />
+        {/* ============================================================== */}
+        {/* LIST DATA MOBILE (FLEX-1, SCROLLABLE) */}
+        {/* ============================================================== */}
+        <div className="md:hidden flex flex-col flex-1 min-h-0 bg-white border border-slate-200 rounded-[1.5rem] shadow-sm overflow-hidden mx-2 mb-2">
+          <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-100">
+            {loading && data.length === 0 ? (
+              <div className="py-16 text-center">
+                <RefreshCw
+                  className="animate-spin mx-auto text-emerald-500 mb-3"
+                  size={28}
+                />
+                <span className="font-bold text-slate-400 text-xs">
+                  Memuat Data...
+                </span>
+              </div>
+            ) : processedData.length === 0 ? (
+              <div className="py-16 text-center text-slate-400 font-medium text-sm">
+                Belum ada data.
+              </div>
+            ) : (
+              processedData.map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-4 transition-colors flex flex-col gap-2 ${item.isNew ? "bg-amber-50" : "hover:bg-slate-50"}`}
+                >
+                  <div className="flex justify-between items-start gap-3 border-b border-slate-100 pb-3 mb-1">
+                    <div className="flex-1">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
+                          ID:
+                        </span>
+                        <EditableCell
+                          item={item}
+                          column={currentConfig.columns[0]}
+                          onSave={handleSaveCell}
+                        />
+                      </div>
+                      <div className="font-black text-slate-800 text-sm mt-1">
+                        <EditableCell
+                          item={item}
+                          column={currentConfig.columns[1]}
+                          onSave={handleSaveCell}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => confirmDelete(item.id)}
+                      className="p-2.5 text-red-500 bg-red-50 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-colors shrink-0"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 text-xs">
+                    {currentConfig.columns.slice(2).map((col) => (
+                      <div
+                        key={col.key}
+                        className="flex flex-col gap-1 bg-slate-50/50 p-2 rounded-lg border border-slate-100"
+                      >
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                          {col.label}
+                        </span>
+                        <div className="font-semibold text-slate-700">
+                          <EditableCell
+                            item={item}
+                            column={col}
+                            onSave={handleSaveCell}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ============================================================== */}
+        {/* BAGIAN ATAS DESKTOP (SHRINK-0) */}
+        {/* ============================================================== */}
+        <header className="hidden md:flex shrink-0 relative flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 gap-4 overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-100 z-0">
+          <div className="absolute -top-20 -left-10 w-72 h-72 bg-white/40 rounded-full -z-10 blur-xl"></div>
+          <div className="absolute -bottom-20 right-10 w-80 h-80 bg-emerald-200/30 rounded-full -z-10 blur-xl"></div>
 
           <div className="flex items-center gap-4 z-10">
-            <div className="p-4 bg-white/80 backdrop-blur-sm text-emerald-600 rounded-2xl shadow-sm border border-white/60">
+            <div className="p-4 bg-white/80 text-emerald-600 rounded-2xl shadow-sm border border-white/60">
               <Settings size={28} className={isSyncing ? "animate-spin" : ""} />
             </div>
             <div>
@@ -1043,7 +1119,7 @@ const AdminDashboard = () => {
                 </p>
                 {isSyncing && (
                   <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-md text-[10px] font-bold uppercase animate-pulse border border-amber-200">
-                    <RefreshCw size={10} className="animate-spin" /> Sync
+                    <RefreshCw size={10} className="animate-spin" /> Syncing...
                   </span>
                 )}
               </div>
@@ -1054,62 +1130,52 @@ const AdminDashboard = () => {
               <div className="flex flex-col md:flex-row gap-2 w-full">
                 <button
                   onClick={handleToggleAntiCheat}
-                  className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 shadow-red-500/10" : "bg-gradient-to-r from-blue-600 to-blue-500 text-white border-blue-400 hover:scale-105 shadow-blue-500/30"}`}
+                  className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-blue-600 text-white border-blue-400"}`}
                 >
                   <ShieldCheck size={20} />{" "}
                   {isAntiCheatOn ? "Matikan Anti-Cheat" : "Hidupkan Anti-Cheat"}
                 </button>
                 <button
                   onClick={handleToggleAppOnly}
-                  className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 shadow-amber-500/10" : "bg-slate-800 text-white border-slate-700 hover:scale-105 shadow-slate-500/30"}`}
+                  className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-slate-800 text-white border-slate-700"}`}
                 >
-                  {isAppOnlyOn ? <Unlock size={20} /> : <Lock size={20} />}
+                  {isAppOnlyOn ? <Unlock size={20} /> : <Lock size={20} />}{" "}
                   {isAppOnlyOn ? "Buka Akses Browser" : "Kunci Hanya Aplikasi"}
                 </button>
               </div>
             )}
             <button
-              onClick={openAddModal}
+              onClick={handleAddNewRow}
               className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400 z-10"
             >
-              <Plus size={20} /> Tambah Data Baru
+              <Plus size={20} /> Tambah Baris Baru
             </button>
           </div>
-        </motion.header>
+        </header>
 
-        {/* STATISTIK & TOOLBAR (DISEMBUNYIKAN DI HP) */}
-        <motion.div
-          variants={fadeUp}
-          className="hidden md:flex flex-col xl:flex-row gap-4"
-        >
+        {/* Toolbar & Stats Desktop (Shrink-0) */}
+        <div className="hidden md:flex shrink-0 flex-col xl:flex-row gap-4">
           <Card className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden flex flex-col justify-center">
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <ShieldCheck size={56} className="text-emerald-400" />
             </div>
-            <div className="flex justify-between items-start relative z-10">
-              <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
-                Total Data Tampil
-              </p>
-            </div>
+            <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest relative z-10">
+              Total Data
+            </p>
             <div className="flex items-baseline gap-2 mt-3 relative z-10">
               <p className="text-4xl font-black text-white">
                 {processedData.length}
               </p>
-              {processedData.length !== data.length && (
-                <p className="text-xs font-medium text-slate-400">
-                  dari {data.length} Total
-                </p>
-              )}
             </div>
           </Card>
 
           <Card className="flex-1 p-3 bg-white border border-slate-200 shadow-sm w-full rounded-[2rem] box-border flex flex-col justify-center">
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full min-w-0 px-2">
-              <div className="flex items-center gap-2 w-full md:flex-1 md:border-r border-slate-200 pr-0 md:pr-4">
+            <div className="flex flex-col md:flex-row items-center gap-3 w-full px-2">
+              <div className="flex items-center gap-2 w-full md:flex-1 md:border-r border-slate-200 pr-4">
                 <Search className="text-slate-400 shrink-0" size={20} />
                 <input
-                  className="w-full bg-transparent border-none outline-none font-medium text-base text-slate-700 placeholder:text-slate-400 min-w-0 py-2"
-                  placeholder={`Cari di ${currentConfig.title}...`}
+                  className="w-full bg-transparent border-none outline-none font-medium text-base text-slate-700 py-2"
+                  placeholder="Ketik pencarian..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -1133,7 +1199,6 @@ const AdminDashboard = () => {
                       />
                     </div>
                   )}
-
                   {currentConfig.columns
                     .filter((c) => c.filterable)
                     .map((col) => (
@@ -1155,427 +1220,164 @@ const AdminDashboard = () => {
                       </div>
                     ))}
                 </div>
-
-                <button
-                  onClick={() => fetchData(false)}
-                  className="w-full md:w-auto flex justify-center items-center gap-2 p-3.5 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
-                  title="Sinkronkan Ulang"
-                >
-                  <RefreshCw
-                    size={18}
-                    className={loading || isSyncing ? "animate-spin" : ""}
-                  />
-                  <span className="md:hidden font-bold text-sm">
-                    Refresh Data
-                  </span>
-                </button>
               </div>
-            </div>
-          </Card>
-        </motion.div>
 
-        {/* TAMPILAN DATA (RESPONSIVE) */}
-        <motion.div variants={fadeUp}>
-          {/* DESKTOP VIEW (TABEL) */}
-          <Card className="hidden md:block border border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem] overflow-hidden relative">
-            <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
-              <table className="w-full text-left text-sm whitespace-nowrap border-collapse">
-                <thead className="sticky top-0 z-20 shadow-sm">
-                  <tr>
-                    {currentConfig.columns.map((col, index) => {
-                      const isID = index === 0;
-                      const isName = index === 1;
-                      const stickyStyle = isID
-                        ? {
-                            position: "sticky",
-                            left: 0,
-                            zIndex: 30,
-                            minWidth: "80px",
-                          }
-                        : isName
-                          ? {
-                              position: "sticky",
-                              left: "80px",
-                              zIndex: 30,
-                              minWidth: "220px",
-                            }
-                          : {};
-
-                      return (
-                        <th
-                          key={col.key}
-                          style={stickyStyle}
-                          className={`px-6 py-5 transition-colors font-bold text-xs uppercase tracking-wider text-slate-500 bg-slate-50 border-b-2 border-slate-200 ${col.sortable ? "cursor-pointer hover:bg-slate-100" : ""} ${isID ? "border-r border-slate-200" : ""} ${isName ? "border-r border-slate-200 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}
-                          onClick={() => col.sortable && handleSort(col.key)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`${sortConfig.key === col.key ? "text-emerald-700 font-black" : ""}`}
-                            >
-                              {col.label}
-                            </span>
-                            {col.sortable && (
-                              <div className="flex items-center">
-                                {sortConfig.key === col.key ? (
-                                  sortConfig.direction === "asc" ? (
-                                    <ChevronUp
-                                      size={14}
-                                      className="text-emerald-600 font-black"
-                                    />
-                                  ) : (
-                                    <ChevronDown
-                                      size={14}
-                                      className="text-emerald-600 font-black"
-                                    />
-                                  )
-                                ) : (
-                                  <ArrowUpDown
-                                    size={12}
-                                    className="text-slate-400 hover:text-emerald-600 transition-colors"
-                                  />
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </th>
-                      );
-                    })}
-                    <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider">
-                      Aksi
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loading ? (
-                    <tr>
-                      <td
-                        colSpan={currentConfig.columns.length + 1}
-                        className="py-20 text-center bg-white"
-                      >
-                        <RefreshCw
-                          className="animate-spin mx-auto text-emerald-500 mb-4"
-                          size={32}
-                        />
-                        <span className="font-bold text-slate-400 text-sm tracking-widest uppercase">
-                          Sinkronisasi Server...
-                        </span>
-                      </td>
-                    </tr>
-                  ) : processedData.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={currentConfig.columns.length + 1}
-                        className="py-20 text-center text-slate-400 font-semibold text-base bg-white"
-                      >
-                        {data.length === 0
-                          ? "Belum ada data di dalam sistem."
-                          : "Pencarian tidak menemukan hasil."}
-                      </td>
-                    </tr>
-                  ) : (
-                    processedData.map((item, i) => (
-                      <tr
-                        key={item.id || i}
-                        className="hover:bg-emerald-50/40 transition-colors group bg-white"
-                      >
-                        {currentConfig.columns.map((col, index) => {
-                          const isID = index === 0;
-                          const isName = index === 1;
-                          const stickyStyle = isID
-                            ? {
-                                position: "sticky",
-                                left: 0,
-                                zIndex: 10,
-                                minWidth: "80px",
-                              }
-                            : isName
-                              ? {
-                                  position: "sticky",
-                                  left: "80px",
-                                  zIndex: 10,
-                                  minWidth: "220px",
-                                }
-                              : {};
-
-                          return (
-                            <td
-                              key={col.key}
-                              style={stickyStyle}
-                              className={`px-6 py-4 font-semibold text-slate-700 ${isID ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 transition-colors" : ""} ${isName ? "bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors" : ""}`}
-                            >
-                              {col.key === "role" || col.key === "status" ? (
-                                <Badge type={item[col.key]} />
-                              ) : col.key === "id" ? (
-                                <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
-                                  #{item[col.key]}
-                                </span>
-                              ) : isName ? (
-                                <span className="font-black text-slate-800">
-                                  {item[col.key]}
-                                </span>
-                              ) : col.key === "tanggal" ? (
-                                <span className="text-slate-600 font-medium tracking-wide">
-                                  {formatTanggal(item[col.key])}
-                                </span>
-                              ) : (
-                                item[col.key] || (
-                                  <span className="text-slate-300">-</span>
-                                )
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="px-6 py-4 text-center space-x-2 whitespace-nowrap">
-                          <button
-                            onClick={() => openEditModal(item)}
-                            className="p-2 bg-white border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all shadow-sm hover:shadow-md"
-                            title="Edit"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            onClick={() => confirmDelete(item.id)}
-                            className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white hover:border-red-500 transition-all shadow-sm hover:shadow-md"
-                            title="Hapus"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* MOBILE VIEW (COMPACT LIST - MUDAH DIBACA - TEMA SLATE/EMERALD) */}
-          <div className="md:hidden bg-white border border-slate-200 rounded-[1.5rem] shadow-sm overflow-hidden divide-y divide-slate-100">
-            {loading ? (
-              <div className="py-16 text-center">
+              <button
+                onClick={() => refreshCurrentTab(false)}
+                className="flex justify-center items-center gap-2 p-3.5 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shadow-sm"
+              >
                 <RefreshCw
-                  className="animate-spin mx-auto text-emerald-500 mb-3"
-                  size={28}
+                  size={18}
+                  className={loading || isSyncing ? "animate-spin" : ""}
                 />
-                <span className="font-bold text-slate-400 text-xs tracking-widest uppercase">
-                  Memuat Data...
-                </span>
-              </div>
-            ) : processedData.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 font-medium text-sm px-4">
-                {data.length === 0
-                  ? "Belum ada data di dalam sistem."
-                  : "Pencarian tidak menemukan hasil."}
-              </div>
-            ) : (
-              processedData.map((item, i) => (
-                <div
-                  key={item.id || i}
-                  className="p-4 hover:bg-slate-50 transition-colors flex flex-col gap-2"
-                >
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      {/* Baris 1: Judul Utama & ID */}
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-black text-slate-800 text-sm truncate">
-                          {getPrimaryName(item)}
-                        </span>
-                        <span className="font-mono text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
-                          #{item.id}
-                        </span>
-                      </div>
+              </button>
+            </div>
+          </Card>
+        </div>
 
-                      {/* Baris 2: Informasi Sekunder Padat */}
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-slate-600 mt-1">
-                        {currentConfig.columns.map((col) => {
-                          const isPrimaryName =
-                            col.key === "id" ||
-                            col.key === "nama" ||
-                            col.key === "nama_ujian" ||
-                            col.key === "nama_mapel" ||
-                            col.key === "kunci";
-                          if (isPrimaryName) return null;
+        {/* ========================================================= */}
+        {/* TAMPILAN TABEL INLINE EDIT (DESKTOP - FLEX 1 SCROLLABLE) */}
+        {/* ========================================================= */}
+        <Card className="hidden md:flex flex-col flex-1 min-h-0 border border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem] overflow-hidden relative">
+          <div className="flex-1 overflow-auto w-full relative custom-scrollbar">
+            <table className="w-full text-left text-sm whitespace-nowrap border-collapse min-w-max">
+              <thead className="sticky top-0 z-20 shadow-sm">
+                <tr>
+                  {currentConfig.columns.map((col, index) => {
+                    const isID = index === 0;
+                    const isName = index === 1;
+                    const stickyStyle = isID
+                      ? { position: "sticky", left: 0, zIndex: 30 }
+                      : isName
+                        ? { position: "sticky", left: "80px", zIndex: 30 }
+                        : {};
 
-                          return (
-                            <div key={col.key} className="flex items-center">
-                              {col.key === "role" || col.key === "status" ? (
-                                <Badge type={item[col.key]} />
-                              ) : col.key === "tanggal" ? (
-                                <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md text-[10px]">
-                                  {formatTanggal(item[col.key])}
-                                </span>
+                    return (
+                      <th
+                        key={col.key}
+                        style={stickyStyle}
+                        onClick={() => col.sortable && handleSort(col.key)}
+                        className={`px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider ${col.sortable ? "cursor-pointer hover:bg-slate-100" : ""} ${isID ? "border-r w-[80px]" : ""} ${isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] w-[240px]" : ""}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={
+                              sortConfig.key === col.key
+                                ? "text-emerald-700 font-black"
+                                : ""
+                            }
+                          >
+                            {col.label}
+                          </span>
+                          {col.sortable && (
+                            <div className="flex items-center">
+                              {sortConfig.key === col.key ? (
+                                sortConfig.direction === "asc" ? (
+                                  <ChevronUp
+                                    size={14}
+                                    className="text-emerald-600 font-black"
+                                  />
+                                ) : (
+                                  <ChevronDown
+                                    size={14}
+                                    className="text-emerald-600 font-black"
+                                  />
+                                )
                               ) : (
-                                <span className="bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md text-[10px] flex gap-1">
-                                  <span className="text-slate-400 font-bold uppercase">
-                                    {col.label.substring(0, 6)}:
-                                  </span>
-                                  <span className="font-semibold truncate max-w-[100px]">
-                                    {item[col.key] || "-"}
-                                  </span>
-                                </span>
+                                <ArrowUpDown
+                                  size={12}
+                                  className="text-slate-400"
+                                />
                               )}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Tombol Aksi Mini (Kanan) */}
-                    <div className="flex flex-col gap-1.5 shrink-0 ml-1 border-l border-slate-100 pl-3">
-                      <button
-                        onClick={() => openEditModal(item)}
-                        className="p-2 text-amber-500 bg-amber-50 rounded-lg hover:bg-amber-500 hover:text-white transition-colors"
-                        title="Edit"
-                      >
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        onClick={() => confirmDelete(item.id)}
-                        className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-500 hover:text-white transition-colors"
-                        title="Hapus"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </motion.div>
-
-        {/* MODAL FORM TAMBAH/EDIT */}
-        <AnimatePresence>
-          {isModalOpen && currentConfig && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-2xl my-auto"
-              >
-                <Card className="p-4 md:p-8 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white">
-                  <div className="flex justify-between items-center mb-4 md:mb-6 pb-3 md:pb-5 border-b border-slate-100">
-                    <div>
-                      <h3 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight">
-                        {isEdit ? "Perbarui Data" : "Tambah Data"}
-                      </h3>
-                      <p className="text-emerald-600 font-bold text-[10px] md:text-xs uppercase tracking-widest mt-0.5 md:mt-1">
-                        Modul {currentConfig.title.split(" ")[0]}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setIsModalOpen(false)}
-                      disabled={isSaving}
-                      className="p-1.5 md:p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors disabled:opacity-50 bg-slate-50 border border-slate-100"
-                    >
-                      <X size={20} className="md:w-6 md:h-6" />
-                    </button>
-                  </div>
-
-                  <form
-                    onSubmit={handleSave}
-                    className="space-y-3 md:space-y-5"
-                  >
-                    <div className="space-y-1 md:space-y-2">
-                      <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-500 ml-1">
-                        ID Sistem (Bisa Diedit)
-                      </label>
-                      <input
-                        type="number"
-                        className={`w-full p-2.5 md:p-3.5 text-sm md:text-base rounded-lg md:rounded-xl font-bold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800 hover:border-emerald-300"}`}
-                        value={formData.id}
-                        onChange={(e) =>
-                          setFormData({ ...formData, id: e.target.value })
-                        }
-                        disabled={isSaving}
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-                      {currentConfig.form.map((field) => (
-                        <div key={field.key} className="space-y-1 md:space-y-2">
-                          <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-500 ml-1 flex flex-wrap">
-                            {field.label}{" "}
-                            {field.required && (
-                              <span className="text-red-500 ml-1">*</span>
-                            )}
-                          </label>
-
-                          {field.type === "select" ? (
-                            <PremiumSelect
-                              value={formData[field.key] || ""}
-                              onChange={(val) =>
-                                setFormData({ ...formData, [field.key]: val })
-                              }
-                              options={field.options.map((opt) => ({
-                                label: opt,
-                                value: opt,
-                              }))}
-                              placeholder={`Pilih ${field.label.split(" ")[0]}...`}
-                              disabled={isSaving}
-                            />
-                          ) : field.type === "multi-select" ? (
-                            <PremiumMultiSelect
-                              value={formData[field.key] || ""}
-                              onChange={(val) =>
-                                setFormData({ ...formData, [field.key]: val })
-                              }
-                              options={field.options}
-                              placeholder={`Pilih (Bisa > 1)...`}
-                              disabled={isSaving}
-                            />
-                          ) : (
-                            <input
-                              type={field.type}
-                              disabled={isSaving}
-                              placeholder={`Ketik di sini...`}
-                              className={`w-full p-2.5 md:p-3.5 text-xs md:text-sm rounded-lg md:rounded-xl font-semibold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800 hover:border-emerald-300"}`}
-                              value={formData[field.key] || ""}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  [field.key]: e.target.value,
-                                })
-                              }
-                            />
                           )}
                         </div>
-                      ))}
-                    </div>
+                      </th>
+                    );
+                  })}
+                  <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider w-[80px]">
+                    Hapus
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading && data.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={currentConfig.columns.length + 1}
+                      className="py-20 text-center text-slate-400 font-bold text-sm bg-white"
+                    >
+                      <RefreshCw
+                        className="animate-spin mx-auto text-emerald-500 mb-4"
+                        size={32}
+                      />
+                      Memuat Data...
+                    </td>
+                  </tr>
+                ) : processedData.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={currentConfig.columns.length + 1}
+                      className="py-20 text-center text-slate-400 font-semibold text-base bg-white"
+                    >
+                      Belum ada data. Klik "Tambah Baris Baru".
+                    </td>
+                  </tr>
+                ) : (
+                  processedData.map((item) => (
+                    <tr
+                      key={item.id}
+                      className={`transition-colors group ${item.isNew ? "bg-amber-50 hover:bg-amber-100" : "bg-white hover:bg-slate-50"}`}
+                    >
+                      {currentConfig.columns.map((col, index) => {
+                        const isID = index === 0;
+                        const isName = index === 1;
+                        const stickyStyle = isID
+                          ? { position: "sticky", left: 0, zIndex: 10 }
+                          : isName
+                            ? { position: "sticky", left: "80px", zIndex: 10 }
+                            : {};
 
-                    <div className="pt-4 md:pt-6 mt-2 md:mt-4">
-                      <button
-                        type="submit"
-                        disabled={isSaving}
-                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-black text-sm md:text-base py-3 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/30 hover:from-emerald-700 hover:to-emerald-600 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed border border-emerald-400 uppercase tracking-widest"
-                      >
-                        {isSaving ? (
-                          <RefreshCw size={18} className="animate-spin" />
-                        ) : (
-                          <Save size={18} />
-                        )}
-                        {isSaving
-                          ? "Menyimpan Ke Server..."
-                          : "Simpan Perubahan"}
-                      </button>
-                    </div>
-                  </form>
-                </Card>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+                        return (
+                          <td
+                            key={col.key}
+                            style={stickyStyle}
+                            className={`px-4 py-3 font-semibold text-slate-700 ${isID ? "border-r border-slate-100 bg-inherit" : ""} ${isName ? "border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] bg-inherit" : ""}`}
+                          >
+                            <EditableCell
+                              item={item}
+                              column={col}
+                              onSave={handleSaveCell}
+                            />
+                          </td>
+                        );
+                      })}
+                      <td className="px-4 py-3 text-center whitespace-nowrap bg-inherit">
+                        <button
+                          onClick={() => confirmDelete(item.id)}
+                          className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-colors shadow-sm"
+                          title="Hapus Baris"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
 
         {/* MODAL CUSTOM ALERT & CONFIRM */}
         <AnimatePresence>
           {customAlert.isOpen && (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/80">
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.2 }}
               >
                 <Card className="w-full max-w-sm p-6 md:p-8 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white text-center flex flex-col items-center">
                   <div
@@ -1583,11 +1385,9 @@ const AdminDashboard = () => {
                   >
                     {customAlert.type === "danger" ||
                     customAlert.type === "confirm" ? (
-                      <AlertTriangle size={36} className="md:w-10 md:h-10" />
-                    ) : customAlert.type === "warning" ? (
-                      <AlertTriangle size={36} className="md:w-10 md:h-10" />
+                      <AlertTriangle size={36} />
                     ) : (
-                      <Info size={36} className="md:w-10 md:h-10" />
+                      <Info size={36} />
                     )}
                   </div>
                   <h3 className="text-xl md:text-2xl font-black text-slate-800 mb-2">
@@ -1624,12 +1424,10 @@ const AdminDashboard = () => {
           )}
         </AnimatePresence>
 
-        {/* ========================================================= */}
-        {/* LACI FILTER & SORT MOBILE (MUNCUL DARI BAWAH ALA E-COMMERCE) */}
-        {/* ========================================================= */}
+        {/* LACI FILTER & SORT MOBILE */}
         <AnimatePresence>
           {isMobileFilterOpen && (
-            <div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm md:hidden">
+            <div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-900/80 md:hidden">
               <motion.div
                 initial={{ opacity: 0, y: "100%" }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1755,7 +1553,7 @@ const AdminDashboard = () => {
                   </button>
                   <button
                     onClick={() => setIsMobileFilterOpen(false)}
-                    className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-500/30 hover:bg-emerald-600 transition-colors"
+                    className="flex-1 py-3.5 bg-emerald-50 text-emerald-700 font-bold rounded-xl text-sm shadow-md shadow-emerald-500/30 hover:bg-emerald-100 transition-colors"
                   >
                     Terapkan
                   </button>
@@ -1764,7 +1562,7 @@ const AdminDashboard = () => {
             </div>
           )}
         </AnimatePresence>
-      </motion.div>
+      </div>
     </Dashboard>
   );
 };

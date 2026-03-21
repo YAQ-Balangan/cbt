@@ -1,23 +1,17 @@
 // src/pages/LoginPage.jsx
 import React, { useState, useContext } from "react";
 import { motion } from "framer-motion";
-import { User, Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react"; // Impor Eye dan EyeOff
+import {
+  User,
+  Lock,
+  ArrowRight,
+  Loader2,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+} from "lucide-react";
 import { AuthContext } from "../context/AuthContext";
 import logoMasda from "../assets/logo.svg";
-
-// Variabel Animasi
-const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
-};
-
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1, delayChildren: 0.2 },
-  },
-};
 
 const LoginPage = () => {
   const { login } = useContext(AuthContext);
@@ -25,8 +19,6 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  // State baru untuk mengatur tampilan password
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -45,49 +37,37 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">
-      {/* BACKGROUND ANIMASI (GLASSMORPHISM) */}
+      {/* Latar Belakang Animasi (Tetap Dipertahankan) */}
       <motion.div
-        animate={{ x: [0, 50, -20, 0], y: [0, -30, 40, 0] }}
-        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-        className="absolute top-[-5%] left-[-10%] w-[15rem] md:w-[30rem] h-[15rem] md:h-[30rem] bg-emerald-400/10 rounded-full blur-[80px] md:blur-[100px] pointer-events-none"
+        animate={{
+          scale: [1, 1.2, 1],
+          rotate: [0, 90, 0],
+        }}
+        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+        className="absolute top-[-5%] left-[-10%] w-[15rem] md:w-[30rem] h-[15rem] md:h-[30rem] bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"
       />
       <motion.div
-        animate={{ x: [0, -40, 30, 0], y: [0, 50, -20, 0] }}
-        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-        className="absolute bottom-[-5%] right-[-10%] w-[15rem] md:w-[30rem] h-[15rem] md:h-[30rem] bg-amber-400/10 rounded-full blur-[80px] md:blur-[100px] pointer-events-none"
+        animate={{
+          scale: [1, 1.2, 1],
+          rotate: [0, -90, 0],
+        }}
+        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+        className="absolute bottom-[-5%] right-[-10%] w-[15rem] md:w-[30rem] h-[15rem] md:h-[30rem] bg-amber-400/20 rounded-full blur-3xl pointer-events-none"
       />
 
-      {/* FORM CARD */}
-      <motion.div
-        variants={fadeUp}
-        initial="hidden"
-        animate="visible"
-        className="w-full max-w-[340px] sm:max-w-md bg-white/90 backdrop-blur-xl p-6 sm:p-8 md:p-10 rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl shadow-slate-200/50 relative z-10 border border-white"
-      >
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-          className="flex flex-col items-center mb-6 sm:mb-8 text-center"
-        >
-          {/* CONTAINER LOGO DENGAN EFEK SHIMMER (MENGKILAP) */}
-          <motion.div
-            variants={fadeUp}
-            className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mb-4 sm:mb-6 transform hover:scale-105 transition-transform duration-500 relative overflow-hidden rounded-2xl group"
-          >
-            {/* GAMBAR LOGO UTAMA */}
+      {/* FORM CARD (Muncul Instan Tanpa Animasi Meluncur) */}
+      <div className="w-full max-w-[340px] sm:max-w-md bg-white/90 backdrop-blur-xl p-6 sm:p-8 md:p-10 rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl shadow-slate-200/50 relative z-10 border border-white">
+        <div className="flex flex-col items-center mb-6 sm:mb-8 text-center">
+          {/* CONTAINER LOGO DENGAN EFEK SHIMMER (Tetap Dipertahankan) */}
+          <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mb-4 sm:mb-6 transform hover:scale-105 transition-transform duration-500 relative overflow-hidden rounded-2xl group">
             <img
               src={logoMasda}
               alt="Logo MASDA PRO"
               className="w-full h-full object-contain drop-shadow-xl relative z-10"
             />
-
-            {/* EFEK CAHAYA LEWAT (SHIMMER) */}
             <motion.div
               className="absolute top-0 left-[-100%] w-[50%] h-full bg-gradient-to-r from-transparent via-white/60 to-transparent skew-x-[-20deg] z-20 pointer-events-none"
-              animate={{
-                left: ["-100%", "200%"],
-              }}
+              animate={{ left: ["-100%", "200%"] }}
               transition={{
                 duration: 10,
                 ease: "easeInOut",
@@ -95,121 +75,93 @@ const LoginPage = () => {
                 repeatDelay: 2,
               }}
             />
-          </motion.div>
+          </div>
 
-          <motion.h1
-            variants={fadeUp}
-            className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight"
-          >
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">
             M-HANIF
-          </motion.h1>
-          <motion.p
-            variants={fadeUp}
-            className="text-[10px] sm:text-[11px] font-bold text-amber-500 uppercase tracking-widest mt-1.5 sm:mt-2"
-          >
+          </h1>
+          <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1.5 sm:mt-2">
+            "Manajemen Hasil Asesmen Nilai dan Instrumen Final"
+          </p>
+          <p className="text-[10px] sm:text-[11px] font-bold text-amber-500 uppercase tracking-widest mt-1.5 sm:mt-2">
             Online Based Test 2026
-          </motion.p>
-        </motion.div>
+          </p>
+        </div>
 
         {error && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mb-5 sm:mb-6 p-3 sm:p-4 bg-red-50 text-red-600 text-xs sm:text-sm font-semibold rounded-xl border border-red-100 text-center flex items-center justify-center gap-2"
-          >
-            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500 animate-pulse" />
+          <div className="mb-5 sm:mb-6 p-3 sm:p-4 bg-red-50 text-red-600 text-xs sm:text-sm font-semibold rounded-xl border border-red-100 text-center flex items-center justify-center gap-2">
+            <AlertTriangle size={16} />
             {error}
-          </motion.div>
+          </div>
         )}
 
-        {/* Form menggunakan onSubmit agar Enter otomatis terdeteksi */}
-        <motion.form
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-          onSubmit={handleSubmit}
-          className="space-y-4 sm:space-y-5"
-        >
-          <motion.div variants={fadeUp} className="space-y-1.5">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+          <div className="space-y-1.5">
             <label className="text-[10px] sm:text-[11px] font-semibold uppercase text-slate-500 ml-1 tracking-wider">
               Username
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <User size={18} className="sm:w-5 sm:h-5" />
+                <User size={18} />
               </div>
               <input
                 type="text"
                 required
-                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm sm:text-base text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-400 shadow-sm"
+                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm sm:text-base text-slate-800 outline-none focus:bg-white focus:border-emerald-500 transition-colors placeholder:text-slate-400"
                 placeholder="Masukkan username..."
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div variants={fadeUp} className="space-y-1.5">
+          <div className="space-y-1.5">
             <label className="text-[10px] sm:text-[11px] font-semibold uppercase text-slate-500 ml-1 tracking-wider">
               Password
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Lock size={18} className="sm:w-5 sm:h-5" />
+                <Lock size={18} />
               </div>
               <input
-                // Tipe input dinamis berdasarkan state
                 type={showPassword ? "text" : "password"}
                 required
-                // Padding kanan ditambah (pr-12) agar teks tidak tertutup ikon mata
-                className="w-full pl-10 sm:pl-12 pr-12 py-2.5 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm sm:text-base text-slate-800 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-400 shadow-sm"
+                className="w-full pl-10 sm:pl-12 pr-12 py-2.5 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm sm:text-base text-slate-800 outline-none focus:bg-white focus:border-emerald-500 transition-colors placeholder:text-slate-400"
                 placeholder="Masukkan password..."
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              {/* Tombol Toggle Mata */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-emerald-500 focus:outline-none transition-colors"
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-emerald-500 transition-colors"
               >
-                {showPassword ? (
-                  <EyeOff size={18} className="sm:w-5 sm:h-5" />
-                ) : (
-                  <Eye size={18} className="sm:w-5 sm:h-5" />
-                )}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div variants={fadeUp} className="pt-3 sm:pt-4">
-            {/* Tombol submit standar di dalam form akan selalu tertrigger oleh Enter */}
+          <div className="pt-3 sm:pt-4">
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold py-3 sm:py-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:from-emerald-700 hover:to-emerald-600 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 relative overflow-hidden group"
+              className="w-full bg-emerald-500 text-white font-bold py-3 sm:py-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-md hover:bg-emerald-600 active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70"
             >
               {loading ? (
-                <Loader2 size={18} className="animate-spin sm:w-5 sm:h-5" />
+                <Loader2 size={18} className="animate-spin" />
               ) : (
                 <>
-                  Masuk Aplikasi{" "}
-                  <ArrowRight size={18} className="sm:w-5 sm:h-5" />
+                  Masuk Aplikasi <ArrowRight size={18} />
                 </>
               )}
             </button>
-          </motion.div>
-        </motion.form>
+          </div>
+        </form>
 
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="text-center mt-6 sm:mt-8 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest"
-        >
-          &copy; 2026 MA Darussalam Awayan
-        </motion.p>
-      </motion.div>
+        <p className="text-center mt-6 sm:mt-8 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          &copy; 2026 Ahmad Maulana
+        </p>
+      </div>
     </div>
   );
 };
