@@ -83,6 +83,63 @@ const fontClasses = {
   ],
 };
 
+// ==========================================
+// KOMPONEN TIMER INDEPENDEN (ANTI RE-RENDER GLOBAL)
+// ==========================================
+const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp }) => {
+  const [timeLeft, setTimeLeft] = useState(initialTime);
+
+  useEffect(() => {
+    setTimeLeft(initialTime);
+  }, [initialTime]);
+
+  useEffect(() => {
+    if (timeLeft <= 0) return;
+
+    const timerId = setInterval(() => {
+      setTimeLeft((prev) => {
+        const newTime = prev - 1;
+
+        // Informasikan ke komponen induk setiap 15 detik untuk save ke DB
+        if (newTime % 15 === 0) onTick(newTime);
+
+        if (newTime <= 0) {
+          clearInterval(timerId);
+          onTimeUp();
+        }
+        return newTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, [timeLeft, onTick, onTimeUp]);
+
+  const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0)
+      return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl border shadow-sm transition-colors ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200" : "bg-slate-800 text-white border-slate-700"}`}
+    >
+      <Timer size={18} />
+      <div className="flex flex-col">
+        <span className="text-[8px] font-black uppercase tracking-widest leading-none mb-[2px] opacity-80">
+          Sisa Waktu
+        </span>
+        <span className="font-black text-sm md:text-base leading-none tracking-wider">
+          {formatTime(timeLeft)}
+        </span>
+      </div>
+    </div>
+  );
+});
+
 const SiswaDashboard = () => {
   const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("home");
@@ -572,45 +629,6 @@ const SiswaDashboard = () => {
   };
 
   // 6. TIMER & SAVE SERVER
-  useEffect(() => {
-    if (!activeExam || timeLeft <= 0 || isSubmitting || isLocked) return;
-
-    const timerId = setInterval(() => {
-      setTimeLeft((prev) => {
-        const newTime = prev - 1;
-        const usernameSiswa = getVal(user, "Username");
-        const examId = getVal(activeExam, "ID");
-
-        if (newTime % 15 === 0) {
-          api.saveSesi(
-            usernameSiswa,
-            examId,
-            answers,
-            newTime,
-            pelanggaranRef.current,
-            isLockedRef.current ? "LOCKED" : "ACTIVE",
-          );
-        }
-
-        if (newTime <= 0) {
-          clearInterval(timerId);
-          handleEndExamClick(true);
-        }
-        return newTime;
-      });
-    }, 1000);
-
-    return () => clearInterval(timerId);
-  }, [activeExam, timeLeft, isSubmitting, isLocked, answers, user]);
-
-  const formatTime = (seconds) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0)
-      return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
 
   // ==============================================================
   // TAMPILAN BLOKIR EKSKLUSIF APLIKASI
@@ -767,19 +785,22 @@ const SiswaDashboard = () => {
               </div>
             )}
 
-            <div
-              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl border shadow-sm transition-colors ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-slate-800 text-white border-slate-700"}`}
-            >
-              <Timer size={18} />
-              <div className="flex flex-col">
-                <span className="text-[8px] font-black uppercase tracking-widest leading-none mb-[2px] opacity-80">
-                  Sisa Waktu
-                </span>
-                <span className="font-black text-sm md:text-base leading-none tracking-wider">
-                  {formatTime(timeLeft)}
-                </span>
-              </div>
-            </div>
+            <ExamTimer
+              initialTime={timeLeft}
+              onTick={(newTime) => {
+                if (activeExamRef.current) {
+                  api.saveSesi(
+                    getVal(user, "Username"),
+                    getVal(activeExamRef.current, "ID"),
+                    answersRef.current,
+                    newTime,
+                    pelanggaranRef.current,
+                    isLockedRef.current ? "LOCKED" : "ACTIVE",
+                  );
+                }
+              }}
+              onTimeUp={() => handleEndExamClick(true)}
+            />
           </div>
         </header>
 
