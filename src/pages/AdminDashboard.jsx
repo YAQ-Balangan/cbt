@@ -23,6 +23,7 @@ import {
   Lock,
   Unlock,
   ListChecks,
+  MonitorSmartphone,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
@@ -965,6 +966,13 @@ const AdminDashboard = () => {
           {/* Aksi Mobile */}
           <div className="flex flex-col gap-2">
             <button
+              onClick={() => window.open("/ujian-dashboard", "_blank")}
+              className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-indigo-500/30 hover:bg-indigo-700 active:scale-95 transition-all"
+            >
+              <MonitorSmartphone size={16} className="animate-pulse" /> Live
+              Ujian
+            </button>
+            <button
               onClick={handleAddNewRow}
               className="w-full py-3.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
             >
@@ -1144,6 +1152,14 @@ const AdminDashboard = () => {
                 </button>
               </div>
             )}
+            {/* TOMBOL PINTU MASUK KELAS VIRTUAL ADMIN */}
+            <button
+              onClick={() => window.open("/ujian-dashboard", "_blank")}
+              className="w-full md:w-auto bg-indigo-600 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-indigo-400 z-10"
+            >
+              <MonitorSmartphone size={20} className="animate-pulse" /> Live
+              Ujian
+            </button>
             <button
               onClick={handleAddNewRow}
               className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400 z-10"
@@ -1413,9 +1429,7 @@ const AdminDashboard = () => {
                       }
                       className={`w-full py-3 px-4 rounded-lg md:rounded-xl font-bold text-white shadow-lg transition-all text-sm order-1 sm:order-2 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : customAlert.type === "warning" ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/30" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"}`}
                     >
-                      {customAlert.type === "confirm"
-                        ? "Ya, Hapus"
-                        : "Mengerti"}
+                      {customAlert.type === "confirm" ? "Ya" : "Mengerti"}
                     </button>
                   </div>
                 </Card>

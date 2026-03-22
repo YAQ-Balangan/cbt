@@ -2,20 +2,29 @@
 import React, { useContext } from "react";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 
-// Import halaman-halaman yang sudah kita pisahkan (sesuaikan path foldernya jika berbeda)
+// Import halaman-halaman yang sudah kita pisahkan
 import LoginPage from "./pages/LoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import GuruDashboard from "./pages/GuruDashboard";
 import SiswaDashboard from "./pages/SiswaDashboard";
+import UjianDashboard from "./pages/UjianDashboard";
 
 // --- ROUTER UTAMA ---
 const AppRouter = () => {
   const { user } = useContext(AuthContext);
 
-  // Jika belum login (user tidak ada), arahkan ke halaman Login
+  // 1. Jika belum login (user tidak ada), arahkan ke halaman Login
   if (!user) return <LoginPage />;
 
-  // Jika sudah login, arahkan ke dashboard sesuai role-nya
+  // 2. PINTU RAHASIA: Arahkan ke UjianDashboard jika URL-nya cocok
+  // Hanya Admin dan Guru yang diizinkan masuk ke halaman ini
+  if (window.location.pathname === "/ujian-dashboard") {
+    if (user.role === "admin" || user.role === "guru") {
+      return <UjianDashboard />;
+    }
+  }
+
+  // 3. Jika URL biasa, arahkan ke dashboard bawaan sesuai role-nya
   switch (user.role) {
     case "admin":
       return <AdminDashboard />;
