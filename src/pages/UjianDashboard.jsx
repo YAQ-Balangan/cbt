@@ -21,30 +21,51 @@ import {
   AlertTriangle,
   CheckCircle2,
   Skull,
-  Filter
+  Filter,
 } from "lucide-react";
 import Dashboard from "../components/layout/Dashboard";
-import { api, supabase } from "../api/api"; 
+import { api, supabase } from "../api/api";
 
 // ==========================================
 // 1. KOMPONEN AVATAR CSS CUSTOM (Mata X untuk Diskualifikasi)
 // ==========================================
 const CustomAvatar = ({ gender, isDisqualified }) => {
-  const isBoy = !String(gender || "").toUpperCase().startsWith("P");
+  const isBoy = !String(gender || "")
+    .toUpperCase()
+    .startsWith("P");
 
   const renderEyes = () => {
+    // Jika hanya ingin mata laki-laki yang turun, dan perempuan tetap,
+    // kita bisa pakai pengecekan isBoy di sini.
+    const eyeTop = isBoy ? "top-[55px]" : "top-[40px]";
+    const deadEyeTop = isBoy ? "top-[47px]" : "top-[37px]";
+
     if (isDisqualified) {
       return (
         <>
-          <div className="absolute top-[37px] left-[13px] text-red-600 font-black text-[13px] leading-none drop-shadow-md z-20">X</div>
-          <div className="absolute top-[37px] right-[13px] text-red-600 font-black text-[13px] leading-none drop-shadow-md z-20">X</div>
+          {/* Ubah top nya memakai variabel deadEyeTop */}
+          <div
+            className={`absolute ${deadEyeTop} left-[13px] text-red-600 font-black text-[13px] leading-none drop-shadow-md z-20`}
+          >
+            X
+          </div>
+          <div
+            className={`absolute ${deadEyeTop} right-[13px] text-red-600 font-black text-[13px] leading-none drop-shadow-md z-20`}
+          >
+            X
+          </div>
         </>
       );
     }
     return (
       <>
-        <div className="absolute w-[8px] h-[8px] bg-[#333] rounded-full top-[40px] left-[15px] z-20"></div>
-        <div className="absolute w-[8px] h-[8px] bg-[#333] rounded-full top-[40px] right-[15px] z-20"></div>
+        {/* Ubah top nya memakai variabel eyeTop */}
+        <div
+          className={`absolute w-[8px] h-[8px] bg-[#333] rounded-full ${eyeTop} left-[15px] z-20`}
+        ></div>
+        <div
+          className={`absolute w-[8px] h-[8px] bg-[#333] rounded-full ${eyeTop} right-[15px] z-20`}
+        ></div>
       </>
     );
   };
@@ -56,28 +77,57 @@ const CustomAvatar = ({ gender, isDisqualified }) => {
     >
       {isBoy ? (
         <div className="w-full h-full relative flex flex-col items-center">
-          <div className={`w-[90px] h-[105px] ${isDisqualified ? 'bg-[#ffc2c2]' : 'bg-[#ffdbac]'} relative z-10 transition-colors`} style={{ borderRadius: "45px 45px 50px 50px" }}>
-            <div className="w-full h-[45px] bg-[#2d3436]" style={{ borderRadius: "45px 45px 10px 10px" }}></div>
+          <div
+            className={`w-[90px] h-[105px] ${isDisqualified ? "bg-[#ffc2c2]" : "bg-[#ffdbac]"} relative z-10 transition-colors`}
+            style={{ borderRadius: "45px 45px 50px 50px" }}
+          >
+            <div
+              className="w-full h-[45px] bg-[#2d3436]"
+              style={{ borderRadius: "45px 45px 10px 10px" }}
+            ></div>
             {renderEyes()}
           </div>
           <div className="w-[180px] h-[150px] relative z-0 -mt-[5px]">
-            <div className="w-full h-full bg-white border-2 border-slate-200 relative overflow-hidden flex flex-col items-center" style={{ borderRadius: "40px 40px 0 0" }}>
-              <div className="w-[50px] h-[20px] bg-[#f0f0f0]" style={{ clipPath: "polygon(0 0, 100% 0, 85% 100%, 15% 100%)" }}></div>
-              <div className="w-[22px] h-[110px] bg-[#1e272e] -mt-[5px]" style={{ clipPath: "polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%)" }}></div>
+            <div
+              className="w-full h-full bg-white border-2 border-slate-200 relative overflow-hidden flex flex-col items-center"
+              style={{ borderRadius: "40px 40px 0 0" }}
+            >
+              <div
+                className="w-[50px] h-[20px] bg-[#f0f0f0]"
+                style={{ clipPath: "polygon(0 0, 100% 0, 85% 100%, 15% 100%)" }}
+              ></div>
+              <div
+                className="w-[22px] h-[110px] bg-[#1e272e] -mt-[5px]"
+                style={{
+                  clipPath: "polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%)",
+                }}
+              ></div>
               <div className="w-[35px] h-[40px] border-2 border-slate-100 absolute top-[40px] right-[30px] rounded-sm"></div>
             </div>
           </div>
         </div>
       ) : (
         <div className="w-full h-full relative flex flex-col items-center">
-          <div className="w-[110px] h-[140px] bg-white relative z-10 shadow-sm border border-slate-100" style={{ borderRadius: "55px 55px 40px 40px" }}>
-            <div className={`w-[70px] h-[90px] ${isDisqualified ? 'bg-[#ffc2c2]' : 'bg-[#ffdbac]'} absolute top-[25px] left-[20px] transition-colors`} style={{ borderRadius: "35px" }}>
+          <div
+            className="w-[110px] h-[140px] bg-white relative z-10 shadow-sm border border-slate-100"
+            style={{ borderRadius: "55px 55px 40px 40px" }}
+          >
+            <div
+              className={`w-[70px] h-[90px] ${isDisqualified ? "bg-[#ffc2c2]" : "bg-[#ffdbac]"} absolute top-[25px] left-[20px] transition-colors`}
+              style={{ borderRadius: "35px" }}
+            >
               {renderEyes()}
             </div>
           </div>
           <div className="w-[180px] h-[150px] relative z-0 -mt-[25px]">
-            <div className="w-full h-full bg-white border-2 border-slate-200 relative overflow-hidden" style={{ borderRadius: "40px 40px 0 0" }}>
-              <div className="w-full h-[80px] bg-white shadow-[0_5px_15px_rgba(0,0,0,0.1)]" style={{ borderRadius: "0 0 80px 80px" }}></div>
+            <div
+              className="w-full h-full bg-white border-2 border-slate-200 relative overflow-hidden"
+              style={{ borderRadius: "40px 40px 0 0" }}
+            >
+              <div
+                className="w-full h-[80px] bg-white shadow-[0_5px_15px_rgba(0,0,0,0.1)]"
+                style={{ borderRadius: "0 0 80px 80px" }}
+              ></div>
             </div>
           </div>
         </div>
@@ -96,7 +146,7 @@ const UjianDashboard = () => {
 
   const [isFitScreen, setIsFitScreen] = useState(false);
   const containerRef = useRef(null);
-  
+
   // DUA STATE SCALE: 1 untuk Fit W&H, 1 untuk Fit Width doang (Mobile)
   const [zoomScale, setZoomScale] = useState(1);
   const [autoScale, setAutoScale] = useState(1);
@@ -119,21 +169,37 @@ const UjianDashboard = () => {
   };
 
   // KALKULASI DIMENSI PAPAN MATEMATIS
-  const activeRoomConf = layoutConfig[activeRoom] || { cols: 5, rows: 5, door: "Kiri", assignments: {} };
+  const activeRoomConf = layoutConfig[activeRoom] || {
+    cols: 5,
+    rows: 5,
+    door: "Kiri",
+    assignments: {},
+  };
   const cols = Math.max(1, parseInt(activeRoomConf.cols) || 5);
   const rows = Math.max(1, parseInt(activeRoomConf.rows) || 5);
-  const boardWidth = (cols * 130) + ((cols - 1) * 24); 
-  const boardHeight = (rows * 140) + ((rows - 1) * 24) + 160;
+  const boardWidth = cols * 130 + (cols - 1) * 24;
+  const boardHeight = rows * 140 + (rows - 1) * 24 + 160;
 
-  // 1. FETCH DATA API 
+  // 1. FETCH DATA API
   const fetchAllData = async () => {
     setIsSyncing(true);
     try {
-      const fetchSesi = supabase.from("sesi_ujian").select("*").then(({ data }) => data || []).catch(() => []);
+      const fetchSesi = supabase
+        .from("sesi_ujian")
+        .select("*")
+        .then(({ data }) => data || [])
+        .catch(() => []);
 
-      const [resNilai, resSesiUjian, resSettings, resUsers, resJadwal, resSoal] = await Promise.all([
+      const [
+        resNilai,
+        resSesiUjian,
+        resSettings,
+        resUsers,
+        resJadwal,
+        resSoal,
+      ] = await Promise.all([
         api.read("Nilai").catch(() => []),
-        fetchSesi, 
+        fetchSesi,
         api.read("Settings").catch(() => []),
         api.read("Users").catch(() => []),
         api.read("Jadwal").catch(() => []),
@@ -141,24 +207,37 @@ const UjianDashboard = () => {
       ]);
 
       const safeUsers = (resUsers || []).map((u) => ({
-        nama: String(u.nama || u.Nama || u.username || u.Username || "Tanpa Nama"),
+        nama: String(
+          u.nama || u.Nama || u.username || u.Username || "Tanpa Nama",
+        ),
         username: String(u.username || u.Username || ""),
         kelas: String(u.kelas || u.Kelas || ""),
-        gender: String(u.gender || u.Gender || u.jenis_kelamin || u.Jenis_Kelamin || "").toUpperCase().startsWith("P") ? "P" : "L",
+        gender: String(
+          u.gender || u.Gender || u.jenis_kelamin || u.Jenis_Kelamin || "",
+        )
+          .toUpperCase()
+          .startsWith("P")
+          ? "P"
+          : "L",
         role: String(u.role || u.Role || "").toLowerCase(),
       }));
 
-      let siswaOnly = safeUsers.filter((u) => u.role === "siswa" || u.role === "murid");
+      let siswaOnly = safeUsers.filter(
+        (u) => u.role === "siswa" || u.role === "murid",
+      );
       if (siswaOnly.length === 0 && safeUsers.length > 0) siswaOnly = safeUsers;
       setDbUsers(siswaOnly);
 
-      const denahSetting = (resSettings || []).find((s) => String(s.kunci || "").toLowerCase() === "denah_kelas");
+      const denahSetting = (resSettings || []).find(
+        (s) => String(s.kunci || "").toLowerCase() === "denah_kelas",
+      );
       if (denahSetting && denahSetting.nilai && isInitialLoad) {
         setConfigId(denahSetting.id);
         try {
           const parsed = JSON.parse(denahSetting.nilai);
           setLayoutConfig(parsed);
-          if (Object.keys(parsed).length > 0 && !activeRoom) setActiveRoom(Object.keys(parsed)[0]);
+          if (Object.keys(parsed).length > 0 && !activeRoom)
+            setActiveRoom(Object.keys(parsed)[0]);
         } catch (e) {}
       }
 
@@ -169,7 +248,11 @@ const UjianDashboard = () => {
         resJadwal.forEach((jadwal) => {
           const mapelJadwal = String(jadwal.mapel || jadwal.Mapel || "");
           jadwalMap[String(jadwal.id)] = mapelJadwal || "Ujian";
-          const total = resSoal.filter((s) => String(s.mapel || s.Mapel || "").toUpperCase() === mapelJadwal.toUpperCase()).length;
+          const total = resSoal.filter(
+            (s) =>
+              String(s.mapel || s.Mapel || "").toUpperCase() ===
+              mapelJadwal.toUpperCase(),
+          ).length;
           examTotalSoal[String(jadwal.id)] = total > 0 ? total : 0;
         });
       }
@@ -178,21 +261,27 @@ const UjianDashboard = () => {
 
       (resSesiUjian || []).forEach((sesi) => {
         const usernameSesiNormal = normalizeText(sesi.username_siswa);
-        const userObj = siswaOnly.find(u => normalizeText(u.username) === usernameSesiNormal);
+        const userObj = siswaOnly.find(
+          (u) => normalizeText(u.username) === usernameSesiNormal,
+        );
 
         let jawaban = {};
-        try { 
-          if(typeof sesi.jawaban_sementara === 'string') jawaban = JSON.parse(sesi.jawaban_sementara); 
+        try {
+          if (typeof sesi.jawaban_sementara === "string")
+            jawaban = JSON.parse(sesi.jawaban_sementara);
           else if (sesi.jawaban_sementara) jawaban = sesi.jawaban_sementara;
-        } catch(e) {}
-        
+        } catch (e) {}
+
         const dijawab = Object.keys(jawaban).length;
         const totalSoal = examTotalSoal[String(sesi.id_ujian)] || 0;
-        let percentage = totalSoal > 0 ? Math.min(100, Math.round((dijawab / totalSoal) * 100)) : 0;
+        let percentage =
+          totalSoal > 0
+            ? Math.min(100, Math.round((dijawab / totalSoal) * 100))
+            : 0;
 
         liveStudentsList.push({
           id: `live-${sesi.id_sesi}`,
-          username: sesi.username_siswa, 
+          username: sesi.username_siswa,
           id_ujian: String(sesi.id_ujian),
           mapel: jadwalMap[String(sesi.id_ujian)] || "Ujian",
           nama: userObj ? userObj.nama : sesi.username_siswa,
@@ -205,27 +294,42 @@ const UjianDashboard = () => {
       });
 
       (resNilai || []).forEach((nilai) => {
-        const nNama = String(nilai.nama_siswa || nilai.Nama_Siswa || "").toLowerCase().trim();
-        const statusVal = String(nilai.status || nilai.Status || "").toUpperCase();
-        const isDisqualified = statusVal.includes("DISKUALIFIKASI") || statusVal.includes("DIS");
+        const nNama = String(nilai.nama_siswa || nilai.Nama_Siswa || "")
+          .toLowerCase()
+          .trim();
+        const statusVal = String(
+          nilai.status || nilai.Status || "",
+        ).toUpperCase();
+        const isDisqualified =
+          statusVal.includes("DISKUALIFIKASI") || statusVal.includes("DIS");
 
-        const isAlreadyLive = liveStudentsList.find(ls => normalizeText(ls.username) === nNama || normalizeText(ls.nama) === nNama);
+        const isAlreadyLive = liveStudentsList.find(
+          (ls) =>
+            normalizeText(ls.username) === nNama ||
+            normalizeText(ls.nama) === nNama,
+        );
 
-        if(!isAlreadyLive) {
-            const userObj = siswaOnly.find(u => normalizeText(u.nama) === nNama || normalizeText(u.username) === nNama);
+        if (!isAlreadyLive) {
+          const userObj = siswaOnly.find(
+            (u) =>
+              normalizeText(u.nama) === nNama ||
+              normalizeText(u.username) === nNama,
+          );
 
-            liveStudentsList.push({
-              id: `done-${nilai.id}`,
-              username: userObj ? userObj.username : (nilai.nama_siswa || nilai.Nama_Siswa),
-              id_ujian: String(nilai.id_ujian || ""),
-              mapel: nilai.mapel || nilai.Mapel || "Ujian",
-              nama: userObj ? userObj.nama : (nilai.nama_siswa || nilai.Nama_Siswa),
-              gender: userObj ? userObj.gender : "L",
-              dijawab: nilai.total_soal || nilai.Total_Soal || "-",
-              totalSoal: nilai.total_soal || nilai.Total_Soal || "-",
-              progress: 100,
-              status: isDisqualified ? "DISKUALIFIKASI" : "SELESAI",
-            });
+          liveStudentsList.push({
+            id: `done-${nilai.id}`,
+            username: userObj
+              ? userObj.username
+              : nilai.nama_siswa || nilai.Nama_Siswa,
+            id_ujian: String(nilai.id_ujian || ""),
+            mapel: nilai.mapel || nilai.Mapel || "Ujian",
+            nama: userObj ? userObj.nama : nilai.nama_siswa || nilai.Nama_Siswa,
+            gender: userObj ? userObj.gender : "L",
+            dijawab: nilai.total_soal || nilai.Total_Soal || "-",
+            totalSoal: nilai.total_soal || nilai.Total_Soal || "-",
+            progress: 100,
+            status: isDisqualified ? "DISKUALIFIKASI" : "SELESAI",
+          });
         }
       });
 
@@ -258,13 +362,22 @@ const UjianDashboard = () => {
 
         if (!currentConfigId) {
           const resSettings = await api.read("Settings").catch(() => []);
-          const existing = resSettings.find((s) => String(s.kunci).toLowerCase() === "denah_kelas");
+          const existing = resSettings.find(
+            (s) => String(s.kunci).toLowerCase() === "denah_kelas",
+          );
           if (existing) {
             currentConfigId = existing.id;
             setConfigId(existing.id);
           } else {
-            const maxId = resSettings.length > 0 ? Math.max(...resSettings.map((s) => parseInt(s.id) || 0)) : 0;
-            const newSetting = await api.create("Settings", { id: maxId + 1, kunci: "Denah_Kelas", nilai: payloadString });
+            const maxId =
+              resSettings.length > 0
+                ? Math.max(...resSettings.map((s) => parseInt(s.id) || 0))
+                : 0;
+            const newSetting = await api.create("Settings", {
+              id: maxId + 1,
+              kunci: "Denah_Kelas",
+              nilai: payloadString,
+            });
             if (newSetting && !newSetting.error) {
               currentConfigId = maxId + 1;
               setConfigId(maxId + 1);
@@ -273,9 +386,12 @@ const UjianDashboard = () => {
         }
 
         if (currentConfigId) {
-          await api.update("Settings", currentConfigId, { kunci: "Denah_Kelas", nilai: payloadString });
+          await api.update("Settings", currentConfigId, {
+            kunci: "Denah_Kelas",
+            nilai: payloadString,
+          });
         }
-        
+
         setAutoSaveStatus("SAVED");
         setTimeout(() => setAutoSaveStatus("IDLE"), 2000);
       } catch (e) {
@@ -309,12 +425,19 @@ const UjianDashboard = () => {
         setAutoScale(wScale);
       }
     };
-    
+
     calculateScale();
     window.addEventListener("resize", calculateScale);
     setTimeout(calculateScale, 200); // Trigger again after UI renders
     return () => window.removeEventListener("resize", calculateScale);
-  }, [isFitScreen, activeTab, layoutConfig, activeRoom, boardWidth, boardHeight]);
+  }, [
+    isFitScreen,
+    activeTab,
+    layoutConfig,
+    activeRoom,
+    boardWidth,
+    boardHeight,
+  ]);
 
   // FUNGSI BUILDER
   const handleAddRoom = () => {
@@ -361,7 +484,11 @@ const UjianDashboard = () => {
         ...prev[activeRoom],
         assignments: {
           ...prev[activeRoom].assignments,
-          [selectedDesk]: { nama: siswa.nama, username: siswa.username, gender: siswa.gender || "L" },
+          [selectedDesk]: {
+            nama: siswa.nama,
+            username: siswa.username,
+            gender: siswa.gender || "L",
+          },
         },
       },
     }));
@@ -383,7 +510,9 @@ const UjianDashboard = () => {
     try {
       await api.updateSesiStatus(username, examId, "ACTIVE", 1);
       setStudentsData((prev) =>
-        prev.map((s) => s.username === username ? { ...s, status: "WORKING" } : s)
+        prev.map((s) =>
+          s.username === username ? { ...s, status: "WORKING" } : s,
+        ),
       );
     } catch (err) {
       alert("Gagal membuka kunci.");
@@ -416,31 +545,39 @@ const UjianDashboard = () => {
         className={`flex-1 flex bg-slate-100 border-4 border-slate-200 rounded-[2rem] relative shadow-inner min-h-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] overflow-auto custom-scrollbar items-start justify-center`}
       >
         {/* WRAPPER MATEMATIS AGAR TIDAK ADA WHITE SPACE SAAT SCALE */}
-        <div 
+        <div
           className="flex justify-center transition-all duration-300 mt-6 md:mt-10"
-          style={{ 
-            width: `${boardWidth * currentScale}px`, 
-            height: `${boardHeight * currentScale}px` 
+          style={{
+            width: `${boardWidth * currentScale}px`,
+            height: `${boardHeight * currentScale}px`,
           }}
         >
           <div
             className={`flex flex-col relative transition-transform duration-300 origin-top`}
-            style={{ 
+            style={{
               width: `${boardWidth}px`,
               height: `${boardHeight}px`,
-              transform: `scale(${currentScale})` 
+              transform: `scale(${currentScale})`,
             }}
           >
             {/* AREA DEPAN KELAS */}
-            <div className={`w-full flex items-start mb-12 relative z-10 ${doorPos === "Kanan" ? "justify-end" : "justify-start"}`}>
-              <div className={`w-24 h-28 bg-white/80 rounded-2xl border-4 border-slate-300 flex flex-col items-center justify-center p-2 z-10 shadow-sm absolute top-0 ${doorPos === "Kanan" ? "right-0" : "left-0"}`}>
+            <div
+              className={`w-full flex items-start mb-12 relative z-10 ${doorPos === "Kanan" ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`w-24 h-28 bg-white/80 rounded-2xl border-4 border-slate-300 flex flex-col items-center justify-center p-2 z-10 shadow-sm absolute top-0 ${doorPos === "Kanan" ? "right-0" : "left-0"}`}
+              >
                 <DoorOpen size={36} className="text-slate-400 mb-1" />
-                <span className="text-[10px] font-black text-slate-500 uppercase text-center">Pintu Masuk</span>
+                <span className="text-[10px] font-black text-slate-500 uppercase text-center">
+                  Pintu Masuk
+                </span>
               </div>
 
               <div className="relative w-72 h-24 bg-slate-800 rounded-b-2xl rounded-t-lg shadow-2xl flex flex-col items-center justify-center border-b-8 border-slate-900 z-20 mx-auto">
                 <Laptop size={28} className="text-slate-400 mb-2" />
-                <span className="text-xs font-black text-white uppercase tracking-widest">Meja Pengawas</span>
+                <span className="text-xs font-black text-white uppercase tracking-widest">
+                  Meja Pengawas
+                </span>
               </div>
             </div>
 
@@ -452,32 +589,38 @@ const UjianDashboard = () => {
                 gridTemplateRows: `repeat(${rows}, 140px)`,
               }}
             >
-              {Array.from({ length: totalDesks }, (_, i) => i + 1).map((deskNo) => {
+              {Array.from({ length: totalDesks }, (_, i) => i + 1).map(
+                (deskNo) => {
                   const assignedData = assignments[deskNo];
                   const isSitting = !!assignedData;
                   let liveStudent = null;
 
                   if (activeTab === "live" && isSitting) {
-                    const assignedUsernameNormal = normalizeText(assignedData.username);
+                    const assignedUsernameNormal = normalizeText(
+                      assignedData.username,
+                    );
                     const assignedNamaNormal = normalizeText(assignedData.nama);
 
                     liveStudent = studentsData.find((s) => {
                       if (assignedData.username) {
-                        return normalizeText(s.username) === assignedUsernameNormal;
+                        return (
+                          normalizeText(s.username) === assignedUsernameNormal
+                        );
                       }
                       return normalizeText(s.nama) === assignedNamaNormal;
                     });
                   }
 
                   // TEMA MEJA KAYU & STATUS
-                  let deskClass = "bg-amber-100 border-amber-300 shadow-sm"; 
+                  let deskClass = "bg-amber-100 border-amber-300 shadow-sm";
                   let deskStatus = "KOSONG";
                   let progressText = "";
                   let progressPercent = 0;
                   let mapelText = "";
 
                   const isFinished = liveStudent?.status === "SELESAI";
-                  const isDisqualified = liveStudent?.status === "DISKUALIFIKASI";
+                  const isDisqualified =
+                    liveStudent?.status === "DISKUALIFIKASI";
 
                   if (activeTab === "builder" && isSitting) {
                     deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-lg"; // Kayu klasik
@@ -488,16 +631,19 @@ const UjianDashboard = () => {
                       mapelText = liveStudent.mapel;
 
                       if (isDisqualified) {
-                        deskClass = "bg-red-900 border-black shadow-[0_0_20px_rgba(220,38,38,0.9)] animate-pulse z-20";
+                        deskClass =
+                          "bg-red-900 border-black shadow-[0_0_20px_rgba(220,38,38,0.9)] animate-pulse z-20";
                         deskStatus = "ELIMINASI";
                         progressText = "Melanggar Aturan";
                         progressPercent = 100;
                       } else if (liveStudent.status === "LOCKED") {
-                        deskClass = "bg-orange-800 border-orange-950 shadow-[0_0_15px_rgba(249,115,22,0.8)] animate-pulse z-20";
+                        deskClass =
+                          "bg-orange-800 border-orange-950 shadow-[0_0_15px_rgba(249,115,22,0.8)] animate-pulse z-20";
                         deskStatus = "TERKUNCI";
                         progressText = `${liveStudent.dijawab}/${liveStudent.totalSoal} Soal`;
                       } else if (isFinished) {
-                        deskClass = "bg-emerald-700 border-emerald-900 shadow-md";
+                        deskClass =
+                          "bg-emerald-700 border-emerald-900 shadow-md";
                         deskStatus = "SELESAI";
                         progressText = `100% Tuntas`;
                         progressPercent = 100;
@@ -507,7 +653,8 @@ const UjianDashboard = () => {
                         progressText = `${liveStudent.dijawab}/${liveStudent.totalSoal} Soal`;
                       }
                     } else {
-                      deskClass = "bg-[#8b5a2b] border-[#5c3a21] opacity-70 grayscale"; // Meja kayu mati (Offline)
+                      deskClass =
+                        "bg-[#8b5a2b] border-[#5c3a21] opacity-70 grayscale"; // Meja kayu mati (Offline)
                       deskStatus = "OFFLINE";
                       progressText = "Belum Mulai";
                       progressPercent = 0;
@@ -515,7 +662,10 @@ const UjianDashboard = () => {
                   }
 
                   return (
-                    <div key={deskNo} className="relative w-[130px] h-[140px] group">
+                    <div
+                      key={deskNo}
+                      className="relative w-[130px] h-[140px] group"
+                    >
                       <div
                         onClick={() => {
                           if (activeTab === "builder") {
@@ -528,18 +678,33 @@ const UjianDashboard = () => {
                         {/* AVATAR DENGAN ANIMASI RPG */}
                         <AnimatePresence>
                           {isSitting && (
-                            <motion.div 
-                              initial={{ opacity: 0, scale: 0.5, y: -50, x: -50 }} 
-                              animate={{ 
-                                opacity: (activeTab === "live" && isFinished) ? 0 : 1, 
-                                scale: (activeTab === "live" && isFinished) ? 0.3 : 1, 
-                                y: (activeTab === "live" && isFinished) ? -150 : 0, 
-                                x: 0 
+                            <motion.div
+                              initial={{
+                                opacity: 0,
+                                scale: 0.5,
+                                y: -50,
+                                x: -50,
                               }}
-                              transition={{ duration: (activeTab === "live" && isFinished) ? 2 : 0.6, ease: "easeInOut" }}
+                              animate={{
+                                opacity:
+                                  activeTab === "live" && isFinished ? 0 : 1,
+                                scale:
+                                  activeTab === "live" && isFinished ? 0.3 : 1,
+                                y:
+                                  activeTab === "live" && isFinished ? -150 : 0,
+                                x: 0,
+                              }}
+                              transition={{
+                                duration:
+                                  activeTab === "live" && isFinished ? 2 : 0.6,
+                                ease: "easeInOut",
+                              }}
                               className="absolute top-0 w-full h-[85px] flex items-end justify-center pt-2"
                             >
-                              <CustomAvatar gender={assignedData.gender} isDisqualified={isDisqualified} />
+                              <CustomAvatar
+                                gender={assignedData.gender}
+                                isDisqualified={isDisqualified}
+                              />
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -559,12 +724,26 @@ const UjianDashboard = () => {
                                       {mapelText}
                                     </div>
                                   )}
-                                  
+
                                   <div className="flex justify-between items-center text-[8.5px] font-black px-0.5 leading-none mt-0.5">
-                                    <span className={deskStatus === "TERKUNCI" ? "text-orange-600" : deskStatus === "ELIMINASI" ? "text-red-600" : deskStatus === "SELESAI" ? "text-emerald-600" : deskStatus === "OFFLINE" ? "text-slate-400" : "text-indigo-600"}>
+                                    <span
+                                      className={
+                                        deskStatus === "TERKUNCI"
+                                          ? "text-orange-600"
+                                          : deskStatus === "ELIMINASI"
+                                            ? "text-red-600"
+                                            : deskStatus === "SELESAI"
+                                              ? "text-emerald-600"
+                                              : deskStatus === "OFFLINE"
+                                                ? "text-slate-400"
+                                                : "text-indigo-600"
+                                      }
+                                    >
                                       {deskStatus}
                                     </span>
-                                    <span className="text-slate-500 font-bold">{progressText}</span>
+                                    <span className="text-slate-500 font-bold">
+                                      {progressText}
+                                    </span>
                                   </div>
 
                                   <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden shadow-inner">
@@ -575,11 +754,15 @@ const UjianDashboard = () => {
                                   </div>
                                 </div>
                               ) : (
-                                <p className="text-[9px] font-black mt-0.5 tracking-widest text-indigo-600">TERISI</p>
+                                <p className="text-[9px] font-black mt-0.5 tracking-widest text-indigo-600">
+                                  TERISI
+                                </p>
                               )}
                             </>
                           ) : (
-                            <span className={`text-[10px] font-black mt-auto mb-1 ${activeTab === "builder" ? "text-amber-700 group-hover:text-amber-900" : "text-slate-400"}`}>
+                            <span
+                              className={`text-[10px] font-black mt-auto mb-1 ${activeTab === "builder" ? "text-amber-700 group-hover:text-amber-900" : "text-slate-400"}`}
+                            >
                               MEJA {deskNo}
                             </span>
                           )}
@@ -589,7 +772,10 @@ const UjianDashboard = () => {
                       {/* TOMBOL HAPUS (BUILDER) */}
                       {activeTab === "builder" && isSitting && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleRemoveStudent(deskNo); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveStudent(deskNo);
+                          }}
                           className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-50 hover:bg-red-600 shadow-lg"
                         >
                           <Trash2 size={14} />
@@ -597,21 +783,27 @@ const UjianDashboard = () => {
                       )}
 
                       {/* ICON ALERT / SELESAI */}
-                      {activeTab === "live" && isSitting && deskStatus === "TERKUNCI" && (
-                        <div className="absolute -top-4 -right-4 bg-orange-500 text-white p-1.5 rounded-full shadow-lg z-30 animate-bounce">
-                          <ShieldAlert size={18} />
-                        </div>
-                      )}
-                      {activeTab === "live" && isSitting && deskStatus === "ELIMINASI" && (
-                        <div className="absolute -top-4 -right-4 bg-red-600 text-white p-1.5 rounded-full shadow-lg z-30 animate-bounce">
-                          <Skull size={18} />
-                        </div>
-                      )}
-                      {activeTab === "live" && isSitting && deskStatus === "SELESAI" && (
-                        <div className="absolute -top-3 -right-3 bg-emerald-500 text-white p-1 rounded-full shadow-md z-30">
-                          <CheckCircle2 size={16} />
-                        </div>
-                      )}
+                      {activeTab === "live" &&
+                        isSitting &&
+                        deskStatus === "TERKUNCI" && (
+                          <div className="absolute -top-4 -right-4 bg-orange-500 text-white p-1.5 rounded-full shadow-lg z-30 animate-bounce">
+                            <ShieldAlert size={18} />
+                          </div>
+                        )}
+                      {activeTab === "live" &&
+                        isSitting &&
+                        deskStatus === "ELIMINASI" && (
+                          <div className="absolute -top-4 -right-4 bg-red-600 text-white p-1.5 rounded-full shadow-lg z-30 animate-bounce">
+                            <Skull size={18} />
+                          </div>
+                        )}
+                      {activeTab === "live" &&
+                        isSitting &&
+                        deskStatus === "SELESAI" && (
+                          <div className="absolute -top-3 -right-3 bg-emerald-500 text-white p-1 rounded-full shadow-md z-30">
+                            <CheckCircle2 size={16} />
+                          </div>
+                        )}
                     </div>
                   );
                 },
@@ -636,9 +828,14 @@ const UjianDashboard = () => {
           <div>
             <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2">
               {activeTab === "live" ? (
-                <><MonitorSmartphone className="text-indigo-600" /> Pemantauan Kelas Virtual</>
+                <>
+                  <MonitorSmartphone className="text-indigo-600" /> Pemantauan
+                  Kelas Virtual
+                </>
               ) : (
-                <><SettingsIcon className="text-indigo-500" /> Atur Denah Ujian</>
+                <>
+                  <SettingsIcon className="text-indigo-500" /> Atur Denah Ujian
+                </>
               )}
             </h2>
             <p className="text-xs md:text-sm text-slate-500 font-medium mt-0.5">
@@ -656,10 +853,24 @@ const UjianDashboard = () => {
                   onClick={() => setIsFitScreen(!isFitScreen)}
                   className={`hidden md:flex px-4 py-2.5 rounded-xl border font-bold text-xs items-center gap-2 transition-all ${isFitScreen ? "bg-indigo-100 text-indigo-700 border-indigo-200 shadow-inner" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 shadow-sm"}`}
                 >
-                  {isFitScreen ? <><Minimize size={16} /> Mode Scroll</> : <><Maximize size={16} /> Fit ke Layar</>}
+                  {isFitScreen ? (
+                    <>
+                      <Minimize size={16} /> Mode Scroll
+                    </>
+                  ) : (
+                    <>
+                      <Maximize size={16} /> Fit ke Layar
+                    </>
+                  )}
                 </button>
-                <div className="p-2.5 rounded-xl text-slate-400 bg-white border border-slate-200 shadow-sm" title="Auto-Sync Berjalan">
-                  <RefreshCw size={18} className={isSyncing ? "animate-spin text-indigo-500" : ""} />
+                <div
+                  className="p-2.5 rounded-xl text-slate-400 bg-white border border-slate-200 shadow-sm"
+                  title="Auto-Sync Berjalan"
+                >
+                  <RefreshCw
+                    size={18}
+                    className={isSyncing ? "animate-spin text-indigo-500" : ""}
+                  />
                 </div>
               </>
             )}
@@ -667,14 +878,17 @@ const UjianDashboard = () => {
               <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
                 {autoSaveStatus === "SAVING" ? (
                   <span className="text-xs font-bold text-amber-500 flex items-center gap-1.5">
-                    <RefreshCw size={14} className="animate-spin" /> Menyimpan...
+                    <RefreshCw size={14} className="animate-spin" />{" "}
+                    Menyimpan...
                   </span>
                 ) : autoSaveStatus === "SAVED" ? (
                   <span className="text-xs font-bold text-emerald-500 flex items-center gap-1.5">
                     <Check size={14} /> Tersimpan
                   </span>
                 ) : (
-                  <span className="text-xs font-bold text-slate-400">Auto-Save Aktif</span>
+                  <span className="text-xs font-bold text-slate-400">
+                    Auto-Save Aktif
+                  </span>
                 )}
               </div>
             )}
@@ -719,25 +933,61 @@ const UjianDashboard = () => {
               >
                 <div className="bg-white border border-slate-200 rounded-[1.5rem] p-4 flex flex-wrap items-end gap-4 shadow-sm">
                   <div className="flex flex-col flex-1 min-w-[120px]">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Kolom Meja</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                      Kolom Meja
+                    </label>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden h-10">
-                      <button onClick={() => updateGridSize("cols", "MINUS")} className="px-4 h-full text-slate-500 hover:bg-slate-200 border-r border-slate-200"><Minus size={14} /></button>
-                      <input type="text" readOnly value={layoutConfig[activeRoom].cols} className="w-full h-full text-center font-black text-slate-700 text-sm outline-none bg-transparent" />
-                      <button onClick={() => updateGridSize("cols", "PLUS")} className="px-4 h-full text-slate-500 hover:bg-slate-200 border-l border-slate-200"><Plus size={14} /></button>
+                      <button
+                        onClick={() => updateGridSize("cols", "MINUS")}
+                        className="px-4 h-full text-slate-500 hover:bg-slate-200 border-r border-slate-200"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <input
+                        type="text"
+                        readOnly
+                        value={layoutConfig[activeRoom].cols}
+                        className="w-full h-full text-center font-black text-slate-700 text-sm outline-none bg-transparent"
+                      />
+                      <button
+                        onClick={() => updateGridSize("cols", "PLUS")}
+                        className="px-4 h-full text-slate-500 hover:bg-slate-200 border-l border-slate-200"
+                      >
+                        <Plus size={14} />
+                      </button>
                     </div>
                   </div>
 
                   <div className="flex flex-col flex-1 min-w-[120px]">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Baris Meja</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                      Baris Meja
+                    </label>
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden h-10">
-                      <button onClick={() => updateGridSize("rows", "MINUS")} className="px-4 h-full text-slate-500 hover:bg-slate-200 border-r border-slate-200"><Minus size={14} /></button>
-                      <input type="text" readOnly value={layoutConfig[activeRoom].rows} className="w-full h-full text-center font-black text-slate-700 text-sm outline-none bg-transparent" />
-                      <button onClick={() => updateGridSize("rows", "PLUS")} className="px-4 h-full text-slate-500 hover:bg-slate-200 border-l border-slate-200"><Plus size={14} /></button>
+                      <button
+                        onClick={() => updateGridSize("rows", "MINUS")}
+                        className="px-4 h-full text-slate-500 hover:bg-slate-200 border-r border-slate-200"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <input
+                        type="text"
+                        readOnly
+                        value={layoutConfig[activeRoom].rows}
+                        className="w-full h-full text-center font-black text-slate-700 text-sm outline-none bg-transparent"
+                      />
+                      <button
+                        onClick={() => updateGridSize("rows", "PLUS")}
+                        className="px-4 h-full text-slate-500 hover:bg-slate-200 border-l border-slate-200"
+                      >
+                        <Plus size={14} />
+                      </button>
                     </div>
                   </div>
 
                   <div className="flex flex-col flex-1 min-w-[140px]">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Posisi Pintu</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                      Posisi Pintu
+                    </label>
                     <select
                       value={layoutConfig[activeRoom].door}
                       onChange={(e) => handleUpdateDoor(e.target.value)}
@@ -752,7 +1002,8 @@ const UjianDashboard = () => {
                     onClick={() => handleDeleteRoom(activeRoom)}
                     className="h-10 px-5 flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-xl font-bold text-xs whitespace-nowrap ml-auto"
                   >
-                    <Trash2 size={16} /> <span className="hidden sm:inline">Hapus Denah Ini</span>
+                    <Trash2 size={16} />{" "}
+                    <span className="hidden sm:inline">Hapus Denah Ini</span>
                   </button>
                 </div>
               </motion.div>
@@ -782,10 +1033,17 @@ const UjianDashboard = () => {
               </div>
               <div className="max-h-60 overflow-y-auto p-2 bg-orange-50 custom-scrollbar">
                 {lockedStudents.map((siswa) => (
-                  <div key={siswa.username} className="bg-white p-3 rounded-xl shadow-sm mb-2 last:mb-0 border border-orange-100">
-                    <p className="font-bold text-sm text-slate-800">{siswa.nama}</p>
+                  <div
+                    key={siswa.username}
+                    className="bg-white p-3 rounded-xl shadow-sm mb-2 last:mb-0 border border-orange-100"
+                  >
+                    <p className="font-bold text-sm text-slate-800">
+                      {siswa.nama}
+                    </p>
                     <button
-                      onClick={() => handleUnlockStudent(siswa.username, siswa.id_ujian)}
+                      onClick={() =>
+                        handleUnlockStudent(siswa.username, siswa.id_ujian)
+                      }
                       className="mt-2 w-full py-1.5 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-600 text-xs font-bold rounded-lg transition-colors border border-orange-200 hover:border-orange-500"
                     >
                       Buka Kunci Sekarang
@@ -815,13 +1073,19 @@ const UjianDashboard = () => {
                     UNTUK BANGKU NOMOR {selectedDesk}
                   </p>
                 </div>
-                <button onClick={() => setIsModalSiswaOpen(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
+                <button
+                  onClick={() => setIsModalSiswaOpen(false)}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                >
                   <X size={20} />
                 </button>
               </div>
               <div className="p-4 shrink-0 bg-slate-50 border-b border-slate-200">
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <Search
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={18}
+                  />
                   <input
                     type="text"
                     placeholder="Ketik nama/username siswa..."
@@ -835,26 +1099,42 @@ const UjianDashboard = () => {
               <div className="overflow-y-auto flex-1 p-2 custom-scrollbar bg-white">
                 {dbUsers
                   .filter((u) => {
-                    const searchName = String(u.nama || u.username || "").toLowerCase();
+                    const searchName = String(
+                      u.nama || u.username || "",
+                    ).toLowerCase();
                     return searchName.includes(searchSiswa.toLowerCase());
                   })
                   .map((u, i) => {
                     const namaTampil = u.nama || u.username || "Siswa";
                     const usernameTampil = u.username || namaTampil;
-                    const genderSet = String(u.gender).toUpperCase().startsWith("P") ? "P" : "L";
+                    const genderSet = String(u.gender)
+                      .toUpperCase()
+                      .startsWith("P")
+                      ? "P"
+                      : "L";
 
                     return (
                       <button
                         key={i}
-                        onClick={() => handleAssignStudent({ nama: namaTampil, username: usernameTampil, gender: genderSet })}
+                        onClick={() =>
+                          handleAssignStudent({
+                            nama: namaTampil,
+                            username: usernameTampil,
+                            gender: genderSet,
+                          })
+                        }
                         className="w-full flex items-center justify-between p-4 hover:bg-indigo-50 border-b border-slate-50 last:border-0 transition-colors text-left group rounded-xl"
                       >
                         <div>
                           <p className="font-bold text-slate-800 text-sm group-hover:text-indigo-700">
-                            {namaTampil} <span className="text-xs font-medium text-slate-400">({usernameTampil})</span>
+                            {namaTampil}{" "}
+                            <span className="text-xs font-medium text-slate-400">
+                              ({usernameTampil})
+                            </span>
                           </p>
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                            Kelas: {u.kelas || "-"} | {genderSet === "P" ? "Perempuan" : "Laki-laki"}
+                            Kelas: {u.kelas || "-"} |{" "}
+                            {genderSet === "P" ? "Perempuan" : "Laki-laki"}
                           </p>
                         </div>
                         <div className="bg-slate-100 p-2 rounded-lg text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
