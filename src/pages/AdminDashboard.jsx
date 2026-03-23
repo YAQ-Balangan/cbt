@@ -966,7 +966,7 @@ const AdminDashboard = () => {
           {/* Aksi Mobile */}
           <div className="flex flex-col gap-2">
             <button
-              onClick={() => window.open("/ujian-dashboard", "_blank")}
+              onClick={() => (window.location.href = "/ujian-dashboard")}
               className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-indigo-500/30 hover:bg-indigo-700 active:scale-95 transition-all"
             >
               <MonitorSmartphone size={16} className="animate-pulse" /> Live
@@ -1154,7 +1154,7 @@ const AdminDashboard = () => {
             )}
             {/* TOMBOL PINTU MASUK KELAS VIRTUAL ADMIN */}
             <button
-              onClick={() => window.open("/ujian-dashboard", "_blank")}
+              onClick={() => (window.location.href = "/ujian-dashboard")}
               className="w-full md:w-auto bg-indigo-600 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-indigo-400 z-10"
             >
               <MonitorSmartphone size={20} className="animate-pulse" /> Live

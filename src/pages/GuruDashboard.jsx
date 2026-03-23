@@ -2140,7 +2140,7 @@ const GuruDashboard = () => {
             </h3>
             <div className="grid grid-cols-4 gap-y-6 gap-x-2">
               <button
-                onClick={() => window.open("/ujian-dashboard", "_blank")}
+                onClick={() => (window.location.href = "/ujian-dashboard")}
                 className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
               >
                 <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-[1rem] flex items-center justify-center shadow-inner border border-indigo-200">
@@ -2521,7 +2521,7 @@ const GuruDashboard = () => {
               </button>
               {/* TOMBOL PINTU MASUK KELAS VIRTUAL */}
               <button
-                onClick={() => window.open("/ujian-dashboard", "_blank")}
+                onClick={() => (window.location.href = "/ujian-dashboard")}
                 className="w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black transition-all bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 shadow-indigo-500/30 md:ml-2 mt-2 md:mt-0"
               >
                 <MonitorSmartphone size={16} className="animate-pulse" /> Live
