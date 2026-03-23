@@ -492,6 +492,26 @@ const SiswaDashboard = () => {
         setIsLocked(false);
       }
 
+      // PAKSA KIRIM STATUS ONLINE KE GURU SAAT PERTAMA KALI MULAI
+      if (!serverSession) {
+        try {
+          await api.saveSesi(
+            getVal(user, "Username"),
+            examId,
+            {}, // Jawaban masih kosong
+            finalTimeLeft,
+            0,
+            "ACTIVE",
+          );
+        } catch (e) {
+          console.error("Gagal sinkron awal", e);
+        }
+      }
+
+      setAnswers(finalAnswers);
+      setTimeLeft(finalTimeLeft);
+      setCurrentSoalIndex(0);
+
       setAnswers(finalAnswers);
       setTimeLeft(finalTimeLeft);
       setCurrentSoalIndex(0);

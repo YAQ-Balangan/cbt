@@ -16,18 +16,15 @@ import {
   Search,
   Check,
   Minus,
-  Maximize,
-  Minimize,
   AlertTriangle,
   CheckCircle2,
   Skull,
-  Filter,
 } from "lucide-react";
 import Dashboard from "../components/layout/Dashboard";
 import { api, supabase } from "../api/api";
 
 // ==========================================
-// 1. KOMPONEN AVATAR CSS CUSTOM (Mata X untuk Diskualifikasi)
+// 1. KOMPONEN AVATAR CSS CUSTOM
 // ==========================================
 const CustomAvatar = ({ gender, isDisqualified }) => {
   const isBoy = !String(gender || "")
@@ -35,15 +32,13 @@ const CustomAvatar = ({ gender, isDisqualified }) => {
     .startsWith("P");
 
   const renderEyes = () => {
-    // Jika hanya ingin mata laki-laki yang turun, dan perempuan tetap,
-    // kita bisa pakai pengecekan isBoy di sini.
+    // Mata laki-laki diturunkan agar lebih pas
     const eyeTop = isBoy ? "top-[55px]" : "top-[40px]";
     const deadEyeTop = isBoy ? "top-[47px]" : "top-[37px]";
 
     if (isDisqualified) {
       return (
         <>
-          {/* Ubah top nya memakai variabel deadEyeTop */}
           <div
             className={`absolute ${deadEyeTop} left-[13px] text-red-600 font-black text-[13px] leading-none drop-shadow-md z-20`}
           >
@@ -59,7 +54,6 @@ const CustomAvatar = ({ gender, isDisqualified }) => {
     }
     return (
       <>
-        {/* Ubah top nya memakai variabel eyeTop */}
         <div
           className={`absolute w-[8px] h-[8px] bg-[#333] rounded-full ${eyeTop} left-[15px] z-20`}
         ></div>
@@ -144,12 +138,10 @@ const UjianDashboard = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState("IDLE");
 
-  const [isFitScreen, setIsFitScreen] = useState(false);
+  // STATE LAYOUT & AUTO-SCALE YANG SUDAH DIBERSIHKAN
   const containerRef = useRef(null);
-
-  // DUA STATE SCALE: 1 untuk Fit W&H, 1 untuk Fit Width doang (Mobile)
-  const [zoomScale, setZoomScale] = useState(1);
-  const [autoScale, setAutoScale] = useState(1);
+  const [boardScale, setBoardScale] = useState(1);
+  const [isDesktop, setIsDesktop] = useState(true);
 
   const [studentsData, setStudentsData] = useState([]);
   const [dbUsers, setDbUsers] = useState([]);
@@ -401,9 +393,12 @@ const UjianDashboard = () => {
     return () => clearTimeout(timeoutId);
   }, [layoutConfig, isInitialLoad, configId]);
 
-  // 3. FIT TO SCREEN LOGIC
+  // 3. FULL AUTO-PILOT SCREEN SCALING (Tanpa Tombol Fit Layar)
   useEffect(() => {
     const calculateScale = () => {
+      const desktopMode = window.innerWidth > 768;
+      setIsDesktop(desktopMode);
+
       if (containerRef.current) {
         const containerW = containerRef.current.clientWidth;
         const containerH = containerRef.current.clientHeight;
@@ -412,34 +407,25 @@ const UjianDashboard = () => {
         const contentW = boardWidth + 60; // Extra padding
         const contentH = boardHeight + 60;
 
-        // Mode Fit Layar (W & H) - Untuk Desktop
         const scaleW = containerW / contentW;
         const scaleH = containerH / contentH;
-        let fitScale = Math.min(scaleW, scaleH);
-        if (fitScale > 1) fitScale = 1;
-        setZoomScale(fitScale);
 
-        // Mode Auto (Khusus Fit Width untuk HP agar tidak melebar/scroll samping)
-        let wScale = containerW / contentW;
-        if (wScale > 1) wScale = 1;
-        setAutoScale(wScale);
+        if (desktopMode) {
+          // Desktop: Fit Width & Height secara otomatis
+          setBoardScale(Math.min(scaleW, scaleH, 1));
+        } else {
+          // Mobile: Fit Width Only (Scroll bebas ke bawah)
+          setBoardScale(Math.min(scaleW, 1));
+        }
       }
     };
 
     calculateScale();
     window.addEventListener("resize", calculateScale);
-    setTimeout(calculateScale, 200); // Trigger again after UI renders
+    setTimeout(calculateScale, 200);
     return () => window.removeEventListener("resize", calculateScale);
-  }, [
-    isFitScreen,
-    activeTab,
-    layoutConfig,
-    activeRoom,
-    boardWidth,
-    boardHeight,
-  ]);
+  }, [layoutConfig, activeRoom, boardWidth, boardHeight, activeTab]);
 
-  // FUNGSI BUILDER
   const handleAddRoom = () => {
     const roomName = prompt("Masukkan Nama Lokal Baru (Misal: Lokal 1):");
     if (!roomName || layoutConfig[roomName]) return;
@@ -536,20 +522,21 @@ const UjianDashboard = () => {
     const assignments = activeRoomConf.assignments || {};
     const totalDesks = cols * rows;
 
-    const isZoomActive = isFitScreen && activeTab === "live";
-    const currentScale = isZoomActive ? zoomScale : autoScale;
+    const doorX = doorPos === "Kiri" ? 50 : boardWidth - 50;
+    const doorY = 80;
+    const teacherX = boardWidth / 2;
+    const teacherY = 80;
 
     return (
       <div
         ref={containerRef}
         className={`flex-1 flex bg-slate-100 border-4 border-slate-200 rounded-[2rem] relative shadow-inner min-h-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] overflow-auto custom-scrollbar items-start justify-center`}
       >
-        {/* WRAPPER MATEMATIS AGAR TIDAK ADA WHITE SPACE SAAT SCALE */}
         <div
           className="flex justify-center transition-all duration-300 mt-6 md:mt-10"
           style={{
-            width: `${boardWidth * currentScale}px`,
-            height: `${boardHeight * currentScale}px`,
+            width: `${boardWidth * boardScale}px`,
+            height: isDesktop ? `${boardHeight * boardScale}px` : "auto",
           }}
         >
           <div
@@ -557,7 +544,7 @@ const UjianDashboard = () => {
             style={{
               width: `${boardWidth}px`,
               height: `${boardHeight}px`,
-              transform: `scale(${currentScale})`,
+              transform: `scale(${boardScale})`,
             }}
           >
             {/* AREA DEPAN KELAS */}
@@ -595,6 +582,16 @@ const UjianDashboard = () => {
                   const isSitting = !!assignedData;
                   let liveStudent = null;
 
+                  const colIndex = (deskNo - 1) % cols;
+                  const rowIndex = Math.floor((deskNo - 1) / cols);
+                  const deskCenterX = colIndex * 154 + 65;
+                  const deskCenterY = rowIndex * 164 + 70 + 144;
+
+                  const offsetDoorX = doorX - deskCenterX;
+                  const offsetDoorY = doorY - deskCenterY;
+                  const offsetTeacherX = teacherX - deskCenterX;
+                  const offsetTeacherY = teacherY - deskCenterY;
+
                   if (activeTab === "live" && isSitting) {
                     const assignedUsernameNormal = normalizeText(
                       assignedData.username,
@@ -611,7 +608,6 @@ const UjianDashboard = () => {
                     });
                   }
 
-                  // TEMA MEJA KAYU & STATUS
                   let deskClass = "bg-amber-100 border-amber-300 shadow-sm";
                   let deskStatus = "KOSONG";
                   let progressText = "";
@@ -621,9 +617,10 @@ const UjianDashboard = () => {
                   const isFinished = liveStudent?.status === "SELESAI";
                   const isDisqualified =
                     liveStudent?.status === "DISKUALIFIKASI";
+                  const isOffline = activeTab === "live" && !liveStudent;
 
                   if (activeTab === "builder" && isSitting) {
-                    deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-lg"; // Kayu klasik
+                    deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-lg";
                     deskStatus = "TERISI";
                   } else if (activeTab === "live" && isSitting) {
                     if (liveStudent) {
@@ -648,24 +645,81 @@ const UjianDashboard = () => {
                         progressText = `100% Tuntas`;
                         progressPercent = 100;
                       } else {
-                        deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-xl"; // Meja kayu menyala
+                        deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-xl";
                         deskStatus = `${progressPercent}%`;
                         progressText = `${liveStudent.dijawab}/${liveStudent.totalSoal} Soal`;
                       }
                     } else {
                       deskClass =
-                        "bg-[#8b5a2b] border-[#5c3a21] opacity-70 grayscale"; // Meja kayu mati (Offline)
+                        "bg-[#8b5a2b] border-[#5c3a21] opacity-70 grayscale";
                       deskStatus = "OFFLINE";
                       progressText = "Belum Mulai";
                       progressPercent = 0;
                     }
                   }
 
+                  const avatarVariants = {
+                    hidden: {
+                      x: offsetDoorX,
+                      y: offsetDoorY,
+                      scale: 0.2,
+                      opacity: 0,
+                    },
+                    working: {
+                      x: 0,
+                      y: 0,
+                      scale: 1,
+                      opacity: 1,
+                      transition: { duration: 2, ease: "easeOut" },
+                    },
+                    finished: {
+                      x: [0, offsetTeacherX, offsetTeacherX, offsetDoorX],
+                      y: [0, offsetTeacherY, offsetTeacherY, offsetDoorY],
+                      scale: [1, 0.8, 0.8, 0.2],
+                      opacity: [1, 1, 1, 0],
+                      transition: {
+                        duration: 6,
+                        times: [0, 0.3333, 0.6666, 1],
+                        ease: "easeInOut",
+                      },
+                    },
+                  };
+
                   return (
                     <div
                       key={deskNo}
                       className="relative w-[130px] h-[140px] group"
                     >
+                      {/* --- LAPISAN TENGAH: AVATAR RPG --- */}
+                      <AnimatePresence>
+                        {isSitting && activeTab === "live" && liveStudent && (
+                          <motion.div
+                            variants={avatarVariants}
+                            initial="hidden"
+                            animate={isFinished ? "finished" : "working"}
+                            className="absolute top-0 w-full h-[85px] flex items-end justify-center pt-2 z-[100] pointer-events-none"
+                          >
+                            <CustomAvatar
+                              gender={assignedData.gender}
+                              isDisqualified={isDisqualified}
+                            />
+                          </motion.div>
+                        )}
+
+                        {isSitting &&
+                          (!liveStudent || activeTab === "builder") && (
+                            <div
+                              className={`absolute top-0 w-full h-[85px] flex items-end justify-center pt-2 z-[100] pointer-events-none ${isOffline ? "grayscale opacity-60 brightness-75" : ""}`}
+                            >
+                              <CustomAvatar
+                                gender={assignedData.gender}
+                                isDisqualified={false}
+                              />
+                            </div>
+                          )}
+                      </AnimatePresence>
+
+                      {/* --- LAPISAN BAWAH: WADAH MEJA KAYU --- */}
                       <div
                         onClick={() => {
                           if (activeTab === "builder") {
@@ -673,134 +727,102 @@ const UjianDashboard = () => {
                             setIsModalSiswaOpen(true);
                           }
                         }}
-                        className={`absolute inset-0 rounded-2xl border-4 flex flex-col items-center justify-end pb-0 overflow-hidden transition-all ${deskClass} ${activeTab === "builder" && !assignedData ? "hover:border-[#8b5a2b] hover:bg-amber-100 border-dashed cursor-pointer" : ""}`}
-                      >
-                        {/* AVATAR DENGAN ANIMASI RPG */}
-                        <AnimatePresence>
-                          {isSitting && (
-                            <motion.div
-                              initial={{
-                                opacity: 0,
-                                scale: 0.5,
-                                y: -50,
-                                x: -50,
-                              }}
-                              animate={{
-                                opacity:
-                                  activeTab === "live" && isFinished ? 0 : 1,
-                                scale:
-                                  activeTab === "live" && isFinished ? 0.3 : 1,
-                                y:
-                                  activeTab === "live" && isFinished ? -150 : 0,
-                                x: 0,
-                              }}
-                              transition={{
-                                duration:
-                                  activeTab === "live" && isFinished ? 2 : 0.6,
-                                ease: "easeInOut",
-                              }}
-                              className="absolute top-0 w-full h-[85px] flex items-end justify-center pt-2"
-                            >
-                              <CustomAvatar
-                                gender={assignedData.gender}
-                                isDisqualified={isDisqualified}
-                              />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                        className={`absolute inset-0 rounded-2xl border-4 transition-all ${deskClass} ${activeTab === "builder" && !assignedData ? "hover:border-[#8b5a2b] hover:bg-amber-100 border-dashed cursor-pointer" : "cursor-pointer"}`}
+                      ></div>
 
-                        {/* LABEL MEJA/NAMA (KERTAS PUTIH DI ATAS KAYU) */}
-                        <div className="w-full px-2 z-10 flex flex-col items-center mt-auto bg-white pt-1 pb-1.5 border-t-2 border-black/20">
-                          {isSitting ? (
-                            <>
-                              <p className="text-[10px] font-black text-slate-800 truncate w-full text-center leading-tight uppercase">
-                                {assignedData.nama}
-                              </p>
+                      {/* --- LAPISAN ATAS: LABEL KERTAS PUTIH (Selalu menindih Avatar) --- */}
+                      <div className="absolute bottom-[4px] left-[4px] right-[4px] px-2 z-[110] flex flex-col items-center bg-white pt-1 pb-1.5 border-t-2 border-black/20 rounded-b-[10px] pointer-events-none">
+                        {isSitting ? (
+                          <>
+                            <p className="text-[10px] font-black text-slate-800 truncate w-full text-center leading-tight uppercase">
+                              {assignedData.nama}
+                            </p>
 
-                              {activeTab === "live" ? (
-                                <div className="w-full mt-0.5 flex flex-col gap-1">
-                                  {liveStudent && deskStatus !== "OFFLINE" && (
-                                    <div className="text-[7.5px] font-black text-indigo-500 truncate w-full text-center bg-indigo-50 rounded-full px-1 py-0.5 border border-indigo-200 leading-none">
-                                      {mapelText}
-                                    </div>
-                                  )}
-
-                                  <div className="flex justify-between items-center text-[8.5px] font-black px-0.5 leading-none mt-0.5">
-                                    <span
-                                      className={
-                                        deskStatus === "TERKUNCI"
-                                          ? "text-orange-600"
-                                          : deskStatus === "ELIMINASI"
-                                            ? "text-red-600"
-                                            : deskStatus === "SELESAI"
-                                              ? "text-emerald-600"
-                                              : deskStatus === "OFFLINE"
-                                                ? "text-slate-400"
-                                                : "text-indigo-600"
-                                      }
-                                    >
-                                      {deskStatus}
-                                    </span>
-                                    <span className="text-slate-500 font-bold">
-                                      {progressText}
-                                    </span>
+                            {activeTab === "live" ? (
+                              <div className="w-full mt-0.5 flex flex-col gap-1">
+                                {liveStudent && deskStatus !== "OFFLINE" && (
+                                  <div className="text-[7.5px] font-black text-indigo-500 truncate w-full text-center bg-indigo-50 rounded-full px-1 py-0.5 border border-indigo-200 leading-none">
+                                    {mapelText}
                                   </div>
+                                )}
 
-                                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden shadow-inner">
-                                    <div
-                                      className={`h-full rounded-full transition-all duration-500 ${deskStatus === "TERKUNCI" ? "bg-orange-500" : deskStatus === "ELIMINASI" ? "bg-red-600" : deskStatus === "SELESAI" ? "bg-emerald-500" : deskStatus === "OFFLINE" ? "bg-transparent" : "bg-indigo-500"}`}
-                                      style={{ width: `${progressPercent}%` }}
-                                    ></div>
-                                  </div>
+                                <div className="flex justify-between items-center text-[8.5px] font-black px-0.5 leading-none mt-0.5">
+                                  <span
+                                    className={
+                                      deskStatus === "TERKUNCI"
+                                        ? "text-orange-600"
+                                        : deskStatus === "ELIMINASI"
+                                          ? "text-red-600"
+                                          : deskStatus === "SELESAI"
+                                            ? "text-emerald-600"
+                                            : deskStatus === "OFFLINE"
+                                              ? "text-slate-400"
+                                              : "text-indigo-600"
+                                    }
+                                  >
+                                    {deskStatus}
+                                  </span>
+                                  <span className="text-slate-500 font-bold">
+                                    {progressText}
+                                  </span>
                                 </div>
-                              ) : (
-                                <p className="text-[9px] font-black mt-0.5 tracking-widest text-indigo-600">
-                                  TERISI
-                                </p>
-                              )}
-                            </>
-                          ) : (
+
+                                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden shadow-inner">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${deskStatus === "TERKUNCI" ? "bg-orange-500" : deskStatus === "ELIMINASI" ? "bg-red-600" : deskStatus === "SELESAI" ? "bg-emerald-500" : deskStatus === "OFFLINE" ? "bg-transparent" : "bg-indigo-500"}`}
+                                    style={{ width: `${progressPercent}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-[9px] font-black mt-0.5 tracking-widest text-indigo-600">
+                                TERISI
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <div className="py-1 flex items-center justify-center">
                             <span
-                              className={`text-[10px] font-black mt-auto mb-1 ${activeTab === "builder" ? "text-amber-700 group-hover:text-amber-900" : "text-slate-400"}`}
+                              className={`text-[10px] font-black ${activeTab === "builder" ? "text-amber-700" : "text-slate-400"}`}
                             >
                               MEJA {deskNo}
                             </span>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
 
-                      {/* TOMBOL HAPUS (BUILDER) */}
+                      {/* --- LAPISAN TOMBOL (BUILDER) --- */}
                       {activeTab === "builder" && isSitting && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleRemoveStudent(deskNo);
                           }}
-                          className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-50 hover:bg-red-600 shadow-lg"
+                          className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-[120] hover:bg-red-600 shadow-lg"
                         >
                           <Trash2 size={14} />
                         </button>
                       )}
 
-                      {/* ICON ALERT / SELESAI */}
+                      {/* --- LAPISAN ICON STATUS --- */}
                       {activeTab === "live" &&
                         isSitting &&
                         deskStatus === "TERKUNCI" && (
-                          <div className="absolute -top-4 -right-4 bg-orange-500 text-white p-1.5 rounded-full shadow-lg z-30 animate-bounce">
+                          <div className="absolute -top-4 -right-4 bg-orange-500 text-white p-1.5 rounded-full shadow-lg z-[120] animate-bounce">
                             <ShieldAlert size={18} />
                           </div>
                         )}
                       {activeTab === "live" &&
                         isSitting &&
                         deskStatus === "ELIMINASI" && (
-                          <div className="absolute -top-4 -right-4 bg-red-600 text-white p-1.5 rounded-full shadow-lg z-30 animate-bounce">
+                          <div className="absolute -top-4 -right-4 bg-red-600 text-white p-1.5 rounded-full shadow-lg z-[120] animate-bounce">
                             <Skull size={18} />
                           </div>
                         )}
                       {activeTab === "live" &&
                         isSitting &&
                         deskStatus === "SELESAI" && (
-                          <div className="absolute -top-3 -right-3 bg-emerald-500 text-white p-1 rounded-full shadow-md z-30">
+                          <div className="absolute -top-3 -right-3 bg-emerald-500 text-white p-1 rounded-full shadow-md z-[120]">
                             <CheckCircle2 size={16} />
                           </div>
                         )}
@@ -823,7 +845,6 @@ const UjianDashboard = () => {
   return (
     <Dashboard menu={menuItems} active={activeTab} setActive={setActiveTab}>
       <div className="flex flex-col h-[calc(100vh-100px)] max-w-[90rem] mx-auto p-2 md:p-4 font-sans select-none overflow-hidden gap-4 relative">
-        {/* HEADER DASHBOARD */}
         <div className="bg-white p-4 md:p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between shrink-0 gap-4">
           <div>
             <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2">
@@ -847,32 +868,15 @@ const UjianDashboard = () => {
 
           <div className="flex flex-wrap items-center gap-3">
             {activeTab === "live" && (
-              <>
-                {/* TOMBOL FIT SCREEN DISEMBUNYIKAN DI HP KARENA SUDAH AUTO-FIT WIDTH */}
-                <button
-                  onClick={() => setIsFitScreen(!isFitScreen)}
-                  className={`hidden md:flex px-4 py-2.5 rounded-xl border font-bold text-xs items-center gap-2 transition-all ${isFitScreen ? "bg-indigo-100 text-indigo-700 border-indigo-200 shadow-inner" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 shadow-sm"}`}
-                >
-                  {isFitScreen ? (
-                    <>
-                      <Minimize size={16} /> Mode Scroll
-                    </>
-                  ) : (
-                    <>
-                      <Maximize size={16} /> Fit ke Layar
-                    </>
-                  )}
-                </button>
-                <div
-                  className="p-2.5 rounded-xl text-slate-400 bg-white border border-slate-200 shadow-sm"
-                  title="Auto-Sync Berjalan"
-                >
-                  <RefreshCw
-                    size={18}
-                    className={isSyncing ? "animate-spin text-indigo-500" : ""}
-                  />
-                </div>
-              </>
+              <div
+                className="p-2.5 rounded-xl text-slate-400 bg-white border border-slate-200 shadow-sm"
+                title="Auto-Sync Berjalan"
+              >
+                <RefreshCw
+                  size={18}
+                  className={isSyncing ? "animate-spin text-indigo-500" : ""}
+                />
+              </div>
             )}
             {activeTab === "builder" && (
               <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
@@ -895,7 +899,6 @@ const UjianDashboard = () => {
           </div>
         </div>
 
-        {/* TAB LOKAL / ROOMS */}
         <div className="flex overflow-x-auto gap-2 custom-scrollbar shrink-0 pb-1">
           {Object.keys(layoutConfig).map((room) => (
             <button
@@ -920,7 +923,6 @@ const UjianDashboard = () => {
           )}
         </div>
 
-        {/* PANEL SETTING BUILDER */}
         <AnimatePresence>
           {activeTab === "builder" &&
             activeRoom &&
@@ -1010,10 +1012,8 @@ const UjianDashboard = () => {
             )}
         </AnimatePresence>
 
-        {/* AREA KELAS */}
         {renderClassroom()}
 
-        {/* FLOATING ALERT PANEL UNTUK SISWA TERKUNCI/DISKUALIFIKASI */}
         <AnimatePresence>
           {activeTab === "live" && lockedStudents.length > 0 && (
             <motion.div
@@ -1056,7 +1056,6 @@ const UjianDashboard = () => {
         </AnimatePresence>
       </div>
 
-      {/* MODAL PILIH SISWA (BUILDER) */}
       <AnimatePresence>
         {isModalSiswaOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
