@@ -19,6 +19,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Skull,
+  ZoomIn,
+  ZoomOut,
+  Maximize,
+  Info,
 } from "lucide-react";
 import Dashboard from "../components/layout/Dashboard";
 import { api, supabase } from "../api/api";
@@ -32,7 +36,6 @@ const CustomAvatar = ({ gender, isDisqualified }) => {
     .startsWith("P");
 
   const renderEyes = () => {
-    // Mata laki-laki diturunkan agar lebih pas
     const eyeTop = isBoy ? "top-[55px]" : "top-[40px]";
     const deadEyeTop = isBoy ? "top-[47px]" : "top-[37px]";
 
@@ -138,10 +141,22 @@ const UjianDashboard = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState("IDLE");
 
-  // STATE LAYOUT & AUTO-SCALE YANG SUDAH DIBERSIHKAN
+  // STATE LAYOUT & AUTO-SCALE (ANTI-RESET & FIT SCREEN)
   const containerRef = useRef(null);
-  const [boardScale, setBoardScale] = useState(1);
+  const hasInitializedScale = useRef(false);
+  const [boardScale, setBoardScale] = useState(1.15); // Default Zoom Besar
+  const [autoScale, setAutoScale] = useState(1);
   const [isDesktop, setIsDesktop] = useState(true);
+
+  // STATE CUSTOM ALERT PREMIUM
+  const [customAlert, setCustomAlert] = useState({
+    isOpen: false,
+    type: "info",
+    title: "",
+    message: "",
+    inputValue: "",
+    onConfirm: null,
+  });
 
   const [studentsData, setStudentsData] = useState([]);
   const [dbUsers, setDbUsers] = useState([]);
@@ -160,7 +175,31 @@ const UjianDashboard = () => {
     return String(text).trim().toLowerCase().replace(/\s+/g, " ");
   };
 
-  // KALKULASI DIMENSI PAPAN MATEMATIS
+  const showAlert = (
+    type,
+    title,
+    message,
+    onConfirm = null,
+    defaultValue = "",
+  ) => {
+    setCustomAlert({
+      isOpen: true,
+      type,
+      title,
+      message,
+      inputValue: defaultValue,
+      onConfirm,
+    });
+  };
+  const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
+
+  // HANDLER ZOOM (Desktop)
+  const handleZoomIn = () =>
+    setBoardScale((prev) => Math.min(prev + 0.15, 2.5));
+  const handleZoomOut = () =>
+    setBoardScale((prev) => Math.max(prev - 0.15, 0.3));
+  const handleResetZoom = () => setBoardScale(autoScale); // Tombol Fit Layar: mengecilkan ke ukuran muat 1 layar
+
   const activeRoomConf = layoutConfig[activeRoom] || {
     cols: 5,
     rows: 5,
@@ -181,7 +220,6 @@ const UjianDashboard = () => {
         .select("*")
         .then(({ data }) => data || [])
         .catch(() => []);
-
       const [
         resNilai,
         resSesiUjian,
@@ -307,7 +345,6 @@ const UjianDashboard = () => {
               normalizeText(u.nama) === nNama ||
               normalizeText(u.username) === nNama,
           );
-
           liveStudentsList.push({
             id: `done-${nilai.id}`,
             username: userObj
@@ -377,12 +414,11 @@ const UjianDashboard = () => {
           }
         }
 
-        if (currentConfigId) {
+        if (currentConfigId)
           await api.update("Settings", currentConfigId, {
             kunci: "Denah_Kelas",
             nilai: payloadString,
           });
-        }
 
         setAutoSaveStatus("SAVED");
         setTimeout(() => setAutoSaveStatus("IDLE"), 2000);
@@ -393,7 +429,7 @@ const UjianDashboard = () => {
     return () => clearTimeout(timeoutId);
   }, [layoutConfig, isInitialLoad, configId]);
 
-  // 3. FULL AUTO-PILOT SCREEN SCALING (Tanpa Tombol Fit Layar)
+  // 3. FULL AUTO-PILOT SCREEN SCALING (MEMISAHKAN DESKTOP & MOBILE)
   useEffect(() => {
     const calculateScale = () => {
       const desktopMode = window.innerWidth > 768;
@@ -404,45 +440,73 @@ const UjianDashboard = () => {
         const containerH = containerRef.current.clientHeight;
         if (containerW === 0 || containerH === 0) return;
 
-        const contentW = boardWidth + 60; // Extra padding
-        const contentH = boardHeight + 60;
+        // Content Width & Height ditambahkan ekstra margin agar tidak terpotong saat Maximize
+        const contentW = boardWidth + 60;
+        const contentH = boardHeight + 120; // 120 = Ruang untuk mt-10 (40px) & mb-20 (80px)
 
         const scaleW = containerW / contentW;
         const scaleH = containerH / contentH;
 
         if (desktopMode) {
-          // Desktop: Fit Width & Height secara otomatis
-          setBoardScale(Math.min(scaleW, scaleH, 1));
+          // DESKTOP: Hitung agar muat SEMUA tanpa scroll untuk tombol Maximize
+          const fitScale = Math.min(scaleW, scaleH);
+          setAutoScale(fitScale);
+
+          // Default selalu terzoom besar (1.15) pertama kali masuk layar Desktop
+          if (!hasInitializedScale.current) {
+            setBoardScale(1.15);
+            hasInitializedScale.current = true;
+          }
         } else {
-          // Mobile: Fit Width Only (Scroll bebas ke bawah)
-          setBoardScale(Math.min(scaleW, 1));
+          // MOBILE: Kembali ke original, selalu fit lebar dengan auto-update presisi
+          const fitScale = Math.min(scaleW, 1);
+          setAutoScale(fitScale);
+          setBoardScale(fitScale); // Memaksa HP update real-time
+          hasInitializedScale.current = false; // Buka kunci jika dilipat/direkues ke Mobile
         }
       }
     };
 
     calculateScale();
     window.addEventListener("resize", calculateScale);
-    setTimeout(calculateScale, 200);
     return () => window.removeEventListener("resize", calculateScale);
-  }, [layoutConfig, activeRoom, boardWidth, boardHeight, activeTab]);
+  }, [boardWidth, boardHeight, activeRoom]); // activeRoom menjaga pergantian lokal
 
   const handleAddRoom = () => {
-    const roomName = prompt("Masukkan Nama Lokal Baru (Misal: Lokal 1):");
-    if (!roomName || layoutConfig[roomName]) return;
-    setLayoutConfig((prev) => ({
-      ...prev,
-      [roomName]: { door: "Kiri", cols: 5, rows: 5, assignments: {} },
-    }));
-    setActiveRoom(roomName);
+    showAlert(
+      "prompt",
+      "Tambah Lokal Baru",
+      "Ketikkan nama ruangan/lokal baru untuk denah ini (Misal: Lokal 1):",
+      (val) => {
+        const roomName = val.trim();
+        if (!roomName) return;
+        if (layoutConfig[roomName]) {
+          showAlert("danger", "Gagal", `Nama lokal "${roomName}" sudah ada!`);
+          return;
+        }
+        setLayoutConfig((prev) => ({
+          ...prev,
+          [roomName]: { door: "Kiri", cols: 5, rows: 5, assignments: {} },
+        }));
+        setActiveRoom(roomName);
+        closeAlert();
+      },
+    );
   };
 
   const handleDeleteRoom = (roomName) => {
-    if (window.confirm(`Yakin hapus denah ${roomName}?`)) {
-      const newConf = { ...layoutConfig };
-      delete newConf[roomName];
-      setLayoutConfig(newConf);
-      setActiveRoom(Object.keys(newConf)[0] || "");
-    }
+    showAlert(
+      "confirm",
+      "Hapus Denah?",
+      `Apakah Anda yakin ingin menghapus desain denah "${roomName}" secara permanen?`,
+      () => {
+        const newConf = { ...layoutConfig };
+        delete newConf[roomName];
+        setLayoutConfig(newConf);
+        setActiveRoom(Object.keys(newConf)[0] || "");
+        closeAlert();
+      },
+    );
   };
 
   const updateGridSize = (type, action) => {
@@ -500,8 +564,17 @@ const UjianDashboard = () => {
           s.username === username ? { ...s, status: "WORKING" } : s,
         ),
       );
+      showAlert(
+        "success",
+        "Kunci Terbuka",
+        `Akses ujian untuk siswa bersangkutan berhasil dipulihkan.`,
+      );
     } catch (err) {
-      alert("Gagal membuka kunci.");
+      showAlert(
+        "danger",
+        "Gagal Membuka Kunci",
+        "Pastikan koneksi internet Anda stabil.",
+      );
     }
   };
 
@@ -528,308 +601,328 @@ const UjianDashboard = () => {
     const teacherY = 80;
 
     return (
-      <div
-        ref={containerRef}
-        className={`flex-1 flex bg-slate-100 border-4 border-slate-200 rounded-[2rem] relative shadow-inner min-h-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] overflow-auto custom-scrollbar items-start justify-center`}
-      >
+      <div className="flex-1 relative rounded-[2rem] overflow-hidden border-4 border-slate-200 bg-slate-100 shadow-inner min-h-0">
+        {/* --- KONTROL ZOOM DESKTOP (Fix diam di pojok, hilang di HP) --- */}
+        {isDesktop && (
+          <div className="absolute top-6 right-6 z-[200] flex flex-col gap-2 bg-white/90 backdrop-blur-md p-2 rounded-[1.2rem] shadow-xl border border-slate-200">
+            <button
+              onClick={handleZoomIn}
+              className="p-3 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-all shadow-sm"
+              title="Perbesar (Zoom In)"
+            >
+              <ZoomIn size={20} />
+            </button>
+            <button
+              onClick={handleResetZoom}
+              className="p-3 bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 rounded-xl transition-all shadow-sm"
+              title="Fit Layar (Tampilkan Semua Meja Tanpa Scroll)"
+            >
+              <Maximize size={20} />
+            </button>
+            <button
+              onClick={handleZoomOut}
+              className="p-3 bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-xl transition-all shadow-sm"
+              title="Perkecil (Zoom Out)"
+            >
+              <ZoomOut size={20} />
+            </button>
+          </div>
+        )}
+
+        {/* --- AREA WADAH KELAS KEMBALI SEPERTI ORIGINAL (Scroll Aman & Fit Sempurna untuk HP) --- */}
         <div
-          className="flex justify-center transition-all duration-300 mt-6 md:mt-10"
-          style={{
-            width: `${boardWidth * boardScale}px`,
-            height: isDesktop ? `${boardHeight * boardScale}px` : "auto",
-          }}
+          ref={containerRef}
+          className="w-full h-full flex bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] overflow-auto custom-scrollbar items-start justify-center relative"
         >
           <div
-            className={`flex flex-col relative transition-transform duration-300 origin-top`}
+            className="flex justify-center transition-all duration-300 mt-6 md:mt-10 mb-20"
             style={{
-              width: `${boardWidth}px`,
-              height: `${boardHeight}px`,
-              transform: `scale(${boardScale})`,
+              width: `${boardWidth * boardScale}px`,
+              height: isDesktop ? `${boardHeight * boardScale}px` : "auto",
             }}
           >
-            {/* AREA DEPAN KELAS */}
             <div
-              className={`w-full flex items-start mb-12 relative z-10 ${doorPos === "Kanan" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`w-24 h-28 bg-white/80 rounded-2xl border-4 border-slate-300 flex flex-col items-center justify-center p-2 z-10 shadow-sm absolute top-0 ${doorPos === "Kanan" ? "right-0" : "left-0"}`}
-              >
-                <DoorOpen size={36} className="text-slate-400 mb-1" />
-                <span className="text-[10px] font-black text-slate-500 uppercase text-center">
-                  Pintu Masuk
-                </span>
-              </div>
-
-              <div className="relative w-72 h-24 bg-slate-800 rounded-b-2xl rounded-t-lg shadow-2xl flex flex-col items-center justify-center border-b-8 border-slate-900 z-20 mx-auto">
-                <Laptop size={28} className="text-slate-400 mb-2" />
-                <span className="text-xs font-black text-white uppercase tracking-widest">
-                  Meja Pengawas
-                </span>
-              </div>
-            </div>
-
-            {/* GRID BANGKU MATRIKS */}
-            <div
-              className="relative z-10 grid gap-6 mx-auto"
+              className={`flex flex-col relative transition-transform duration-300 origin-top`}
               style={{
-                gridTemplateColumns: `repeat(${cols}, 130px)`,
-                gridTemplateRows: `repeat(${rows}, 140px)`,
+                width: `${boardWidth}px`,
+                height: `${boardHeight}px`,
+                transform: `scale(${boardScale})`,
               }}
             >
-              {Array.from({ length: totalDesks }, (_, i) => i + 1).map(
-                (deskNo) => {
-                  const assignedData = assignments[deskNo];
-                  const isSitting = !!assignedData;
-                  let liveStudent = null;
+              {/* AREA DEPAN KELAS */}
+              <div
+                className={`w-full flex items-start mb-12 relative z-10 ${doorPos === "Kanan" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`w-24 h-28 bg-white/80 rounded-2xl border-4 border-slate-300 flex flex-col items-center justify-center p-2 z-10 shadow-sm absolute top-0 ${doorPos === "Kanan" ? "right-0" : "left-0"}`}
+                >
+                  <DoorOpen size={36} className="text-slate-400 mb-1" />
+                  <span className="text-[10px] font-black text-slate-500 uppercase text-center">
+                    Pintu Masuk
+                  </span>
+                </div>
+                <div className="relative w-72 h-24 bg-slate-800 rounded-b-2xl rounded-t-lg shadow-2xl flex flex-col items-center justify-center border-b-8 border-slate-900 z-20 mx-auto">
+                  <Laptop size={28} className="text-slate-400 mb-2" />
+                  <span className="text-xs font-black text-white uppercase tracking-widest">
+                    Meja Pengawas
+                  </span>
+                </div>
+              </div>
 
-                  const colIndex = (deskNo - 1) % cols;
-                  const rowIndex = Math.floor((deskNo - 1) / cols);
-                  const deskCenterX = colIndex * 154 + 65;
-                  const deskCenterY = rowIndex * 164 + 70 + 144;
+              {/* GRID BANGKU MATRIKS */}
+              <div
+                className="relative z-10 grid gap-6 mx-auto"
+                style={{
+                  gridTemplateColumns: `repeat(${cols}, 130px)`,
+                  gridTemplateRows: `repeat(${rows}, 140px)`,
+                }}
+              >
+                {Array.from({ length: totalDesks }, (_, i) => i + 1).map(
+                  (deskNo) => {
+                    const assignedData = assignments[deskNo];
+                    const isSitting = !!assignedData;
+                    let liveStudent = null;
 
-                  const offsetDoorX = doorX - deskCenterX;
-                  const offsetDoorY = doorY - deskCenterY;
-                  const offsetTeacherX = teacherX - deskCenterX;
-                  const offsetTeacherY = teacherY - deskCenterY;
+                    const colIndex = (deskNo - 1) % cols;
+                    const rowIndex = Math.floor((deskNo - 1) / cols);
+                    const deskCenterX = colIndex * 154 + 65;
+                    const deskCenterY = rowIndex * 164 + 70 + 144;
 
-                  if (activeTab === "live" && isSitting) {
-                    const assignedUsernameNormal = normalizeText(
-                      assignedData.username,
-                    );
-                    const assignedNamaNormal = normalizeText(assignedData.nama);
+                    const offsetDoorX = doorX - deskCenterX;
+                    const offsetDoorY = doorY - deskCenterY;
+                    const offsetTeacherX = teacherX - deskCenterX;
+                    const offsetTeacherY = teacherY - deskCenterY;
 
-                    liveStudent = studentsData.find((s) => {
-                      if (assignedData.username) {
-                        return (
-                          normalizeText(s.username) === assignedUsernameNormal
-                        );
-                      }
-                      return normalizeText(s.nama) === assignedNamaNormal;
-                    });
-                  }
-
-                  let deskClass = "bg-amber-100 border-amber-300 shadow-sm";
-                  let deskStatus = "KOSONG";
-                  let progressText = "";
-                  let progressPercent = 0;
-                  let mapelText = "";
-
-                  const isFinished = liveStudent?.status === "SELESAI";
-                  const isDisqualified =
-                    liveStudent?.status === "DISKUALIFIKASI";
-                  const isOffline = activeTab === "live" && !liveStudent;
-
-                  if (activeTab === "builder" && isSitting) {
-                    deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-lg";
-                    deskStatus = "TERISI";
-                  } else if (activeTab === "live" && isSitting) {
-                    if (liveStudent) {
-                      progressPercent = liveStudent.progress;
-                      mapelText = liveStudent.mapel;
-
-                      if (isDisqualified) {
-                        deskClass =
-                          "bg-red-900 border-black shadow-[0_0_20px_rgba(220,38,38,0.9)] animate-pulse z-20";
-                        deskStatus = "ELIMINASI";
-                        progressText = "Melanggar Aturan";
-                        progressPercent = 100;
-                      } else if (liveStudent.status === "LOCKED") {
-                        deskClass =
-                          "bg-orange-800 border-orange-950 shadow-[0_0_15px_rgba(249,115,22,0.8)] animate-pulse z-20";
-                        deskStatus = "TERKUNCI";
-                        progressText = `${liveStudent.dijawab}/${liveStudent.totalSoal} Soal`;
-                      } else if (isFinished) {
-                        deskClass =
-                          "bg-emerald-700 border-emerald-900 shadow-md";
-                        deskStatus = "SELESAI";
-                        progressText = `100% Tuntas`;
-                        progressPercent = 100;
-                      } else {
-                        deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-xl";
-                        deskStatus = `${progressPercent}%`;
-                        progressText = `${liveStudent.dijawab}/${liveStudent.totalSoal} Soal`;
-                      }
-                    } else {
-                      deskClass =
-                        "bg-[#8b5a2b] border-[#5c3a21] opacity-70 grayscale";
-                      deskStatus = "OFFLINE";
-                      progressText = "Belum Mulai";
-                      progressPercent = 0;
+                    if (activeTab === "live" && isSitting) {
+                      const assignedUsernameNormal = normalizeText(
+                        assignedData.username,
+                      );
+                      const assignedNamaNormal = normalizeText(
+                        assignedData.nama,
+                      );
+                      liveStudent = studentsData.find((s) => {
+                        if (assignedData.username)
+                          return (
+                            normalizeText(s.username) === assignedUsernameNormal
+                          );
+                        return normalizeText(s.nama) === assignedNamaNormal;
+                      });
                     }
-                  }
 
-                  const avatarVariants = {
-                    hidden: {
-                      x: offsetDoorX,
-                      y: offsetDoorY,
-                      scale: 0.2,
-                      opacity: 0,
-                    },
-                    working: {
-                      x: 0,
-                      y: 0,
-                      scale: 1,
-                      opacity: 1,
-                      transition: { duration: 2, ease: "easeOut" },
-                    },
-                    finished: {
-                      x: [0, offsetTeacherX, offsetTeacherX, offsetDoorX],
-                      y: [0, offsetTeacherY, offsetTeacherY, offsetDoorY],
-                      scale: [1, 0.8, 0.8, 0.2],
-                      opacity: [1, 1, 1, 0],
-                      transition: {
-                        duration: 6,
-                        times: [0, 0.3333, 0.6666, 1],
-                        ease: "easeInOut",
+                    let deskClass = "bg-amber-100 border-amber-300 shadow-sm";
+                    let deskStatus = "KOSONG";
+                    let progressText = "";
+                    let progressPercent = 0;
+                    let mapelText = "";
+
+                    const isFinished = liveStudent?.status === "SELESAI";
+                    const isDisqualified =
+                      liveStudent?.status === "DISKUALIFIKASI";
+                    const isOffline = activeTab === "live" && !liveStudent;
+
+                    if (activeTab === "builder" && isSitting) {
+                      deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-lg";
+                      deskStatus = "TERISI";
+                    } else if (activeTab === "live" && isSitting) {
+                      if (liveStudent) {
+                        progressPercent = liveStudent.progress;
+                        mapelText = liveStudent.mapel;
+
+                        if (isDisqualified) {
+                          deskClass =
+                            "bg-red-900 border-black shadow-[0_0_20px_rgba(220,38,38,0.9)] animate-pulse z-20";
+                          deskStatus = "ELIMINASI";
+                          progressText = "Melanggar Aturan";
+                          progressPercent = 100;
+                        } else if (liveStudent.status === "LOCKED") {
+                          deskClass =
+                            "bg-orange-800 border-orange-950 shadow-[0_0_15px_rgba(249,115,22,0.8)] animate-pulse z-20";
+                          deskStatus = "TERKUNCI";
+                          progressText = `${liveStudent.dijawab}/${liveStudent.totalSoal} Soal`;
+                        } else if (isFinished) {
+                          deskClass =
+                            "bg-emerald-700 border-emerald-900 shadow-md";
+                          deskStatus = "SELESAI";
+                          progressText = `100% Tuntas`;
+                          progressPercent = 100;
+                        } else {
+                          deskClass = "bg-[#8b5a2b] border-[#5c3a21] shadow-xl";
+                          deskStatus = `${progressPercent}%`;
+                          progressText = `${liveStudent.dijawab}/${liveStudent.totalSoal} Soal`;
+                        }
+                      } else {
+                        deskClass =
+                          "bg-[#8b5a2b] border-[#5c3a21] opacity-70 grayscale";
+                        deskStatus = "OFFLINE";
+                        progressText = "Belum Mulai";
+                        progressPercent = 0;
+                      }
+                    }
+
+                    const avatarVariants = {
+                      hidden: {
+                        x: offsetDoorX,
+                        y: offsetDoorY,
+                        scale: 0.2,
+                        opacity: 0,
                       },
-                    },
-                  };
+                      working: {
+                        x: 0,
+                        y: 0,
+                        scale: 1,
+                        opacity: 1,
+                        transition: { duration: 2, ease: "easeOut" },
+                      },
+                      finished: {
+                        x: [0, offsetTeacherX, offsetTeacherX, offsetDoorX],
+                        y: [0, offsetTeacherY, offsetTeacherY, offsetDoorY],
+                        scale: [1, 0.8, 0.8, 0.2],
+                        opacity: [1, 1, 1, 0],
+                        transition: {
+                          duration: 6,
+                          times: [0, 0.3333, 0.6666, 1],
+                          ease: "easeInOut",
+                        },
+                      },
+                    };
 
-                  return (
-                    <div
-                      key={deskNo}
-                      className="relative w-[130px] h-[140px] group"
-                    >
-                      {/* --- LAPISAN TENGAH: AVATAR RPG --- */}
-                      <AnimatePresence>
-                        {isSitting && activeTab === "live" && liveStudent && (
-                          <motion.div
-                            variants={avatarVariants}
-                            initial="hidden"
-                            animate={isFinished ? "finished" : "working"}
-                            className="absolute top-0 w-full h-[85px] flex items-end justify-center pt-2 z-[100] pointer-events-none"
-                          >
-                            <CustomAvatar
-                              gender={assignedData.gender}
-                              isDisqualified={isDisqualified}
-                            />
-                          </motion.div>
-                        )}
-
-                        {isSitting &&
-                          (!liveStudent || activeTab === "builder") && (
-                            <div
-                              className={`absolute top-0 w-full h-[85px] flex items-end justify-center pt-2 z-[100] pointer-events-none ${isOffline ? "grayscale opacity-60 brightness-75" : ""}`}
+                    return (
+                      <div
+                        key={deskNo}
+                        className="relative w-[130px] h-[140px] group"
+                      >
+                        <AnimatePresence>
+                          {isSitting && activeTab === "live" && liveStudent && (
+                            <motion.div
+                              variants={avatarVariants}
+                              initial="hidden"
+                              animate={isFinished ? "finished" : "working"}
+                              className="absolute top-0 w-full h-[85px] flex items-end justify-center pt-2 z-[100] pointer-events-none"
                             >
                               <CustomAvatar
                                 gender={assignedData.gender}
-                                isDisqualified={false}
+                                isDisqualified={isDisqualified}
                               />
+                            </motion.div>
+                          )}
+                          {isSitting &&
+                            (!liveStudent || activeTab === "builder") && (
+                              <div
+                                className={`absolute top-0 w-full h-[85px] flex items-end justify-center pt-2 z-[100] pointer-events-none ${isOffline ? "grayscale opacity-60 brightness-75" : ""}`}
+                              >
+                                <CustomAvatar
+                                  gender={assignedData.gender}
+                                  isDisqualified={false}
+                                />
+                              </div>
+                            )}
+                        </AnimatePresence>
+
+                        <div
+                          onClick={() => {
+                            if (activeTab === "builder") {
+                              setSelectedDesk(deskNo);
+                              setIsModalSiswaOpen(true);
+                            }
+                          }}
+                          className={`absolute inset-0 rounded-2xl border-4 transition-all ${deskClass} ${activeTab === "builder" && !assignedData ? "hover:border-[#8b5a2b] hover:bg-amber-100 border-dashed cursor-pointer" : "cursor-pointer"}`}
+                        ></div>
+
+                        <div className="absolute bottom-[4px] left-[4px] right-[4px] px-2 z-[110] flex flex-col items-center bg-white pt-1 pb-1.5 border-t-2 border-black/20 rounded-b-[10px] pointer-events-none">
+                          {isSitting ? (
+                            <>
+                              <p className="text-[10px] font-black text-slate-800 truncate w-full text-center leading-tight uppercase">
+                                {assignedData.nama}
+                              </p>
+                              {activeTab === "live" ? (
+                                <div className="w-full mt-0.5 flex flex-col gap-1">
+                                  {liveStudent && deskStatus !== "OFFLINE" && (
+                                    <div className="text-[7.5px] font-black text-indigo-500 truncate w-full text-center bg-indigo-50 rounded-full px-1 py-0.5 border border-indigo-200 leading-none">
+                                      {mapelText}
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between items-center text-[8.5px] font-black px-0.5 leading-none mt-0.5">
+                                    <span
+                                      className={
+                                        deskStatus === "TERKUNCI"
+                                          ? "text-orange-600"
+                                          : deskStatus === "ELIMINASI"
+                                            ? "text-red-600"
+                                            : deskStatus === "SELESAI"
+                                              ? "text-emerald-600"
+                                              : deskStatus === "OFFLINE"
+                                                ? "text-slate-400"
+                                                : "text-indigo-600"
+                                      }
+                                    >
+                                      {deskStatus}
+                                    </span>
+                                    <span className="text-slate-500 font-bold">
+                                      {progressText}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden shadow-inner">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-500 ${deskStatus === "TERKUNCI" ? "bg-orange-500" : deskStatus === "ELIMINASI" ? "bg-red-600" : deskStatus === "SELESAI" ? "bg-emerald-500" : deskStatus === "OFFLINE" ? "bg-transparent" : "bg-indigo-500"}`}
+                                      style={{ width: `${progressPercent}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-[9px] font-black mt-0.5 tracking-widest text-indigo-600">
+                                  TERISI
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <div className="py-1 flex items-center justify-center">
+                              <span
+                                className={`text-[10px] font-black ${activeTab === "builder" ? "text-amber-700" : "text-slate-400"}`}
+                              >
+                                MEJA {deskNo}
+                              </span>
                             </div>
                           )}
-                      </AnimatePresence>
+                        </div>
 
-                      {/* --- LAPISAN BAWAH: WADAH MEJA KAYU --- */}
-                      <div
-                        onClick={() => {
-                          if (activeTab === "builder") {
-                            setSelectedDesk(deskNo);
-                            setIsModalSiswaOpen(true);
-                          }
-                        }}
-                        className={`absolute inset-0 rounded-2xl border-4 transition-all ${deskClass} ${activeTab === "builder" && !assignedData ? "hover:border-[#8b5a2b] hover:bg-amber-100 border-dashed cursor-pointer" : "cursor-pointer"}`}
-                      ></div>
-
-                      {/* --- LAPISAN ATAS: LABEL KERTAS PUTIH (Selalu menindih Avatar) --- */}
-                      <div className="absolute bottom-[4px] left-[4px] right-[4px] px-2 z-[110] flex flex-col items-center bg-white pt-1 pb-1.5 border-t-2 border-black/20 rounded-b-[10px] pointer-events-none">
-                        {isSitting ? (
-                          <>
-                            <p className="text-[10px] font-black text-slate-800 truncate w-full text-center leading-tight uppercase">
-                              {assignedData.nama}
-                            </p>
-
-                            {activeTab === "live" ? (
-                              <div className="w-full mt-0.5 flex flex-col gap-1">
-                                {liveStudent && deskStatus !== "OFFLINE" && (
-                                  <div className="text-[7.5px] font-black text-indigo-500 truncate w-full text-center bg-indigo-50 rounded-full px-1 py-0.5 border border-indigo-200 leading-none">
-                                    {mapelText}
-                                  </div>
-                                )}
-
-                                <div className="flex justify-between items-center text-[8.5px] font-black px-0.5 leading-none mt-0.5">
-                                  <span
-                                    className={
-                                      deskStatus === "TERKUNCI"
-                                        ? "text-orange-600"
-                                        : deskStatus === "ELIMINASI"
-                                          ? "text-red-600"
-                                          : deskStatus === "SELESAI"
-                                            ? "text-emerald-600"
-                                            : deskStatus === "OFFLINE"
-                                              ? "text-slate-400"
-                                              : "text-indigo-600"
-                                    }
-                                  >
-                                    {deskStatus}
-                                  </span>
-                                  <span className="text-slate-500 font-bold">
-                                    {progressText}
-                                  </span>
-                                </div>
-
-                                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden shadow-inner">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-500 ${deskStatus === "TERKUNCI" ? "bg-orange-500" : deskStatus === "ELIMINASI" ? "bg-red-600" : deskStatus === "SELESAI" ? "bg-emerald-500" : deskStatus === "OFFLINE" ? "bg-transparent" : "bg-indigo-500"}`}
-                                    style={{ width: `${progressPercent}%` }}
-                                  ></div>
-                                </div>
-                              </div>
-                            ) : (
-                              <p className="text-[9px] font-black mt-0.5 tracking-widest text-indigo-600">
-                                TERISI
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <div className="py-1 flex items-center justify-center">
-                            <span
-                              className={`text-[10px] font-black ${activeTab === "builder" ? "text-amber-700" : "text-slate-400"}`}
-                            >
-                              MEJA {deskNo}
-                            </span>
-                          </div>
+                        {activeTab === "builder" && isSitting && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveStudent(deskNo);
+                            }}
+                            className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-[120] hover:bg-red-600 shadow-lg"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         )}
+
+                        {activeTab === "live" &&
+                          isSitting &&
+                          deskStatus === "TERKUNCI" && (
+                            <div className="absolute -top-4 -right-4 bg-orange-500 text-white p-1.5 rounded-full shadow-lg z-[120] animate-bounce">
+                              <ShieldAlert size={18} />
+                            </div>
+                          )}
+                        {activeTab === "live" &&
+                          isSitting &&
+                          deskStatus === "ELIMINASI" && (
+                            <div className="absolute -top-4 -right-4 bg-red-600 text-white p-1.5 rounded-full shadow-lg z-[120] animate-bounce">
+                              <Skull size={18} />
+                            </div>
+                          )}
+                        {activeTab === "live" &&
+                          isSitting &&
+                          deskStatus === "SELESAI" && (
+                            <div className="absolute -top-3 -right-3 bg-emerald-500 text-white p-1 rounded-full shadow-md z-[120]">
+                              <CheckCircle2 size={16} />
+                            </div>
+                          )}
                       </div>
-
-                      {/* --- LAPISAN TOMBOL (BUILDER) --- */}
-                      {activeTab === "builder" && isSitting && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveStudent(deskNo);
-                          }}
-                          className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity z-[120] hover:bg-red-600 shadow-lg"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-
-                      {/* --- LAPISAN ICON STATUS --- */}
-                      {activeTab === "live" &&
-                        isSitting &&
-                        deskStatus === "TERKUNCI" && (
-                          <div className="absolute -top-4 -right-4 bg-orange-500 text-white p-1.5 rounded-full shadow-lg z-[120] animate-bounce">
-                            <ShieldAlert size={18} />
-                          </div>
-                        )}
-                      {activeTab === "live" &&
-                        isSitting &&
-                        deskStatus === "ELIMINASI" && (
-                          <div className="absolute -top-4 -right-4 bg-red-600 text-white p-1.5 rounded-full shadow-lg z-[120] animate-bounce">
-                            <Skull size={18} />
-                          </div>
-                        )}
-                      {activeTab === "live" &&
-                        isSitting &&
-                        deskStatus === "SELESAI" && (
-                          <div className="absolute -top-3 -right-3 bg-emerald-500 text-white p-1 rounded-full shadow-md z-[120]">
-                            <CheckCircle2 size={16} />
-                          </div>
-                        )}
-                    </div>
-                  );
-                },
-              )}
+                    );
+                  },
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -904,11 +997,7 @@ const UjianDashboard = () => {
             <button
               key={room}
               onClick={() => setActiveRoom(room)}
-              className={`px-5 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex items-center gap-2 border shadow-sm ${
-                activeRoom === room
-                  ? "bg-slate-800 text-white border-slate-900"
-                  : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-              }`}
+              className={`px-5 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex items-center gap-2 border shadow-sm ${activeRoom === room ? "bg-slate-800 text-white border-slate-900" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
             >
               <Map size={14} /> {room}
             </button>
@@ -1002,7 +1091,7 @@ const UjianDashboard = () => {
 
                   <button
                     onClick={() => handleDeleteRoom(activeRoom)}
-                    className="h-10 px-5 flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-xl font-bold text-xs whitespace-nowrap ml-auto"
+                    className="h-10 px-5 flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-xl font-bold text-xs whitespace-nowrap ml-auto transition-colors"
                   >
                     <Trash2 size={16} />{" "}
                     <span className="hidden sm:inline">Hapus Denah Ini</span>
@@ -1024,11 +1113,11 @@ const UjianDashboard = () => {
             >
               <div className="bg-orange-500 text-white p-3 flex justify-between items-center">
                 <div className="flex items-center gap-2 font-black text-sm">
-                  <AlertTriangle size={18} className="animate-pulse" />
-                  PERINGATAN PELANGGARAN
+                  <AlertTriangle size={18} className="animate-pulse" />{" "}
+                  PELANGGARAN UJIAN
                 </div>
                 <span className="bg-white text-orange-600 px-2 py-0.5 rounded-full text-xs font-bold">
-                  {lockedStudents.length} Siswa
+                  {lockedStudents.length} Terkunci
                 </span>
               </div>
               <div className="max-h-60 overflow-y-auto p-2 bg-orange-50 custom-scrollbar">
@@ -1056,6 +1145,7 @@ const UjianDashboard = () => {
         </AnimatePresence>
       </div>
 
+      {/* MODAL PILIH SISWA UNTUK KURSI */}
       <AnimatePresence>
         {isModalSiswaOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -1142,6 +1232,95 @@ const UjianDashboard = () => {
                       </button>
                     );
                   })}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL CUSTOM ALERT PREMIUM */}
+      <AnimatePresence>
+        {customAlert.isOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-white rounded-[2rem] shadow-2xl flex flex-col items-center p-6 md:p-8 text-center"
+            >
+              <div
+                className={`p-4 md:p-5 rounded-[1.5rem] mb-4 md:mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500 shadow-inner" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500 shadow-inner" : customAlert.type === "prompt" ? "bg-indigo-50 text-indigo-500 shadow-inner" : "bg-emerald-50 text-emerald-500 shadow-inner"}`}
+              >
+                {customAlert.type === "danger" ||
+                customAlert.type === "confirm" ? (
+                  <AlertTriangle size={36} className="md:w-10 md:h-10" />
+                ) : customAlert.type === "success" ? (
+                  <CheckCircle2 size={36} className="md:w-10 md:h-10" />
+                ) : customAlert.type === "prompt" ? (
+                  <Plus size={36} className="md:w-10 md:h-10" />
+                ) : (
+                  <Info size={36} className="md:w-10 md:h-10" />
+                )}
+              </div>
+              <h3 className="text-xl md:text-2xl font-bold text-slate-800 mb-2 leading-tight">
+                {customAlert.title}
+              </h3>
+              <p className="text-sm text-slate-500 mb-6 font-medium px-2 leading-relaxed">
+                {customAlert.message}
+              </p>
+
+              {customAlert.type === "prompt" && (
+                <input
+                  type="text"
+                  autoFocus
+                  className="w-full mb-6 p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 text-center outline-none focus:border-indigo-500 transition-colors"
+                  placeholder="Ketik di sini..."
+                  value={customAlert.inputValue}
+                  onChange={(e) =>
+                    setCustomAlert({
+                      ...customAlert,
+                      inputValue: e.target.value,
+                    })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      customAlert.onConfirm
+                        ? customAlert.onConfirm(customAlert.inputValue)
+                        : closeAlert();
+                    }
+                  }}
+                />
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                {customAlert.type === "confirm" ||
+                customAlert.type === "prompt" ? (
+                  <>
+                    <button
+                      onClick={closeAlert}
+                      className="w-full py-3.5 px-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm order-2 sm:order-1"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={() =>
+                        customAlert.onConfirm
+                          ? customAlert.onConfirm(customAlert.inputValue)
+                          : closeAlert()
+                      }
+                      className={`w-full py-3.5 px-4 rounded-xl font-bold text-white shadow-lg transition-all text-sm order-1 sm:order-2 ${customAlert.type === "confirm" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/30"}`}
+                    >
+                      {customAlert.type === "prompt" ? "Simpan" : "Ya, Hapus"}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={closeAlert}
+                    className={`w-full py-3.5 px-4 rounded-xl font-bold text-white shadow-lg transition-all text-sm ${customAlert.type === "danger" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"}`}
+                  >
+                    Mengerti
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
