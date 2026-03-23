@@ -2284,7 +2284,7 @@ const GuruDashboard = () => {
                 </div>
                 <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
                   Unduh /<br />
-                  Cetak
+                  Nilai
                 </span>
               </button>
 
