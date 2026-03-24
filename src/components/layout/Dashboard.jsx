@@ -32,7 +32,7 @@ const Dashboard = ({ children, menu = [], active, setActive }) => {
             <div className="w-14 h-14 flex items-center justify-center shrink-0">
               <img
                 src={logoMasda}
-                alt="Logo MASDA PRO"
+                alt="Logo TADBIRA"
                 className="w-full h-full object-contain drop-shadow-md"
               />
             </div>

@@ -169,7 +169,7 @@ const SiswaDashboard = () => {
 
   // STATE NAMA UJIAN DINAMIS DARI ADMIN
   const [appSettings, setAppSettings] = useState({
-    title: "MASDA PRO",
+    title: "TADBIRA",
     desc: "Online Based Test 2026",
   });
 
@@ -282,7 +282,7 @@ const SiswaDashboard = () => {
             const descConf = settingsRes.find((s) => s.kunci === "APP_DESC");
             if (titleConf || descConf) {
               setAppSettings({
-                title: titleConf ? titleConf.nilai : "MASDA PRO",
+                title: titleConf ? titleConf.nilai : "TADBIRA",
                 desc: descConf ? descConf.nilai : "Online Based Test 2026",
               });
             }
@@ -667,7 +667,7 @@ const SiswaDashboard = () => {
           <br />
           <br />
           Silakan tutup browser ini dan buka melalui{" "}
-          <strong>Aplikasi Resmi MASDA PRO</strong> yang ada di HP Anda.
+          <strong>Aplikasi Resmi TADBIRA</strong> yang ada di HP Anda.
         </p>
       </div>
     );
@@ -689,7 +689,7 @@ const SiswaDashboard = () => {
           <br />
           <br />
           Silakan tutup browser ini dan buka melalui{" "}
-          <strong>Aplikasi Resmi MASDA PRO</strong> yang ada di HP Anda.
+          <strong>Aplikasi Resmi TADBIRA</strong> yang ada di HP Anda.
         </p>
       </div>
     );

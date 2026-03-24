@@ -11,7 +11,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { AuthContext } from "../context/AuthContext";
-import logoMasda from "../assets/logo.svg";
+import logoTADBIRA from "../assets/logo.svg";
 
 const LoginPage = () => {
   const { login } = useContext(AuthContext);
@@ -61,8 +61,8 @@ const LoginPage = () => {
           {/* CONTAINER LOGO DENGAN EFEK SHIMMER (Tetap Dipertahankan) */}
           <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mb-4 sm:mb-6 transform hover:scale-105 transition-transform duration-500 relative overflow-hidden rounded-2xl group">
             <img
-              src={logoMasda}
-              alt="Logo MASDA PRO"
+              src={logoTADBIRA}
+              alt="Logo TADBIRA"
               className="w-full h-full object-contain drop-shadow-xl relative z-10"
             />
             <motion.div

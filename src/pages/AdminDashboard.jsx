@@ -909,7 +909,7 @@ const AdminDashboard = () => {
             <div className="flex justify-between items-center relative z-10">
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold mb-0.5">
-                  MASDA PRO
+                  TADBIRA
                 </p>
                 <h2 className="text-xl font-black leading-tight">
                   Administrator
