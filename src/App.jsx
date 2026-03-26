@@ -1,5 +1,6 @@
 // src/App.jsx
 import React, { useContext } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 
 // Import halaman-halaman yang sudah kita pisahkan
@@ -9,33 +10,70 @@ import GuruDashboard from "./pages/GuruDashboard";
 import SiswaDashboard from "./pages/SiswaDashboard";
 import UjianDashboard from "./pages/UjianDashboard";
 
+// --- KOMPONEN PELINDUNG RUTE (PROTECTED ROUTE) ---
+// Memastikan hanya role tertentu yang bisa masuk ke sebuah halaman
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user } = useContext(AuthContext);
+
+  // 1. Jika belum login (user tidak ada), tendang ke halaman login
+  if (!user) return <Navigate to="/" replace />;
+
+  // 2. Jika role tidak diizinkan masuk ke halaman ini, tendang ke dashboard utama
+  if (!allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
+
+  // 3. Jika aman, persilakan masuk
+  return children;
+};
+
 // --- ROUTER UTAMA ---
 const AppRouter = () => {
   const { user } = useContext(AuthContext);
 
-  // 1. Jika belum login (user tidak ada), arahkan ke halaman Login
-  if (!user) return <LoginPage />;
-
-  // 2. PINTU RAHASIA: Arahkan ke UjianDashboard jika URL-nya cocok
-  // Hanya Admin dan Guru yang diizinkan masuk ke halaman ini
-  if (window.location.pathname === "/ujian-dashboard") {
-    if (user.role === "admin" || user.role === "guru") {
-      return <UjianDashboard />;
-    }
+  // Jika belum login, kunci semua akses HANYA ke halaman Login
+  if (!user) {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="*" element={<LoginPage />} />
+        </Routes>
+      </BrowserRouter>
+    );
   }
 
-  // 3. Jika URL biasa, arahkan ke dashboard bawaan sesuai role-nya
-  switch (user.role) {
-    case "admin":
-      return <AdminDashboard />;
-    case "guru":
-      return <GuruDashboard />;
-    case "siswa":
-      return <SiswaDashboard />;
-    default:
-      // Fallback jika role tidak dikenali
-      return <LoginPage />;
-  }
+  // Jika sudah login, atur jalur halaman menggunakan sistem React Router
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Rute Utama (Dashboard Default) berdasarkan role */}
+        <Route
+          path="/"
+          element={
+            user.role === "admin" ? (
+              <AdminDashboard />
+            ) : user.role === "guru" ? (
+              <GuruDashboard />
+            ) : (
+              <SiswaDashboard />
+            )
+          }
+        />
+
+        {/* PINTU RAHASIA: Rute Khusus UjianDashboard */}
+        {/* Dilindungi oleh ProtectedRoute, hanya Admin & Guru yang bisa lewat */}
+        <Route
+          path="/ujian-dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "guru"]}>
+              <UjianDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Fallback: Jika user iseng mengetik URL ngawur, kembalikan ke dashboard */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
 };
 
 export default function App() {
