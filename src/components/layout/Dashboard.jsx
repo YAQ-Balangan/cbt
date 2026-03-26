@@ -38,7 +38,7 @@ const Dashboard = ({ children, menu = [], active, setActive }) => {
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-800 tracking-tight">
-                M-HANIF
+                TADBIRA
               </h2>
               <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest leading-none mt-1.5">
                 Version 1.0

@@ -78,10 +78,10 @@ const LoginPage = () => {
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">
-            M-HANIF
+            TADBIRA
           </h1>
           <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1.5 sm:mt-2">
-            "Manajemen Hasil Asesmen Nilai dan Instrumen Final"
+            "Tata Kelola Digital Berbasis Akurasi"
           </p>
           <p className="text-[10px] sm:text-[11px] font-bold text-amber-500 uppercase tracking-widest mt-1.5 sm:mt-2">
             Online Based Test 2026
