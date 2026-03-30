@@ -1,4 +1,3 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useState, useEffect } from "react";
 import { api, APP_NAME } from "../api/api";
 
@@ -9,7 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // UBAH DI SINI: Gunakan sessionStorage
+    // Mengecek sesi yang tersimpan saat aplikasi pertama kali dimuat
     const saved = sessionStorage.getItem(`${APP_NAME}_session`);
     if (saved) {
       try {
@@ -21,16 +20,24 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const loginAction = async (u, p) => {
-    const userData = await api.login(u, p);
+  /**
+   * Fungsi Login diperbarui untuk menerima kodeSekolah
+   * @param {string} u - Username
+   * @param {string} p - Password
+   * @param {string} kodeSekolah - Kode unik sekolah dari URL
+   */
+  const loginAction = async (u, p, kodeSekolah) => {
+    // Mengirimkan ketiga parameter ke API Supabase
+    const userData = await api.login(u, p, kodeSekolah);
+
     setUser(userData);
-    // UBAH DI SINI: Gunakan sessionStorage
+
+    // Menyimpan data user (termasuk kode_sekolah) ke sessionStorage
     sessionStorage.setItem(`${APP_NAME}_session`, JSON.stringify(userData));
   };
 
   const logoutAction = () => {
     setUser(null);
-    // UBAH DI SINI: Gunakan sessionStorage
     sessionStorage.removeItem(`${APP_NAME}_session`);
   };
 
