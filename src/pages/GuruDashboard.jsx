@@ -275,7 +275,7 @@ const PremiumMultiSelect = ({
 // ==========================================
 // GENERATOR OPSI KELAS OTOMATIS
 // ==========================================
-const TINGKAT_SEKOLAH = ["X", "XI", "XII"];
+const TINGKAT_SEKOLAH = ["VII", "VIII", "IX", "X", "XI", "XII"];
 const JURUSAN_SEKOLAH = ["MIPA", "IPS"];
 const MAKSIMAL_ROMBEL = 2;
 
@@ -297,7 +297,10 @@ TINGKAT_SEKOLAH.forEach((t) => {
 
 OPSI_KELAS_LENGKAP.push({ label: "KATEGORI JURUSAN GLOBAL", isLabel: true });
 JURUSAN_SEKOLAH.forEach((j) => {
-  OPSI_KELAS_LENGKAP.push({ label: `Semua ${j} (X, XI, XII)`, value: j });
+  OPSI_KELAS_LENGKAP.push({
+    label: `Semua ${j} (VII, VIII, IX, X, XI, XII)`,
+    value: j,
+  });
 });
 
 OPSI_KELAS_LENGKAP.push({ label: "KATEGORI TINGKAT & JURUSAN", isLabel: true });
@@ -1126,7 +1129,7 @@ const GuruDashboard = () => {
       let isKunci = /^\s*(?:Jawaban|Kunci)\s*:/i.test(lineTrimmed);
       let isNumbered = /^\s*\d+[\.\)]\s/.test(lineTrimmed);
       let isWacanaMarker =
-        /^\s*(perhatikan|cermatilah|bacalah|amatilah|wacana|teks|kutipan|dialog)/i.test(
+        /^\s*(perhatikan|cermatilah|bacalah|amatilah|wacana|teks|kutipan|dialog|nomor|-)/i.test(
           lineTrimmed,
         );
 
@@ -1226,16 +1229,25 @@ const GuruDashboard = () => {
       // Regex Hitung Wacana yang Jauh Lebih Kuat (Menutup Celah 2)
       const hitungTargetWacana = (teks) => {
         let remaining = 1;
+
+        // 1. Deteksi Range (Contoh: "soal nomor 1-3" atau "pertanyaan 5 sampai 10")
+        // Menambahkan (?:soal|pertanyaan|butir) agar lebih universal
         const rangeMatch = teks.match(
-          /soal\s+(?:nomor\s+)?(\d+)\s*(?:-|s\.?\/d\.?|sampai|s\/d)\s*(\d+)/i,
+          /(?:soal|pertanyaan|butir)\s+(?:nomor\s+)?(\d+)\s*(?:-|s\.?\/d\.?|sampai|s\/d)\s*(\d+)/i,
         );
-        const andMatch = teks.match(/soal\s+(?:nomor\s+)?(\d+)\s+dan\s+(\d+)/i);
-        // Menangkap "untuk 3 soal", "untuk menjawab 5 soal", "untuk sebanyak 2 soal"
+
+        // 2. Deteksi Dua Soal (Contoh: "pertanyaan nomor 1 dan 2")
+        const andMatch = teks.match(
+          /(?:soal|pertanyaan|butir)\s+(?:nomor\s+)?(\d+)\s+dan\s+(\d+)/i,
+        );
+
+        // 3. Deteksi Jumlah Langsung (Contoh: "untuk menjawab 3 pertanyaan")
         const countMatch = teks.match(
-          /untuk\s+(?:menjawab\s+)?(?:sebanyak\s+)?(\d+)\s+soal/i,
+          /untuk\s+(?:menjawab\s+)?(?:sebanyak\s+)?(\d+)\s+(?:soal|pertanyaan|butir)/i,
         );
 
         if (rangeMatch) {
+          // Menghitung selisih angka (misal 1-3 = 3 soal)
           remaining = Math.max(
             1,
             parseInt(rangeMatch[2]) - parseInt(rangeMatch[1]) + 1,
@@ -1245,6 +1257,7 @@ const GuruDashboard = () => {
         } else if (countMatch) {
           remaining = Math.max(1, parseInt(countMatch[1]));
         }
+
         return remaining;
       };
 
@@ -1288,14 +1301,18 @@ const GuruDashboard = () => {
       if (sisaJatahWacana > 0) sisaJatahWacana--;
 
       if (wacana) {
+        // Update Regex agar mendukung kata 'soal', 'pertanyaan', atau 'butir'
         wacana = wacana.replace(
-          /(untuk\s+(?:menjawab\s+)?soal\s+(?:nomor\s+)?\d+\s*(?:-|s\.?\/d\.?|sampai|s\/d|dan)\s*\d+)/gi,
+          /(untuk\s+(?:menjawab\s+)?(?:soal|pertanyaan|butir)\s+(?:nomor\s+)?\d+\s*(?:-|s\.?\/d\.?|sampai|s\/d|dan)\s*\d+)/gi,
           "untuk menjawab soal di bawah ini",
         );
+
+        // Membersihkan variasi kalimat "Wacana untuk..."
         wacana = wacana.replace(
-          /wacana\s+untuk\s+(?:menjawab\s+)?\d+\s+soal\s+di\s+bawah\s+ini:?/gi,
+          /(?:wacana|teks)\s+untuk\s+(?:menjawab\s+)?\d+\s+(?:soal|pertanyaan|butir)\s+di\s+bawah\s+ini:?/gi,
           "",
         );
+
         wacana = wacana.trim();
       }
 

@@ -279,7 +279,7 @@ const PremiumMultiSelect = ({
 // ==========================================
 // GENERATOR OPSI KELAS OTOMATIS
 // ==========================================
-const TINGKAT_SEKOLAH = ["X", "XI", "XII"];
+const TINGKAT_SEKOLAH = ["VII", "VIII", "IX", "X", "XI", "XII"];
 const JURUSAN_SEKOLAH = ["MIPA", "IPS"];
 const MAKSIMAL_ROMBEL = 2;
 
@@ -301,7 +301,10 @@ TINGKAT_SEKOLAH.forEach((t) => {
 
 OPSI_KELAS_LENGKAP.push({ label: "KATEGORI JURUSAN GLOBAL", isLabel: true });
 JURUSAN_SEKOLAH.forEach((j) => {
-  OPSI_KELAS_LENGKAP.push({ label: `Semua ${j} (X, XI, XII)`, value: j });
+  OPSI_KELAS_LENGKAP.push({
+    label: `Semua ${j} (VII, VIII, IX, X, XI, XII)`,
+    value: j,
+  });
 });
 
 OPSI_KELAS_LENGKAP.push({ label: "KATEGORI TINGKAT & JURUSAN", isLabel: true });
@@ -335,10 +338,18 @@ const TAB_CONFIG = {
   siswa: {
     sheet: "Users",
     title: "Database User",
-    subtitle: "Manajemen Akses Siswa & Guru",
+    subtitle: "Manajemen Akses Lengkap Siswa & Guru",
     columns: [
       { key: "id", label: "ID", isNumber: true, sortable: true },
       { key: "nama", label: "Nama Lengkap", sortable: true },
+      {
+        key: "jenis_kelamin",
+        label: "Jenis Kelamin",
+        isSelect: true,
+        options: ["Laki-Laki", "Perempuan"],
+        sortable: true,
+        filterable: true,
+      },
       { key: "username", label: "Username", sortable: true },
       { key: "password", label: "Password" },
       {
@@ -400,6 +411,14 @@ const TAB_CONFIG = {
     columns: [
       { key: "id", label: "ID", isNumber: true, sortable: true },
       { key: "nama_mapel", label: "Nama Mapel", sortable: true },
+      {
+        key: "kelas",
+        label: "Kelas",
+        isCombobox: true,
+        options: FLAT_OPSI_KELAS,
+        sortable: true,
+        filterable: true,
+      },
       {
         key: "guru_pengampu",
         label: "Guru Pengampu",
@@ -640,13 +659,23 @@ const AdminDashboard = () => {
   const handleAddNewRow = () => {
     const maxId =
       data.length > 0 ? Math.max(...data.map((d) => parseInt(d.id) || 0)) : 0;
+
+    // Inisialisasi baris baru dengan cerdas berdasarkan tipe kolom
     const newRow = { id: maxId + 1, isNew: true };
 
     currentConfig.columns.forEach((col) => {
-      if (col.key !== "id") newRow[col.key] = "";
+      if (col.key !== "id") {
+        // Jika kolom adalah angka, isi dengan 0, jika tidak string kosong
+        newRow[col.key] = col.isNumber ? 0 : "";
+      }
     });
+
     if (tab === "siswa") newRow.role = "siswa";
-    if (tab === "jadwal") newRow.status = "Draft";
+    if (tab === "jadwal") {
+      newRow.status = "Draft";
+      newRow.durasi_menit = 60; // Default durasi agar tidak kosong
+      newRow.tanggal = new Date().toISOString().split("T")[0]; // Default tanggal hari ini
+    }
 
     setAllData((prev) => ({
       ...prev,
@@ -654,44 +683,55 @@ const AdminDashboard = () => {
     }));
   };
 
-  const handleSaveCell = async (oldId, key, newValue) => {
-    const item = data.find((d) => d.id === oldId);
+  const handleSaveCell = async (originalId, key, newValue) => {
+    const item = data.find((d) => d.id === originalId);
     if (!item) return;
 
     let parsedValue = newValue;
-    if (
-      currentConfig.columns.find((c) => c.key === key)?.isNumber ||
-      key === "id"
-    ) {
+    const column = currentConfig.columns.find((c) => c.key === key);
+
+    // 1. Parsing Angka secara ketat (Mencegah string kosong masuk ke kolom angka)
+    if (column?.isNumber || key === "id") {
       parsedValue =
         key === "id" ? parseInt(newValue) || 0 : parseFloat(newValue) || 0;
     }
 
-    if (key === "id" && parsedValue !== oldId) {
+    // 2. Validasi Duplikat ID
+    if (key === "id" && parsedValue !== originalId) {
       const isDuplicate = data.some((d) => d.id === parsedValue);
       if (isDuplicate) {
         return showAlert(
           "warning",
           "ID Duplikat",
-          `ID #${parsedValue} sudah digunakan oleh data lain. Mohon gunakan ID berbeda.`,
+          `ID #${parsedValue} sudah digunakan.`,
         );
       }
     }
 
     const updatedItem = { ...item, [key]: parsedValue };
 
+    // 3. Update State Lokal (Optimistic UI)
     setAllData((prev) => ({
       ...prev,
-      [tab]: prev[tab].map((d) => (d.id === oldId ? updatedItem : d)),
+      [tab]: prev[tab].map((d) => (d.id === originalId ? updatedItem : d)),
     }));
 
     setIsSyncing(true);
     try {
-      if (updatedItem.isNew) {
-        const payload = { ...updatedItem };
-        delete payload.isNew;
-        await api.create(currentConfig.sheet, payload);
+      // 4. Bersihkan payload dari properti internal (isNew)
+      const payload = { ...updatedItem };
+      delete payload.isNew;
 
+      // Pastikan kolom angka lainnya di payload tidak berupa string kosong
+      currentConfig.columns.forEach((col) => {
+        if (col.isNumber && typeof payload[col.key] === "string") {
+          payload[col.key] = parseFloat(payload[col.key]) || 0;
+        }
+      });
+
+      if (item.isNew) {
+        await api.create(currentConfig.sheet, payload);
+        // Setelah sukses create, hilangkan tanda isNew
         setAllData((prev) => ({
           ...prev,
           [tab]: prev[tab].map((d) =>
@@ -699,20 +739,13 @@ const AdminDashboard = () => {
           ),
         }));
       } else {
-        const payload = { ...updatedItem };
-        delete payload.isNew;
-        await api.update(currentConfig.sheet, oldId, payload);
+        // Gunakan originalId untuk mencari data, kirim payload untuk update
+        await api.update(currentConfig.sheet, originalId, payload);
       }
-    } catch (err) {
-      setAllData((prev) => ({
-        ...prev,
-        [tab]: prev[tab].map((d) => (d.id === updatedItem.id ? item : d)),
-      }));
-      showAlert(
-        "danger",
-        "Gagal Auto-Save",
-        `Sistem gagal menyimpan: ${err.message}`,
-      );
+    } catch (error) {
+      console.error("Autosave Error:", error);
+      refreshCurrentTab(true); // Rollback data dari server jika gagal
+      showAlert("danger", "Gagal Menyimpan", error.message);
     } finally {
       setIsSyncing(false);
     }
@@ -896,13 +929,10 @@ const AdminDashboard = () => {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}</style>
-
-      {/* STRUKTUR UTAMA YANG TERKUNCI UKURANNYA (100vh) */}
-      <div className="flex flex-col gap-4 md:gap-5 w-full max-w-[100vw] md:max-w-7xl mx-auto h-[calc(100vh-90px)] md:h-[calc(100vh-125px)] overflow-hidden">
-        {/* ============================================================== */}
-        {/* BAGIAN ATAS MOBILE (SHRINK-0) */}
-        {/* ============================================================== */}
-        <div className="md:hidden flex flex-col gap-4 shrink-0 px-2 pt-2">
+      {/* BISA SCROLL */}
+      <div className="space-y-6 max-w-7xl mx-auto pb-24 relative">
+        {/* BAGIAN ATAS MOBILE */}
+        <div className="md:hidden flex flex-col gap-4 px-2 pt-2">
           {/* Header Mobile */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
