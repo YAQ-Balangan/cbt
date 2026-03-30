@@ -1,5 +1,6 @@
 // src/pages/LoginPage.jsx
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   User,
@@ -11,15 +12,34 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { AuthContext } from "../context/AuthContext";
-import logoTADBIRA from "../assets/logo.svg";
+import { api } from "../api/api";
 
 const LoginPage = () => {
+  const { kode_sekolah } = useParams(); // Mengambil kode dari URL
   const { login } = useContext(AuthContext);
+
+  const [instansi, setInstansi] = useState(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Ambil Logo dan Nama Sekolah saat halaman dibuka
+  useEffect(() => {
+    const loadInfo = async () => {
+      try {
+        const data = await api.getInstitusi(kode_sekolah);
+        setInstansi(data);
+      } catch (err) {
+        setError("Sekolah tidak terdaftar.");
+      } finally {
+        setFetching(false);
+      }
+    };
+    loadInfo();
+  }, [kode_sekolah]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,87 +47,64 @@ const LoginPage = () => {
     setError("");
 
     try {
-      await login(username, password);
+      // Login sekarang mengirimkan username, password, DAN kode sekolah
+      await login(username, password, kode_sekolah);
     } catch (err) {
-      setError("Username atau password tidak valid.");
+      setError(err.message || "Login gagal.");
     } finally {
       setLoading(false);
     }
   };
 
+  if (fetching)
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Memuat Aplikasi...
+      </div>
+    );
+
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">
-      {/* Latar Belakang Animasi (Tetap Dipertahankan) */}
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <motion.div
-        animate={{
-          scale: [1, 1.2, 1],
-          rotate: [0, 90, 0],
-        }}
-        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-        className="absolute top-[-5%] left-[-10%] w-[15rem] md:w-[30rem] h-[15rem] md:h-[30rem] bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"
-      />
-      <motion.div
-        animate={{
-          scale: [1, 1.2, 1],
-          rotate: [0, -90, 0],
-        }}
-        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-        className="absolute bottom-[-5%] right-[-10%] w-[15rem] md:w-[30rem] h-[15rem] md:h-[30rem] bg-amber-400/20 rounded-full blur-3xl pointer-events-none"
-      />
-
-      {/* FORM CARD (Muncul Instan Tanpa Animasi Meluncur) */}
-      <div className="w-full max-w-[340px] sm:max-w-md bg-white/90 backdrop-blur-xl p-6 sm:p-8 md:p-10 rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl shadow-slate-200/50 relative z-10 border border-white">
-        <div className="flex flex-col items-center mb-6 sm:mb-8 text-center">
-          {/* CONTAINER LOGO DENGAN EFEK SHIMMER (Tetap Dipertahankan) */}
-          <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mb-4 sm:mb-6 transform hover:scale-105 transition-transform duration-500 relative overflow-hidden rounded-2xl group">
-            <img
-              src={logoTADBIRA}
-              alt="Logo TADBIRA"
-              className="w-full h-full object-contain drop-shadow-xl relative z-10"
-            />
-            <motion.div
-              className="absolute top-0 left-[-100%] w-[50%] h-full bg-gradient-to-r from-transparent via-white/60 to-transparent skew-x-[-20deg] z-20 pointer-events-none"
-              animate={{ left: ["-100%", "200%"] }}
-              transition={{
-                duration: 10,
-                ease: "easeInOut",
-                repeat: Infinity,
-                repeatDelay: 2,
-              }}
-            />
-          </div>
-
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">
-            TADBIRA
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8"
+      >
+        <div className="text-center mb-8">
+          {/* LOGO OTOMATIS BERGANTI */}
+          <img
+            src={instansi?.logo_url}
+            alt="Logo"
+            className="h-20 mx-auto mb-4 object-contain"
+          />
+          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
+            {instansi?.nama_aplikasi || "TADBIRA"}
           </h1>
-          <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1.5 sm:mt-2">
-            "Tata Kelola Digital Berbasis Akurasi"
-          </p>
-          <p className="text-[10px] sm:text-[11px] font-bold text-amber-500 uppercase tracking-widest mt-1.5 sm:mt-2">
-            Online Based Test 2026
+          <p className="text-slate-500 text-sm font-medium">
+            {instansi?.nama_sekolah}
           </p>
         </div>
 
         {error && (
-          <div className="mb-5 sm:mb-6 p-3 sm:p-4 bg-red-50 text-red-600 text-xs sm:text-sm font-semibold rounded-xl border border-red-100 text-center flex items-center justify-center gap-2">
-            <AlertTriangle size={16} />
-            {error}
+          <div className="mb-6 bg-red-50 border border-red-100 text-red-600 p-4 rounded-xl flex gap-3 items-center text-sm font-bold">
+            <AlertTriangle size={18} /> {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-[10px] sm:text-[11px] font-semibold uppercase text-slate-500 ml-1 tracking-wider">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">
               Username
             </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <User size={18} />
-              </div>
+              <User
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                size={18}
+              />
               <input
                 type="text"
                 required
-                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm sm:text-base text-slate-800 outline-none focus:bg-white focus:border-emerald-500 transition-colors placeholder:text-slate-400"
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-3.5 pl-12 pr-4 text-sm focus:border-emerald-500 outline-none transition-all"
                 placeholder="Masukkan username..."
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -115,18 +112,19 @@ const LoginPage = () => {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] sm:text-[11px] font-semibold uppercase text-slate-500 ml-1 tracking-wider">
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">
               Password
             </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Lock size={18} />
-              </div>
+              <Lock
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                size={18}
+              />
               <input
                 type={showPassword ? "text" : "password"}
                 required
-                className="w-full pl-10 sm:pl-12 pr-12 py-2.5 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm sm:text-base text-slate-800 outline-none focus:bg-white focus:border-emerald-500 transition-colors placeholder:text-slate-400"
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-3.5 pl-12 pr-12 text-sm focus:border-emerald-500 outline-none transition-all"
                 placeholder="Masukkan password..."
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -134,34 +132,27 @@ const LoginPage = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-emerald-500 transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
 
-          <div className="pt-3 sm:pt-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-emerald-500 text-white font-bold py-3 sm:py-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-md hover:bg-emerald-600 active:scale-95 transition-all uppercase tracking-widest disabled:opacity-70"
-            >
-              {loading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <>
-                  Masuk Aplikasi <ArrowRight size={18} />
-                </>
-              )}
-            </button>
-          </div>
+          <button
+            disabled={loading}
+            className="w-full bg-emerald-500 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-emerald-600 transition-all flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <>
+                MASUK APLIKASI <ArrowRight size={18} />
+              </>
+            )}
+          </button>
         </form>
-
-        <p className="text-center mt-6 sm:mt-8 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-          &copy; 2026 Ahmad Maulana
-        </p>
-      </div>
+      </motion.div>
     </div>
   );
 };
