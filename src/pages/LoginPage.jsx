@@ -32,6 +32,14 @@ const LoginPage = () => {
       try {
         const data = await api.getInstitusi(kode_sekolah);
         setInstansi(data);
+        if (data?.nama_aplikasi) {
+          document.title = data.nama_aplikasi;
+        }
+        // Mengubah Ikon Tab secara otomatis sesuai Logo dari Database
+        const favicon = document.querySelector('link[rel="icon"]');
+        if (favicon && data?.logo_url) {
+          favicon.href = data.logo_url;
+        }
       } catch (err) {
         setError("Sekolah tidak terdaftar. Pastikan link URL benar.");
       } finally {
