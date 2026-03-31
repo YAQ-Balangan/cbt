@@ -997,14 +997,14 @@ const AdminDashboard = () => {
           <div className="flex flex-col gap-2">
             <button
               onClick={() => (window.location.href = "/ujian-dashboard")}
-              className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-indigo-500/30 hover:bg-indigo-700 active:scale-95 transition-all"
+              className="w-full md:w-auto bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-indigo-500/30 hover:bg-indigo-700 active:scale-95 transition-all"
             >
               <MonitorSmartphone size={16} className="animate-pulse" /> Live
               Ujian
             </button>
             <button
               onClick={handleAddNewRow}
-              className="w-full py-3.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
+              className="w-full md:w-auto bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
             >
               <Plus size={16} /> Tambah Baris Kosong
             </button>
