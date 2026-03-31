@@ -342,14 +342,6 @@ const TAB_CONFIG = {
     columns: [
       { key: "id", label: "ID", isNumber: true, sortable: true },
       { key: "nama", label: "Nama Lengkap", sortable: true },
-      {
-        key: "jenis_kelamin",
-        label: "Jenis Kelamin",
-        isSelect: true,
-        options: ["Laki-Laki", "Perempuan"],
-        sortable: true,
-        filterable: true,
-      },
       { key: "username", label: "Username", sortable: true },
       { key: "password", label: "Password" },
       {
@@ -365,6 +357,14 @@ const TAB_CONFIG = {
         label: "Kelas",
         isCombobox: true,
         options: FLAT_OPSI_KELAS,
+        sortable: true,
+        filterable: true,
+      },
+      {
+        key: "jenis_kelamin",
+        label: "Jenis Kelamin",
+        isSelect: true,
+        options: ["Laki-Laki", "Perempuan"],
         sortable: true,
         filterable: true,
       },

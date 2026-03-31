@@ -37,6 +37,7 @@ import {
   Unlock,
   UserX,
   MonitorSmartphone,
+  Bot,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
@@ -273,6 +274,88 @@ const PremiumMultiSelect = ({
 };
 
 // ==========================================
+// KOMPONEN EDITOR GOOGLE FORM STYLE (BARU)
+// ==========================================
+const GoogleFormEditor = ({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  onImageUpload,
+}) => {
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    if (editorRef.current && value !== editorRef.current.innerHTML) {
+      editorRef.current.innerHTML = value || "";
+    }
+  }, []);
+
+  const handleInput = () => {
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
+  };
+  const execCmd = (cmd, e) => {
+    e.preventDefault();
+    document.execCommand(cmd, false, null);
+    handleInput();
+  };
+
+  return (
+    <div
+      className={`border rounded-xl md:rounded-[1.5rem] bg-white overflow-hidden shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+    >
+      <div className="flex flex-wrap gap-1 md:gap-2 p-2 bg-slate-50 border-b border-slate-200">
+        <button
+          type="button"
+          onMouseDown={(e) => execCmd("bold", e)}
+          className="p-1.5 md:p-2 hover:bg-slate-200 rounded text-slate-700 font-bold"
+          title="Bold"
+        >
+          B
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => execCmd("italic", e)}
+          className="p-1.5 md:p-2 hover:bg-slate-200 rounded text-slate-700 italic font-serif"
+          title="Italic"
+        >
+          I
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => execCmd("underline", e)}
+          className="p-1.5 md:p-2 hover:bg-slate-200 rounded text-slate-700 underline"
+          title="Underline"
+        >
+          U
+        </button>
+        <div className="w-px bg-slate-300 mx-1"></div>
+        {onImageUpload && (
+          <label className="cursor-pointer p-1.5 md:p-2 hover:bg-slate-200 rounded text-emerald-600 flex items-center gap-2 text-xs font-bold transition-colors">
+            <ImagePlus size={16} /> Sisipkan Foto
+            <input
+              type="file"
+              className="hidden"
+              accept="image/*"
+              disabled={disabled}
+              onChange={onImageUpload}
+            />
+          </label>
+        )}
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable={!disabled}
+        onInput={handleInput}
+        onBlur={handleInput}
+        className="p-3 md:p-4 min-h-[100px] text-sm md:text-base text-slate-800 outline-none whitespace-pre-wrap empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 cursor-text"
+        data-placeholder={placeholder}
+      />
+    </div>
+  );
+};
+
+// ==========================================
 // GENERATOR OPSI KELAS OTOMATIS
 // ==========================================
 const TINGKAT_SEKOLAH = ["VII", "VIII", "IX", "X", "XI", "XII"];
@@ -465,9 +548,10 @@ const MemoizedSoalCard = React.memo(
           )}
         </div>
 
-        <p className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap">
-          {s.pertanyaan}
-        </p>
+        <div
+          className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap"
+          dangerouslySetInnerHTML={{ __html: s.pertanyaan }}
+        />
 
         {s.link_gambar && (
           <div className="mb-6 max-w-lg rounded-xl border border-slate-200 shadow-sm p-2 bg-slate-50 relative group/img w-max">
@@ -519,10 +603,9 @@ const MemoizedSoalCard = React.memo(
                   {opt}.
                 </span>
                 <span
-                  className={`text-xs md:text-sm font-medium leading-relaxed whitespace-pre-wrap ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
-                >
-                  {s[keyMap]}
-                </span>
+                  className={`text-xs md:text-sm font-medium leading-relaxed whitespace-pre-wrap flex-1 ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
+                  dangerouslySetInnerHTML={{ __html: s[keyMap] }}
+                />
                 {isCorrect && (
                   <CheckCircle2
                     size={16}
@@ -617,6 +700,16 @@ const GuruDashboard = () => {
   const [bulkKelas, setBulkKelas] = useState("");
   const [bulkPoin, setBulkPoin] = useState("2");
   const [bulkProgress, setBulkProgress] = useState(0);
+
+  // --- STATE BARU: DUMMY & AI DETECTOR ---
+  const [isDummyModalOpen, setIsDummyModalOpen] = useState(false);
+  const [dummyConfig, setDummyConfig] = useState({
+    jumlah: 40,
+    poin: 2.5,
+    mapel: "",
+    kelas: "",
+  });
+  const [isUploadingFormImg, setIsUploadingFormImg] = useState(false);
 
   // VIEW MODE: "rekap" | "log" | "pelanggaran"
   const [nilaiViewMode, setNilaiViewMode] = useState("rekap");
@@ -722,6 +815,86 @@ const GuruDashboard = () => {
       }
     } catch (error) {
       console.error("Gagal menarik Mapel", error);
+    }
+  };
+
+  // --- FUNGSI BARU: GENERATE SOAL DUMMY ---
+  const handleGenerateDummy = async (e) => {
+    e.preventDefault();
+    if (!dummyConfig.mapel || !dummyConfig.kelas)
+      return showAlert("warning", "Validasi", "Harap pilih Mapel dan Kelas.");
+    setIsSaving(true);
+    try {
+      let nextId =
+        data.length > 0
+          ? Math.max(...data.map((item) => parseInt(item.id) || 0)) + 1
+          : 1;
+      const dummyItems = [];
+      for (let i = 0; i < dummyConfig.jumlah; i++) {
+        const newItem = {
+          id: nextId + i,
+          mapel: dummyConfig.mapel,
+          kelas: dummyConfig.kelas,
+          wacana: "",
+          pertanyaan: `[Soal Dummy ${i + 1}] Edit pertanyaan ini...`,
+          poin: dummyConfig.poin,
+          link_gambar: "",
+          opsi_a: "Opsi A",
+          opsi_b: "Opsi B",
+          opsi_c: "Opsi C",
+          opsi_d: "Opsi D",
+          opsi_e: "Opsi E",
+          jawaban_benar: "A",
+          guru_pembuat: namaGuruLog,
+        };
+        dummyItems.push(newItem);
+        await api.create(currentConfig.sheet, newItem);
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      pushAction({ type: "BULK_CREATE", items: dummyItems });
+      await fetchData(false);
+      setIsDummyModalOpen(false);
+      showAlert(
+        "success",
+        "Berhasil",
+        `${dummyConfig.jumlah} Soal Dummy berhasil dibuat!`,
+      );
+    } catch (err) {
+      showAlert("danger", "Gagal", err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // --- FUNGSI BARU: UPLOAD GAMBAR DI MODAL ---
+  const handleFormImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024)
+      return showAlert("warning", "File Kebesaran", "Maksimal 2MB.");
+    setIsUploadingFormImg(true);
+    const formDataUpload = new FormData();
+    formDataUpload.append("image", file);
+    try {
+      const res = await fetch(
+        `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
+        { method: "POST", body: formDataUpload },
+      );
+      const dataImg = await res.json();
+      if (dataImg.success) {
+        const safeUrl = `https://wsrv.nl/?url=${dataImg.data.url}`;
+        const imgTag = `<br><img src="${safeUrl}" style="max-width:100%; border-radius:8px; margin-top:8px;" /><br>`;
+        setFormData((prev) => ({
+          ...prev,
+          pertanyaan: (prev.pertanyaan || "") + imgTag,
+          link_gambar: safeUrl,
+        }));
+      }
+    } catch (err) {
+      showAlert("danger", "Upload Gagal", err.message);
+    } finally {
+      setIsUploadingFormImg(false);
+      e.target.value = null;
     }
   };
 
@@ -1102,6 +1275,35 @@ const GuruDashboard = () => {
       return showAlert("warning", "Validasi", "Harap pilih Kelas Sasaran.");
     if (!bulkText.trim())
       return showAlert("warning", "Validasi", "Teks soal masih kosong.");
+
+    // ==========================================
+    // AUTO-DETECT MODE SOAL DI BELAKANG LAYAR
+    // ==========================================
+    const textLower = bulkText.toLowerCase();
+    let detectedMode = "umum";
+
+    // Deteksi Eksakta: Mengandung simbol matematika, fisika, kimia, atau deret angka+simbol operasi
+    const isEksakta =
+      /√|\^|∑|∫|lim|sin|cos|tan|log|kuadrat|m\/s|joule|watt|newton|co2|h2o/i.test(
+        textLower,
+      ) || /[\+\-\*\/\=\(\)\d]{6,}/.test(textLower);
+
+    // Deteksi Bahasa: Mengandung instruksi bacaan, kutipan, cerita, atau puisi
+    const isBahasa =
+      /bacalah teks|cermatilah|kutipan|wacana|paragraf|gagasan utama|sinonim|antonim|puisi/i.test(
+        textLower,
+      );
+
+    if (isEksakta) detectedMode = "eksakta";
+    else if (isBahasa) detectedMode = "bahasa";
+
+    // CATATAN UNTUK BACKEND:
+    // Variabel 'detectedMode' ini sekarang menyimpan "eksakta", "bahasa", atau "umum" secara dinamis.
+    // Jika Anda menggunakan API LLM (seperti OpenAI/Gemini), Anda bisa menyisipkan variabel ini ke dalam Prompt agar AI menyesuaikan gayanya.
+    console.log(
+      "🤖 Sistem Auto-Detect mengenali ini sebagai soal:",
+      detectedMode.toUpperCase(),
+    );
 
     // ==========================================
     // 1. LOGIKA PEMISAH SOAL CERDAS (STATE MACHINE V3)
@@ -1574,9 +1776,10 @@ const GuruDashboard = () => {
               <div className="absolute -top-3.5 left-6 bg-linear-to-r from-blue-600 to-blue-500 text-white px-3 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-md border border-blue-400">
                 <BookOpen size={14} /> WACANA TERIKAT PADA {bundleCount} SOAL
               </div>
-              <p className="font-medium text-slate-700 leading-relaxed text-sm md:text-base whitespace-pre-wrap mt-2">
-                {s.wacana}
-              </p>
+              <div
+                className="font-medium text-slate-700 leading-relaxed text-sm md:text-base whitespace-pre-wrap mt-2"
+                dangerouslySetInnerHTML={{ __html: s.wacana }}
+              />
             </div>
             <div className="w-1.5 h-8 bg-blue-200 ml-12 absolute -bottom-8 rounded-full z-0"></div>
           </div>,
@@ -1669,10 +1872,10 @@ const GuruDashboard = () => {
             )}
           </div>
 
-          <p className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap">
-            {s.pertanyaan}
-          </p>
-
+          <div
+            className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap"
+            dangerouslySetInnerHTML={{ __html: s.pertanyaan }}
+          />
           {s.link_gambar && (
             <div className="mb-6 max-w-lg rounded-xl border border-slate-200 shadow-sm p-2 bg-slate-50 relative group/img w-max">
               <button
@@ -1723,10 +1926,9 @@ const GuruDashboard = () => {
                     {opt}.
                   </span>
                   <span
-                    className={`text-xs md:text-sm font-medium leading-relaxed whitespace-pre-wrap ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
-                  >
-                    {s[keyMap]}
-                  </span>
+                    className={`text-xs md:text-sm font-medium leading-relaxed whitespace-pre-wrap flex-1 ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
+                    dangerouslySetInnerHTML={{ __html: s[keyMap] }}
+                  />
                   {isCorrect && (
                     <CheckCircle2
                       size={16}
@@ -1780,12 +1982,22 @@ const GuruDashboard = () => {
       filteredPivot = filteredPivot.filter((s) =>
         s.nama_siswa.toLowerCase().includes(search.toLowerCase()),
       );
-    if (filters.kelas)
+    if (filters.kelas) {
       filteredPivot = filteredPivot.filter((s) =>
         String(s.kelas).toLowerCase().includes(filters.kelas.toLowerCase()),
       );
-    return { data: filteredPivot, mapels };
-  }, [data, tab, search, filters.kelas]);
+    }
+    let filteredMapels = mapels;
+    if (filters.mapel) {
+      filteredMapels = mapels.filter(
+        (m) => String(m).toLowerCase() === String(filters.mapel).toLowerCase(),
+      );
+      filteredPivot = filteredPivot.filter(
+        (s) => s[filters.mapel] !== undefined,
+      );
+    }
+    return { data: filteredPivot, mapels: filteredMapels };
+  }, [data, tab, search, filters.kelas, filters.mapel]);
 
   const getFilterOptions = (key) =>
     [...new Set(data.map((item) => item[key]))].filter(Boolean).sort();
@@ -2469,6 +2681,12 @@ const GuruDashboard = () => {
                   <FileText size={18} /> Import Massal
                 </button>
                 <button
+                  onClick={() => setIsDummyModalOpen(true)}
+                  className="flex-1 md:flex-none bg-blue-50 text-blue-600 border border-blue-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-blue-100 active:scale-95 transition-all text-sm"
+                >
+                  <Layers size={18} /> Buat Dummy
+                </button>
+                <button
                   onClick={openAddModal}
                   className="flex-1 md:flex-none bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-5 py-3 rounded-xl font-bold shadow-md shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400"
                 >
@@ -2644,12 +2862,6 @@ const GuruDashboard = () => {
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto min-w-0">
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-2 w-full md:w-auto min-w-0">
                     {currentConfig.filterKeys.map((key) => {
-                      if (
-                        tab === "nilai" &&
-                        nilaiViewMode === "rekap" &&
-                        key !== "kelas"
-                      )
-                        return null;
                       return (
                         <div key={key} className="w-full md:w-40">
                           <PremiumSelect
@@ -3497,22 +3709,26 @@ const GuruDashboard = () => {
                     </p>
                   </div>
                   <div className="space-y-1 md:space-y-1.5">
-                    <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
-                      Pertanyaan Inti <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      required
-                      disabled={isSaving}
-                      rows="3"
-                      placeholder="Tuliskan pertanyaan di sini..."
-                      className="w-full p-3 md:p-4 text-xs md:text-sm bg-white border border-slate-200 rounded-xl md:rounded-[1.5rem] font-semibold outline-none focus:border-emerald-500 transition-all resize-y whitespace-pre-wrap text-slate-800 shadow-sm"
+                    <div className="flex justify-between items-center ml-1">
+                      <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        Pertanyaan Inti (Bisa Format Teks & Gambar){" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      {isUploadingFormImg && (
+                        <span className="text-xs text-emerald-500 font-bold flex items-center gap-1">
+                          <RefreshCw size={12} className="animate-spin" />{" "}
+                          Uploading...
+                        </span>
+                      )}
+                    </div>
+                    <GoogleFormEditor
                       value={formData.pertanyaan || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          pertanyaan: e.target.value,
-                        })
+                      onChange={(val) =>
+                        setFormData({ ...formData, pertanyaan: val })
                       }
+                      placeholder="Ketik pertanyaan di sini, block teks untuk Bold/Italic..."
+                      disabled={isSaving || isUploadingFormImg}
+                      onImageUpload={handleFormImageUpload}
                     />
                   </div>
                   {/* Input Gambar Sederhana via Modal */}
@@ -3756,9 +3972,12 @@ const GuruDashboard = () => {
                               </span>
                             </div>
                           )}
-                          <p className="text-xs md:text-sm font-semibold text-slate-800 whitespace-pre-wrap mb-3 md:mb-4 pr-8 md:pr-10 leading-relaxed">
-                            {item.pertanyaan}
-                          </p>
+                          <div
+                            className="text-xs md:text-sm font-semibold text-slate-800 whitespace-pre-wrap mb-3 md:mb-4 pr-8 md:pr-10 leading-relaxed"
+                            dangerouslySetInnerHTML={{
+                              __html: item.pertanyaan,
+                            }}
+                          />
                           <div className="flex flex-col gap-1 md:gap-1.5 text-[10px] md:text-xs text-slate-600 font-medium">
                             {item.opsi_a && (
                               <div
@@ -3960,12 +4179,6 @@ const GuruDashboard = () => {
 
               <div className="overflow-y-auto flex-1 scrollbar-thin pb-6 space-y-5">
                 {currentConfig.filterKeys.map((key) => {
-                  if (
-                    tab === "nilai" &&
-                    nilaiViewMode === "rekap" &&
-                    key !== "kelas"
-                  )
-                    return null;
                   return (
                     <div key={key} className="space-y-2">
                       <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 ml-1">
@@ -4007,6 +4220,103 @@ const GuruDashboard = () => {
                   Terapkan Filter
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {/* MODAL GENERATE SOAL DUMMY */}
+        {isDummyModalOpen && (
+          <div className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-900/80">
+            <div className="w-full max-w-md bg-white rounded-[1.5rem] p-6 shadow-2xl">
+              <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
+                <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                  <Layers className="text-blue-500" /> Buat Soal Dummy
+                </h3>
+                <button
+                  onClick={() => setIsDummyModalOpen(false)}
+                  className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <form onSubmit={handleGenerateDummy} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">
+                    Pilih Mapel
+                  </label>
+                  <PremiumSelect
+                    value={dummyConfig.mapel}
+                    onChange={(val) =>
+                      setDummyConfig({ ...dummyConfig, mapel: val })
+                    }
+                    options={mapelOptions.map((opt) => ({
+                      label: opt,
+                      value: opt,
+                    }))}
+                    placeholder="Mata Pelajaran..."
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">
+                    Sasaran Kelas
+                  </label>
+                  <PremiumMultiSelect
+                    value={dummyConfig.kelas}
+                    onChange={(val) =>
+                      setDummyConfig({ ...dummyConfig, kelas: val })
+                    }
+                    options={OPSI_KELAS_LENGKAP}
+                    placeholder="Pilih Kelas..."
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">
+                      Mode Jumlah Soal
+                    </label>
+                    <select
+                      className="w-full p-3 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none"
+                      value={dummyConfig.jumlah}
+                      onChange={(e) =>
+                        setDummyConfig({
+                          ...dummyConfig,
+                          jumlah: Number(e.target.value),
+                        })
+                      }
+                    >
+                      <option value={10}>10 Soal (Test)</option>
+                      <option value={40}>40 Soal</option>
+                      <option value={50}>50 Soal</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">
+                      Poin per Soal
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      className="w-full p-3 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none"
+                      value={dummyConfig.poin}
+                      onChange={(e) =>
+                        setDummyConfig({ ...dummyConfig, poin: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex justify-center items-center gap-2 disabled:opacity-50"
+                >
+                  {isSaving ? (
+                    <RefreshCw className="animate-spin" size={18} />
+                  ) : (
+                    <Check size={18} />
+                  )}{" "}
+                  Generate Dummy Sekarang
+                </button>
+              </form>
             </div>
           </div>
         )}

@@ -22,7 +22,6 @@ import {
   Award,
   Target,
   ShieldAlert,
-  Sparkles,
   AlertTriangle,
   Info,
   Maximize,
@@ -164,6 +163,7 @@ const SiswaDashboard = () => {
   const [currentSoalIndex, setCurrentSoalIndex] = useState(0);
 
   const [answers, setAnswers] = useState({});
+  const [raguRagu, setRaguRagu] = useState({}); // STATE BARU UNTUK FITUR RAGU-RAGU
   const [timeLeft, setTimeLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -248,11 +248,9 @@ const SiswaDashboard = () => {
     const fetchData = async (isBackground = false) => {
       if (!isBackground) setLoading(true);
       try {
-        // Tarik Settings Secara Terpisah (Anti Crash)
         try {
           const settingsRes = await api.read("Settings");
           if (settingsRes && Array.isArray(settingsRes)) {
-            // UBAH PENCARIAN KUNCI MENJADI "MODE_UJIAN"
             const acSetting = settingsRes.find(
               (s) => String(s.kunci).toUpperCase() === "MODE_UJIAN",
             );
@@ -347,7 +345,6 @@ const SiswaDashboard = () => {
   // 2. LOGIKA ANTI-CHEAT (Keluar Aplikasi)
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      // MASTER SWITCH (BYPASS SEMPURNA)
       if (!isAntiCheatActiveRef.current) return;
 
       if (
@@ -451,6 +448,21 @@ const SiswaDashboard = () => {
     setActiveExam(exam);
     setLoadingSoal(true);
     setIsMobileDrawerOpen(false);
+    setRaguRagu({}); // Reset ragu-ragu saat mulai ujian baru
+
+    // MASUK KE MODE FULLSCREEN OTOMATIS
+    try {
+      const docElm = document.documentElement;
+      if (docElm.requestFullscreen) {
+        docElm.requestFullscreen().catch((err) => console.log(err));
+      } else if (docElm.webkitRequestFullscreen) {
+        docElm.webkitRequestFullscreen();
+      } else if (docElm.msRequestFullscreen) {
+        docElm.msRequestFullscreen();
+      }
+    } catch (error) {
+      console.warn("Fullscreen tidak didukung.");
+    }
 
     try {
       const allSoal = await api.read("Soal");
@@ -492,13 +504,12 @@ const SiswaDashboard = () => {
         setIsLocked(false);
       }
 
-      // PAKSA KIRIM STATUS ONLINE KE GURU SAAT PERTAMA KALI MULAI
       if (!serverSession) {
         try {
           await api.saveSesi(
             getVal(user, "Username"),
             examId,
-            {}, // Jawaban masih kosong
+            {},
             finalTimeLeft,
             0,
             "ACTIVE",
@@ -507,10 +518,6 @@ const SiswaDashboard = () => {
           console.error("Gagal sinkron awal", e);
         }
       }
-
-      setAnswers(finalAnswers);
-      setTimeLeft(finalTimeLeft);
-      setCurrentSoalIndex(0);
 
       setAnswers(finalAnswers);
       setTimeLeft(finalTimeLeft);
@@ -598,9 +605,29 @@ const SiswaDashboard = () => {
       setIsSubmitting(false);
       setActiveExam(null);
       setAnswers({});
+      setRaguRagu({}); // Bersihkan ragu-ragu
       setCurrentSoalIndex(0);
       setIsMobileDrawerOpen(false);
       setActiveTab("nilai");
+
+      // KELUAR DARI MODE FULLSCREEN OTOMATIS
+      try {
+        if (
+          document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          document.msFullscreenElement
+        ) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch((err) => console.log(err));
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
+        }
+      } catch (error) {
+        console.warn("Gagal keluar dari fullscreen.");
+      }
 
       if (forcedStatus === "Diskualifikasi") {
         showAlert(
@@ -648,30 +675,15 @@ const SiswaDashboard = () => {
     }
   };
 
-  // 6. TIMER & SAVE SERVER
-
-  // ==============================================================
-  // TAMPILAN BLOKIR EKSKLUSIF APLIKASI
-  // ==============================================================
-  if (isAppBlocked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white flex-col p-6 z-[99999] fixed inset-0 select-none">
-        <Lock size={80} className="text-red-500 mb-6 animate-pulse" />
-        <h1 className="text-3xl md:text-5xl font-black mb-3 text-center tracking-tight">
-          AKSES DIBLOKIR
-        </h1>
-        <p className="text-center text-slate-300 max-w-lg text-sm md:text-base leading-relaxed mb-8">
-          Admin baru saja mengaktifkan <strong>Mode Eksklusif Aplikasi</strong>.
-          Anda tidak dapat melanjutkan ujian menggunakan Browser
-          (Chrome/Safari/dll).
-          <br />
-          <br />
-          Silakan tutup browser ini dan buka melalui{" "}
-          <strong>Aplikasi Resmi TADBIRA</strong> yang ada di HP Anda.
-        </p>
-      </div>
-    );
-  }
+  const toggleRaguRagu = () => {
+    const currentSoal = soalData[currentSoalIndex];
+    if (!currentSoal) return;
+    const currentSoalId = String(getVal(currentSoal, "id")).trim();
+    setRaguRagu((prev) => ({
+      ...prev,
+      [currentSoalId]: !prev[currentSoalId],
+    }));
+  };
 
   // ==============================================================
   // TAMPILAN BLOKIR EKSKLUSIF APLIKASI
@@ -728,7 +740,7 @@ const SiswaDashboard = () => {
   }
 
   // ==============================================================
-  // TAMPILAN KETIKA SEDANG UJIAN (RUANGGURU STYLE)
+  // TAMPILAN KETIKA SEDANG UJIAN (ANBK STYLE)
   // ==============================================================
   if (activeExam) {
     const examMapel = getVal(activeExam, "Mapel");
@@ -759,6 +771,7 @@ const SiswaDashboard = () => {
     const answeredCount = Object.keys(answers).length;
     const progressPercent =
       soalData.length > 0 ? (answeredCount / soalData.length) * 100 : 0;
+    const isCurrentRagu = !!raguRagu[currentSoalId];
 
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none relative overflow-hidden">
@@ -780,7 +793,6 @@ const SiswaDashboard = () => {
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
-            {/* TOMBOL ZOOM FONT */}
             <button
               onClick={() => setFontLevel((prev) => (prev + 1) % 3)}
               className="flex items-center justify-center p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors border border-slate-200 relative"
@@ -796,7 +808,6 @@ const SiswaDashboard = () => {
               )}
             </button>
 
-            {/* LABEL MODE UJI COBA (Sekarang terlihat di HP) */}
             {!isAntiCheatActive && (
               <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 md:px-3 py-2 rounded-xl border border-amber-200 text-[9px] font-black uppercase tracking-widest animate-pulse shadow-sm">
                 <ShieldAlert size={14} />{" "}
@@ -824,7 +835,7 @@ const SiswaDashboard = () => {
           </div>
         </header>
 
-        <main className="flex-1 w-full max-w-7xl mx-auto p-2 md:p-5 flex flex-col justify-center z-10 relative pb-20 lg:pb-5">
+        <main className="flex-1 w-full max-w-7xl mx-auto p-2 md:p-5 flex flex-col justify-center z-10 relative pb-24 lg:pb-5">
           {loadingSoal ? (
             <div className="flex flex-col items-center justify-center h-full m-auto">
               <RefreshCw
@@ -851,27 +862,31 @@ const SiswaDashboard = () => {
                   </div>
                 </div>
 
-                {/* NASKAH SOAL (NATURAL FLOW BUBBLE UI) */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-8">
                   <div className="max-w-4xl mx-auto pb-6">
+                    {/* Menggunakan dangerouslySetInnerHTML agar format HTML (tebal, miring, dll) dari database dapat dirender dengan baik */}
                     {getVal(currentSoal, "Wacana") && (
                       <div className="p-5 md:p-6 bg-amber-50/50 border border-amber-200 rounded-[1.5rem] relative shadow-sm mb-6 mt-2">
                         <div className="absolute -top-3 left-6 bg-amber-500 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1.5">
                           <BookMarked size={14} /> Bacaan / Wacana
                         </div>
-                        <p
-                          className={`font-medium text-slate-700 leading-relaxed whitespace-pre-wrap mt-1 transition-all ${fontClasses.wacana[fontLevel]}`}
-                        >
-                          {getVal(currentSoal, "Wacana")}
-                        </p>
+                        <div
+                          className={`font-medium text-slate-700 leading-relaxed mt-1 transition-all ${fontClasses.wacana[fontLevel]}`}
+                          style={{ whiteSpace: "pre-wrap" }}
+                          dangerouslySetInnerHTML={{
+                            __html: getVal(currentSoal, "Wacana"),
+                          }}
+                        />
                       </div>
                     )}
 
-                    <p
-                      className={`font-bold text-slate-800 leading-relaxed whitespace-pre-wrap mb-6 md:mb-8 transition-all ${fontClasses.soal[fontLevel]}`}
-                    >
-                      {getVal(currentSoal, "Pertanyaan")}
-                    </p>
+                    <div
+                      className={`font-bold text-slate-800 leading-relaxed mb-6 md:mb-8 transition-all ${fontClasses.soal[fontLevel]}`}
+                      style={{ whiteSpace: "pre-wrap" }}
+                      dangerouslySetInnerHTML={{
+                        __html: getVal(currentSoal, "Pertanyaan"),
+                      }}
+                    />
 
                     {getVal(currentSoal, "Link_Gambar") && (
                       <div className="mb-8 w-full flex justify-start">
@@ -896,7 +911,6 @@ const SiswaDashboard = () => {
                       </div>
                     )}
 
-                    {/* PILIHAN GANDA */}
                     <div className="flex flex-col gap-3 md:gap-4">
                       {["A", "B", "C", "D", "E"].map((opt) => {
                         const optText = getVal(currentSoal, `Opsi_${opt}`);
@@ -944,15 +958,16 @@ const SiswaDashboard = () => {
                               {opt}
                             </span>
 
-                            <span
-                              className={`font-medium pt-1 md:pt-2 leading-relaxed whitespace-pre-wrap transition-all z-10 ${fontClasses.opsi[fontLevel]} ${
+                            {/* Opsi juga mendukung HTML Rendering untuk memuat tabel, sub/sup, dll */}
+                            <div
+                              className={`font-medium pt-1 md:pt-2 leading-relaxed transition-all z-10 w-full ${fontClasses.opsi[fontLevel]} ${
                                 isSelected
                                   ? "text-emerald-900 font-bold"
                                   : "text-slate-700"
                               }`}
-                            >
-                              {optText}
-                            </span>
+                              style={{ whiteSpace: "pre-wrap" }}
+                              dangerouslySetInnerHTML={{ __html: optText }}
+                            />
                           </button>
                         );
                       })}
@@ -960,17 +975,35 @@ const SiswaDashboard = () => {
                   </div>
                 </div>
 
-                {/* Navigasi Desktop */}
-                <div className="hidden lg:flex px-6 py-4 border-t border-slate-100 bg-slate-50/50 justify-between items-center shrink-0">
+                {/* Navigasi Desktop ANBK Style */}
+                <div className="hidden lg:flex px-6 py-4 border-t border-slate-100 bg-slate-50/50 justify-between items-center shrink-0 gap-4">
                   <button
                     onClick={() =>
                       setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
                     }
                     disabled={currentSoalIndex === 0}
-                    className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-slate-100 disabled:opacity-40 flex items-center gap-2 shadow-sm"
+                    className="px-5 py-3.5 bg-white border border-slate-300 text-slate-700 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-slate-100 disabled:opacity-40 flex items-center gap-2 shadow-sm transition-colors"
                   >
-                    <ArrowLeft size={16} /> Sebelumnya
+                    <ArrowLeft size={16} /> SOAL SEBELUMNYA
                   </button>
+
+                  <button
+                    onClick={toggleRaguRagu}
+                    className={`px-6 py-3.5 rounded-xl font-bold uppercase tracking-widest text-xs flex items-center gap-2.5 transition-colors border shadow-sm ${
+                      isCurrentRagu
+                        ? "bg-amber-400 text-amber-900 border-amber-500 hover:bg-amber-500"
+                        : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isCurrentRagu}
+                      readOnly
+                      className="w-4 h-4 accent-amber-600 cursor-pointer pointer-events-none"
+                    />
+                    RAGU-RAGU
+                  </button>
+
                   <button
                     onClick={() =>
                       setCurrentSoalIndex((prev) =>
@@ -978,9 +1011,9 @@ const SiswaDashboard = () => {
                       )
                     }
                     disabled={currentSoalIndex === soalData.length - 1}
-                    className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-sm uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-40 transition-colors"
+                    className="px-5 py-3.5 bg-emerald-500 border border-emerald-600 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-sm uppercase tracking-widest text-xs flex items-center gap-2 disabled:opacity-40 transition-colors"
                   >
-                    Selanjutnya <ArrowRight size={16} />
+                    SOAL SELANJUTNYA <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -1006,17 +1039,35 @@ const SiswaDashboard = () => {
                     Terjawab {answeredCount} dari {soalData.length} Soal
                   </p>
                 </div>
+
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-5 content-start">
                   <div className="grid grid-cols-5 gap-2.5">
                     {soalData.map((s, idx) => {
                       const isCurrent = idx === currentSoalIndex;
                       const sId = String(getVal(s, "id")).trim();
                       const hasAnswered = !!answers[sId];
+                      const isRagu = !!raguRagu[sId];
+
+                      let btnClass = isCurrent
+                        ? "border-slate-800 z-10 "
+                        : "border-transparent ";
+                      if (hasAnswered) {
+                        btnClass += isRagu
+                          ? "bg-amber-400 text-amber-900"
+                          : "bg-emerald-500 text-white";
+                      } else {
+                        btnClass += isRagu
+                          ? "bg-amber-100 text-amber-800 border-amber-300"
+                          : isCurrent
+                            ? "bg-slate-800 text-white"
+                            : "bg-slate-100 text-slate-500 hover:bg-slate-200";
+                      }
+
                       return (
                         <button
                           key={idx}
                           onClick={() => setCurrentSoalIndex(idx)}
-                          className={`aspect-square flex items-center justify-center rounded-xl font-bold text-sm transition-colors border-2 ${isCurrent ? "border-slate-800 z-10" : "border-transparent"} ${hasAnswered ? (isCurrent ? "bg-emerald-500 text-white" : "bg-emerald-500 text-white") : isCurrent ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                          className={`aspect-square flex items-center justify-center rounded-xl font-bold text-sm transition-colors border-2 ${btnClass}`}
                         >
                           {idx + 1}
                         </button>
@@ -1024,6 +1075,7 @@ const SiswaDashboard = () => {
                     })}
                   </div>
                 </div>
+
                 <div className="p-5 border-t border-slate-100 bg-slate-50/50 shrink-0">
                   <button
                     onClick={() => handleEndExamClick(false)}
@@ -1043,9 +1095,9 @@ const SiswaDashboard = () => {
           )}
         </main>
 
-        {/* BOTTOM NAVIGATION (MOBILE) */}
+        {/* BOTTOM NAVIGATION (MOBILE - GAYA ANBK) */}
         {!loadingSoal && (
-          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 px-4 flex justify-between items-center z-40 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] pb-6 sm:pb-4">
+          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 px-3 flex justify-between items-center z-40 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] pb-6 sm:pb-4 gap-2">
             <button
               onClick={() =>
                 setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
@@ -1055,17 +1107,35 @@ const SiswaDashboard = () => {
             >
               <ArrowLeft size={20} />
             </button>
+
+            <button
+              onClick={toggleRaguRagu}
+              className={`flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl font-bold text-xs border transition-colors shadow-sm ${
+                isCurrentRagu
+                  ? "bg-amber-400 text-amber-900 border-amber-500"
+                  : "bg-amber-50 text-amber-700 border-amber-200"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={isCurrentRagu}
+                readOnly
+                className="w-4 h-4 accent-amber-600 pointer-events-none"
+              />
+              <span className="hidden sm:inline">RAGU-RAGU</span>
+              <span className="sm:hidden">RAGU</span>
+            </button>
+
             <button
               onClick={() => setIsMobileDrawerOpen(true)}
-              className="flex flex-col items-center justify-center text-slate-700 active:scale-95 transition-transform"
+              className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 active:scale-95 transition-transform flex items-center justify-center relative"
             >
-              <div className="bg-emerald-50 text-emerald-600 p-2.5 rounded-[14px] mb-1 border border-emerald-100">
-                <LayoutDashboard size={22} />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 shadow-sm">
-                {answeredCount}/{soalData.length} Dijawab
+              <LayoutDashboard size={20} />
+              <span className="absolute -top-1.5 -right-1.5 text-[9px] font-black bg-emerald-500 text-white min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center shadow-sm">
+                {answeredCount}
               </span>
             </button>
+
             <button
               onClick={() =>
                 setCurrentSoalIndex((prev) =>
@@ -1118,6 +1188,23 @@ const SiswaDashboard = () => {
                       const isCurrent = idx === currentSoalIndex;
                       const sId = String(getVal(s, "id")).trim();
                       const hasAnswered = !!answers[sId];
+                      const isRagu = !!raguRagu[sId];
+
+                      let btnClass = isCurrent
+                        ? "border-emerald-500 z-10 "
+                        : "border-slate-100 ";
+                      if (hasAnswered) {
+                        btnClass += isRagu
+                          ? "bg-amber-400 text-amber-900 shadow-md shadow-amber-500/20"
+                          : "bg-emerald-500 text-white shadow-md shadow-emerald-500/20";
+                      } else {
+                        btnClass += isRagu
+                          ? "bg-amber-100 text-amber-800 border-amber-300"
+                          : isCurrent
+                            ? "bg-slate-800 text-white shadow-md"
+                            : "bg-white text-slate-400";
+                      }
+
                       return (
                         <button
                           key={idx}
@@ -1125,7 +1212,7 @@ const SiswaDashboard = () => {
                             setCurrentSoalIndex(idx);
                             setIsMobileDrawerOpen(false);
                           }}
-                          className={`aspect-square flex items-center justify-center rounded-[1rem] font-bold text-sm transition-colors border-2 ${isCurrent ? "border-emerald-500 z-10" : "border-slate-100"} ${hasAnswered ? (isCurrent ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20" : "bg-emerald-50 text-emerald-600 border-emerald-200") : isCurrent ? "bg-slate-800 text-white border-slate-800 shadow-md" : "bg-white text-slate-400"}`}
+                          className={`aspect-square flex items-center justify-center rounded-[1rem] font-bold text-sm transition-colors border-2 ${btnClass}`}
                         >
                           {idx + 1}
                         </button>
