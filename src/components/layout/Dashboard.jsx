@@ -1,17 +1,25 @@
 // src/components/layout/Dashboard.jsx
 import React, { useState, useContext } from "react";
-import { LogOut, Menu } from "lucide-react"; // ShieldCheck sudah dihapus
+import { LogOut, Menu } from "lucide-react";
 import { AuthContext } from "../../context/AuthContext";
 import { Badge } from "../ui/Ui";
-import logoMasda from "../../assets/logo.svg"; // Import logo SVG
+import logoMasda from "../../assets/logo.svg";
 
-const Dashboard = ({ children, menu = [], active, setActive }) => {
+const Dashboard = ({
+  children,
+  menu = [],
+  active,
+  setActive,
+  zoomOut = true,
+}) => {
   const { user, logout } = useContext(AuthContext);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    // Layout terkunci sebesar layar (h-screen) dengan background silver/slate sangat muda
-    <div className="h-screen w-full bg-slate-50/50 flex overflow-hidden font-sans relative">
+    // PERBAIKAN DI SINI: Kompensasi ukuran 133.333% agar saat di-zoom 0.75 hasilnya pas 100% layar
+    <div
+      className={`bg-slate-50/50 flex overflow-hidden font-sans relative origin-top-left ${zoomOut ? "w-full h-screen md:w-[133.333vw] md:h-[133.333vh] md:[zoom:0.75]" : "w-full h-screen"}`}
+    >
       {/* OVERLAY UNTUK MOBILE DENGAN EFEK BLUR */}
       {mobileOpen && (
         <div
@@ -26,7 +34,7 @@ const Dashboard = ({ children, menu = [], active, setActive }) => {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* LOGO AREA SUDAH DIPERBARUI */}
+        {/* LOGO AREA */}
         <div className="p-8 pb-6">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 flex items-center justify-center shrink-0">

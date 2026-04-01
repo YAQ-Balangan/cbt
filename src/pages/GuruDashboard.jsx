@@ -655,7 +655,7 @@ const GuruDashboard = () => {
     });
   };
 
-  const [sesiUjianData, setSesiUjianData] = useState([]); // State untuk Anti-Cheat
+  const [sesiUjianData, setSesiUjianData] = useState([]); // State untuk Anti-Curang
 
   // STATE & API GAMBAR
   const IMGBB_API_KEY = "db28c000ce57b260d7d09cb4c18790e0";
@@ -1215,7 +1215,7 @@ const GuruDashboard = () => {
     }
   };
 
-  // LOGIKA ANTI-CHEAT: GURU BUKA KUNCI
+  // LOGIKA Anti-Curang: GURU BUKA KUNCI
   const handleUnlockSesi = async (username, examId) => {
     try {
       setLoading(true);
@@ -1727,7 +1727,7 @@ const GuruDashboard = () => {
     return result;
   }, [data, search, filters]);
 
-  // VARIABEL DATA ANTI-CHEAT
+  // VARIABEL DATA Anti-Curang
   const lockedSessions = sesiUjianData.filter((s) => s.status === "LOCKED");
   const disqualifiedSessions = processedData.filter(
     (d) =>
@@ -2678,13 +2678,13 @@ const GuruDashboard = () => {
                   }}
                   className="flex-1 md:flex-none bg-white text-emerald-700 border border-emerald-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-emerald-50 active:scale-95 transition-all text-sm"
                 >
-                  <FileText size={18} /> Import Massal
+                  <FileText size={18} /> Import Soal Otomatis
                 </button>
                 <button
                   onClick={() => setIsDummyModalOpen(true)}
                   className="flex-1 md:flex-none bg-blue-50 text-blue-600 border border-blue-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-blue-100 active:scale-95 transition-all text-sm"
                 >
-                  <Layers size={18} /> Buat Dummy
+                  <Layers size={18} /> Template Soal (Kosong)
                 </button>
                 <button
                   onClick={openAddModal}
@@ -2735,7 +2735,7 @@ const GuruDashboard = () => {
                 onClick={() => setNilaiViewMode("rekap")}
                 className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "rekap" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-800"}`}
               >
-                <TableProperties size={16} /> Buku Nilai
+                <TableProperties size={16} /> Nilai Siswa
               </button>
               <button
                 onClick={() => setNilaiViewMode("log")}
@@ -2747,7 +2747,7 @@ const GuruDashboard = () => {
                 onClick={() => setNilaiViewMode("pelanggaran")}
                 className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "pelanggaran" ? "bg-red-500 text-white shadow-sm" : "text-red-500 hover:bg-red-50"}`}
               >
-                <ShieldAlert size={16} /> Control Anti-Cheat
+                <ShieldAlert size={16} /> Control Anti-Curang
                 {lockedSessions.length > 0 && (
                   <span className="bg-white text-red-600 px-1.5 py-0.5 rounded-md text-[10px] ml-1">
                     {lockedSessions.length}
@@ -2799,7 +2799,7 @@ const GuruDashboard = () => {
           </div>
         )}
 
-        {/* STATISTIK & TOOLBAR GLOBAL (Disembunyikan di mode Control Anti-Cheat) */}
+        {/* STATISTIK & TOOLBAR GLOBAL (Disembunyikan di mode Control Anti-Curang) */}
         {!(tab === "nilai" && nilaiViewMode === "pelanggaran") && (
           <div className="hidden md:flex flex-col xl:flex-row gap-4">
             <Card className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl min-w-[200px] shrink-0 rounded-[2rem] relative overflow-hidden flex flex-col justify-center">
@@ -3319,7 +3319,7 @@ const GuruDashboard = () => {
             )}
 
             {/* ============================================================== */}
-            {/* VIEW PELANGGARAN / ANTI-CHEAT CONTROL */}
+            {/* VIEW PELANGGARAN / Anti-Curang CONTROL */}
             {/* ============================================================== */}
             {nilaiViewMode === "pelanggaran" && (
               <div className="space-y-6 max-w-5xl mx-auto">
@@ -4229,7 +4229,8 @@ const GuruDashboard = () => {
             <div className="w-full max-w-md bg-white rounded-[1.5rem] p-6 shadow-2xl">
               <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
                 <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                  <Layers className="text-blue-500" /> Buat Soal Dummy
+                  <Layers className="text-blue-500" /> Buat Template Soal
+                  (Kosong)
                 </h3>
                 <button
                   onClick={() => setIsDummyModalOpen(false)}
@@ -4314,7 +4315,7 @@ const GuruDashboard = () => {
                   ) : (
                     <Check size={18} />
                   )}{" "}
-                  Generate Dummy Sekarang
+                  Generate Soal Sekarang
                 </button>
               </form>
             </div>

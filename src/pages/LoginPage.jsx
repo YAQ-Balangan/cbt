@@ -37,7 +37,7 @@ const LoginPage = () => {
 
   return (
     // Overflow hidden ditambahkan untuk mencegah scroll pada halaman login
-    <div className="h-screen w-full bg-slate-50 flex items-center justify-center p-6 font-sans relative overflow-hidden">
+    <div className="bg-slate-50 flex items-center justify-center p-6 font-sans relative overflow-hidden origin-top-left w-full h-screen md:w-[133.333vw] md:h-[133.333vh] md:[zoom:0.75]">
       {/* Latar Belakang Animasi */}
       <motion.div
         animate={{ scale: [1, 1.1, 1], rotate: [0, 45, 0] }}
@@ -51,7 +51,18 @@ const LoginPage = () => {
       />
 
       {/* FORM CARD - Lebar disesuaikan agar lebih slim & menyisakan ruang v-space */}
-      <div className="w-full max-w-[360px] sm:max-w-[380px] bg-white/90 backdrop-blur-2xl p-8 sm:p-10 rounded-[2.5rem] shadow-2xl shadow-slate-200/60 relative z-10 border border-white/50">
+      {/* (Hanya ditambahkan 'overflow-hidden' pada class bawaan di bawah ini) */}
+      <div className="w-full max-w-[360px] sm:max-w-[380px] bg-white/90 backdrop-blur-2xl p-8 sm:p-10 rounded-[2.5rem] shadow-2xl shadow-slate-200/60 relative z-10 border border-white/50 overflow-hidden">
+        {/* === MULAI TAMBAHAN ANIMASI STROKE MENGKILAP === */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+          className="absolute top-1/2 left-1/2 w-[200%] h-[200%] -translate-x-1/2 -translate-y-1/2 bg-[conic-gradient(from_0deg,transparent_75%,#10b981_100%)] pointer-events-none -z-20"
+        />
+        {/* Layer solid di dalam untuk menutupi bagian tengah agar warna hijau hanya terlihat sebagai stroke/border */}
+        <div className="absolute inset-[2px] bg-white/95 backdrop-blur-2xl rounded-[2.5rem] pointer-events-none -z-10" />
+        {/* === AKHIR TAMBAHAN === */}
+
         <div className="flex flex-col items-center mb-8 text-center">
           <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center mb-5 relative overflow-hidden rounded-2xl group">
             <img

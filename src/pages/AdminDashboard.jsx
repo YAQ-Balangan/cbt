@@ -421,7 +421,7 @@ const TAB_CONFIG = {
       },
       {
         key: "guru_pengampu",
-        label: "Guru Pengampu",
+        label: "Guru",
         sortable: true,
         filterable: true,
       },
@@ -435,7 +435,7 @@ const TAB_CONFIG = {
       { key: "id", label: "ID", isNumber: true, sortable: true },
       {
         key: "kunci",
-        label: "Nama Pengaturan",
+        label: "Pengaturan",
         sortable: true,
         filterable: true,
       },
@@ -851,7 +851,7 @@ const AdminDashboard = () => {
     showAlert(
       "confirm",
       "Ubah Mode Ujian?",
-      `Yakin ingin ${isAntiCheatOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Anti-Cheat?`,
+      `Yakin ingin ${isAntiCheatOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Mode Ujian?`,
       async () => {
         closeAlert();
         setIsSyncing(true);
@@ -871,7 +871,7 @@ const AdminDashboard = () => {
           showAlert(
             "success",
             "Berhasil!",
-            `Anti-Cheat ${isAntiCheatOn ? "NONAKTIF" : "AKTIF"}.`,
+            `Mode Ujian ${isAntiCheatOn ? "NONAKTIF" : "AKTIF"}.`,
           );
         } catch (e) {
           showAlert("danger", "Gagal", e.message);
@@ -1018,8 +1018,8 @@ const AdminDashboard = () => {
                   <ShieldCheck size={16} />{" "}
                   <span className="text-center leading-tight">
                     {isAntiCheatOn
-                      ? "Matikan Anti-Cheat"
-                      : "Hidupkan Anti-Cheat"}
+                      ? "Matikan Mode Ujian"
+                      : "Hidupkan Mode Ujian"}
                   </span>
                 </button>
                 <button
@@ -1171,14 +1171,16 @@ const AdminDashboard = () => {
                   className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-blue-600 text-white border-blue-400"}`}
                 >
                   <ShieldCheck size={20} />{" "}
-                  {isAntiCheatOn ? "Matikan Anti-Cheat" : "Hidupkan Anti-Cheat"}
+                  {isAntiCheatOn ? "Matikan Mode Ujian" : "Hidupkan Mode Ujian"}
                 </button>
                 <button
                   onClick={handleToggleAppOnly}
                   className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-slate-800 text-white border-slate-700"}`}
                 >
                   {isAppOnlyOn ? <Unlock size={20} /> : <Lock size={20} />}{" "}
-                  {isAppOnlyOn ? "Buka Akses Browser" : "Kunci Hanya Aplikasi"}
+                  {isAppOnlyOn
+                    ? "Buka Akses Browser"
+                    : "Kunci (Mode Aplikasi HP)"}
                 </button>
               </div>
             )}
@@ -1194,7 +1196,7 @@ const AdminDashboard = () => {
               onClick={handleAddNewRow}
               className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400 z-10"
             >
-              <Plus size={20} /> Tambah Baris Baru
+              <Plus size={20} /> Tambah Data Baru
             </button>
           </div>
         </header>
@@ -1366,7 +1368,7 @@ const AdminDashboard = () => {
                       colSpan={currentConfig.columns.length + 1}
                       className="py-20 text-center text-slate-400 font-semibold text-base bg-white"
                     >
-                      Belum ada data. Klik "Tambah Baris Baru".
+                      Belum ada data. Klik "Tambah Data Baru".
                     </td>
                   </tr>
                 ) : (
