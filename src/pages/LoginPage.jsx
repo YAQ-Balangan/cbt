@@ -70,7 +70,7 @@ const LoginPage = () => {
             TADBIRA
           </h1>
           <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-2">
-            "Digitalisasi Sistem Masa Depan"
+            "Tata Kelola Digital Berbasis Akurasi"
           </p>
           <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mt-1">
             Online Based Test 2026
