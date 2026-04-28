@@ -277,56 +277,24 @@ const PremiumMultiSelect = ({
 };
 
 // ==========================================
-// GENERATOR OPSI KELAS OTOMATIS
+// GENERATOR OPSI KELAS SMP (DINAMIS)
 // ==========================================
-const TINGKAT_SEKOLAH = ["VII", "VIII", "IX", "X", "XI", "XII"];
-const JURUSAN_SEKOLAH = ["MIPA", "IPS"];
-const MAKSIMAL_ROMBEL = 2;
+const TINGKAT_SEKOLAH = ["VII", "VIII", "IX"];
 
 const OPSI_KELAS_LENGKAP = [
   { label: "KATEGORI GLOBAL", isLabel: true },
   { label: "Semua Kelas (Umum)", value: "SEMUA" },
+  { label: "KATEGORI TINGKAT", isLabel: true },
 ];
 
-OPSI_KELAS_LENGKAP.push({
-  label: "KATEGORI TINGKAT (GABUNGAN JURUSAN)",
-  isLabel: true,
-});
 TINGKAT_SEKOLAH.forEach((t) => {
   OPSI_KELAS_LENGKAP.push({
-    label: `Kelas ${t} (Gabungan MIPA & IPS)`,
+    label: `Kelas ${t}`,
     value: t,
   });
 });
 
-OPSI_KELAS_LENGKAP.push({ label: "KATEGORI JURUSAN GLOBAL", isLabel: true });
-JURUSAN_SEKOLAH.forEach((j) => {
-  OPSI_KELAS_LENGKAP.push({
-    label: `Semua ${j} (VII, VIII, IX, X, XI, XII)`,
-    value: j,
-  });
-});
-
-OPSI_KELAS_LENGKAP.push({ label: "KATEGORI TINGKAT & JURUSAN", isLabel: true });
-TINGKAT_SEKOLAH.forEach((t) => {
-  JURUSAN_SEKOLAH.forEach((j) => {
-    OPSI_KELAS_LENGKAP.push({ label: `${t} ${j}`, value: `${t} ${j}` });
-  });
-});
-
-OPSI_KELAS_LENGKAP.push({ label: "KELAS SPESIFIK (ROMBEL)", isLabel: true });
-TINGKAT_SEKOLAH.forEach((t) => {
-  JURUSAN_SEKOLAH.forEach((j) => {
-    for (let i = 1; i <= MAKSIMAL_ROMBEL; i++) {
-      OPSI_KELAS_LENGKAP.push({
-        label: `${t} ${j} ${i}`,
-        value: `${t} ${j} ${i}`,
-      });
-    }
-  });
-});
-
-// Array datar untuk Combobox Autocomplete (Tanpa Label Kategori)
+// Array datar untuk Combobox Autocomplete
 const FLAT_OPSI_KELAS = OPSI_KELAS_LENGKAP.filter((opt) => !opt.isLabel).map(
   (opt) => opt.value,
 );
@@ -997,14 +965,14 @@ const AdminDashboard = () => {
           <div className="flex flex-col gap-2">
             <button
               onClick={() => (window.location.href = "/ujian-dashboard")}
-              className="w-full md:w-auto bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-indigo-500/30 hover:bg-indigo-700 active:scale-95 transition-all"
+              className="w-full py-2 bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-indigo-500/30 hover:bg-indigo-700 active:scale-95 transition-all"
             >
               <MonitorSmartphone size={16} className="animate-pulse" /> Live
               Ujian
             </button>
             <button
               onClick={handleAddNewRow}
-              className="w-full md:w-auto bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
+              className="w-full py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
             >
               <Plus size={16} /> Tambah Baris Kosong
             </button>
@@ -1123,7 +1091,19 @@ const AdminDashboard = () => {
                         <div className="font-semibold text-slate-700">
                           <EditableCell
                             item={item}
-                            column={col}
+                            column={
+                              col.isCombobox
+                                ? {
+                                    ...col,
+                                    options: [
+                                      ...new Set([
+                                        ...col.options,
+                                        ...getFilterOptions(col.key),
+                                      ]),
+                                    ],
+                                  }
+                                : col
+                            }
                             onSave={handleSaveCell}
                           />
                         </div>
@@ -1231,22 +1211,6 @@ const AdminDashboard = () => {
 
               <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto min-w-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-3 w-full md:w-auto min-w-0">
-                  {currentConfig.columns.some((c) => c.key === "kelas") && (
-                    <div className="w-full md:w-40">
-                      <PremiumSelect
-                        value={filters["jurusan"] || ""}
-                        onChange={(val) =>
-                          setFilters({ ...filters, jurusan: val })
-                        }
-                        options={[
-                          { label: "Semua Jurusan", value: "" },
-                          { label: "Jurusan MIPA", value: "MIPA" },
-                          { label: "Jurusan IPS", value: "IPS" },
-                        ]}
-                        placeholder="Filter Jurusan"
-                      />
-                    </div>
-                  )}
                   {currentConfig.columns
                     .filter((c) => c.filterable)
                     .map((col) => (
@@ -1394,7 +1358,19 @@ const AdminDashboard = () => {
                           >
                             <EditableCell
                               item={item}
-                              column={col}
+                              column={
+                                col.isCombobox
+                                  ? {
+                                      ...col,
+                                      options: [
+                                        ...new Set([
+                                          ...col.options,
+                                          ...getFilterOptions(col.key),
+                                        ]),
+                                      ],
+                                    }
+                                  : col
+                              }
                               onSave={handleSaveCell}
                             />
                           </td>
@@ -1534,27 +1510,6 @@ const AdminDashboard = () => {
                         Saring Data
                       </label>
                       <div className="space-y-3">
-                        {currentConfig.columns.some(
-                          (c) => c.key === "kelas",
-                        ) && (
-                          <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold text-slate-500 ml-1">
-                              Kategori Jurusan
-                            </span>
-                            <PremiumSelect
-                              value={filters["jurusan"] || ""}
-                              onChange={(val) =>
-                                setFilters({ ...filters, jurusan: val })
-                              }
-                              options={[
-                                { label: "Semua Jurusan", value: "" },
-                                { label: "Jurusan MIPA", value: "MIPA" },
-                                { label: "Jurusan IPS", value: "IPS" },
-                              ]}
-                              placeholder="Filter Jurusan"
-                            />
-                          </div>
-                        )}
                         {currentConfig.columns
                           .filter((c) => c.filterable)
                           .map((col) => (

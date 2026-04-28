@@ -1290,7 +1290,7 @@ const GuruDashboard = () => {
 
     // Deteksi Bahasa: Mengandung instruksi bacaan, kutipan, cerita, atau puisi
     const isBahasa =
-      /bacalah teks|cermatilah|kutipan|wacana|paragraf|gagasan utama|sinonim|antonim|puisi/i.test(
+      /bacalah teks|cermatilah|kutipan|wacana|paragraf|gagasan utama|sinonim|antonim|puisi|berikut|/i.test(
         textLower,
       );
 
@@ -1306,55 +1306,106 @@ const GuruDashboard = () => {
     );
 
     // ==========================================
-    // 1. LOGIKA PEMISAH SOAL CERDAS (STATE MACHINE V3)
-    // Menutup celah Opsi Multi-baris & Soal tanpa nomor
+    // 1. LOGIKA PEMISAH SOAL CERDAS (STATE MACHINE V6 - AI BACKTRACKING)
+    // Anti-Ngeyel: Tahan dari ketidakhadiran tombol Enter!
     // ==========================================
     const lines = bulkText.split("\n");
     const rawBlocks = [];
     let currentBlock = [];
     let phase = "q"; // 'q' = wacana/soal, 'o' = opsi, 'k' = kunci, 'split_ready' = siap dipotong
+    let optionsSeen = new Set(); // Mengingat opsi apa saja yang sudah dibaca di soal ini
 
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
       let lineTrimmed = line.trim();
 
-      // Memanfaatkan baris kosong sebagai sinyal transisi yang aman
+      // Jika ada enter/baris kosong, tandai sistem bersiap untuk memotong
       if (!lineTrimmed) {
-        // Jika baris kosong muncul SETELAH opsi atau kunci, sistem siap memotong soal
-        if ((phase === "o" || phase === "k") && currentBlock.length > 0) {
-          phase = "split_ready";
-        }
+        if (phase === "o" || phase === "k") phase = "split_ready";
         continue;
       }
 
-      let isOpt = /^\s*\*?[a-eA-E]\*?[\.\)]/.test(lineTrimmed);
+      // Deteksi Baris Opsi
+      let optMatch = lineTrimmed.match(/^\s*\*?([a-eA-E])\*?(?:[\.\)]|\s+)/);
+      let isOpt = !!optMatch;
+      let optLetter = isOpt ? optMatch[1].toLowerCase() : null;
+
+      // ==========================================
+      // DETEKSI MUNDUR (BACKTRACKING) - JURUS PAMUNGKAS
+      // Jika kita ketemu opsi 'A' lagi, padahal sebelumnya sudah lewat opsi B/C/D...
+      // ==========================================
+      if (
+        isOpt &&
+        optLetter === "a" &&
+        (optionsSeen.has("b") || optionsSeen.has("c") || optionsSeen.has("d"))
+      ) {
+        let poppedLines = [];
+
+        // Tarik mundur baris-baris terakhir yang bukan opsi (mengamankan teks pertanyaan baru yang menabrak)
+        while (currentBlock.length > 0) {
+          let lastLine = currentBlock[currentBlock.length - 1];
+          let isLastOpt = /^\s*\*?[a-eA-E]\*?(?:[\.\)]|\s+)/.test(lastLine);
+          let isLastKunci = /^\s*(?:Jawaban|Kunci)\s*:/i.test(lastLine);
+
+          if (!isLastOpt && !isLastKunci) {
+            poppedLines.unshift(currentBlock.pop());
+          } else {
+            break; // Stop narik mundur kalau sudah ketemu opsi D dari soal sebelumnya
+          }
+        }
+
+        // Simpan soal sebelumnya yang sudah bersih
+        if (currentBlock.length > 0) {
+          rawBlocks.push(currentBlock.join("\n"));
+        }
+
+        // Buka lembaran soal baru dengan teks yang ditarik tadi
+        currentBlock = poppedLines;
+        optionsSeen = new Set();
+        phase = "q";
+      }
+
       let isKunci = /^\s*(?:Jawaban|Kunci)\s*:/i.test(lineTrimmed);
-      let isNumbered = /^\s*\d+[\.\)]\s/.test(lineTrimmed);
+      let isNumbered = /^\s*\d+[\.\)]\s*/.test(lineTrimmed);
       let isWacanaMarker =
-        /^\s*(perhatikan|cermatilah|bacalah|amatilah|wacana|teks|kutipan|dialog|nomor|-)/i.test(
+        /^\s*(perhatikan|cermatilah|cermati|bacalah|baca|amatilah|amati|wacana|teks|kutipan|dialog|gambar|tabel|grafik|berikut)/i.test(
           lineTrimmed,
         );
 
-      // Kapan kita memotong (split) blok menjadi soal baru?
+      // Kapan kita memotong (split) blok normal?
       if (currentBlock.length > 0) {
-        if (
-          isNumbered || // Sinyal 1: Jelas ada nomor urut baru
-          isWacanaMarker || // Sinyal 2: Jelas ada penanda instruksi wacana baru
-          (phase === "split_ready" && !isOpt && !isKunci) || // Sinyal 3: Habis baris kosong, dan bukan lanjutan opsi
-          (phase === "k" && !isKunci) // Sinyal 4: Tembok Kunci:A sudah terlewati
-        ) {
+        let shouldSplit = false;
+
+        // Aturan standar: ada enter pemisah
+        if (phase === "split_ready" && !isOpt && !isKunci) shouldSplit = true;
+        // Aturan kunci sudah terlewati
+        else if (phase === "k" && !isKunci) shouldSplit = true;
+        // Aturan tabrak langsung dengan angka (2.) atau kosa kata perintah
+        else if (phase === "o" && (isNumbered || isWacanaMarker) && !isOpt)
+          shouldSplit = true;
+
+        if (shouldSplit) {
           rawBlocks.push(currentBlock.join("\n"));
           currentBlock = [];
+          optionsSeen = new Set();
           phase = "q";
         }
       }
 
-      if (isOpt) phase = "o";
-      else if (isKunci) phase = "k";
-      else if (phase === "split_ready") phase = "q"; // Batal split, ternyata opsi multi-baris berparagraf
+      // Update status fase pembacaan saat ini
+      if (isOpt) {
+        phase = "o";
+        optionsSeen.add(optLetter); // Catat huruf opsinya
+      } else if (isKunci) {
+        phase = "k";
+      } else if (phase === "split_ready") {
+        phase = "q";
+      }
 
       currentBlock.push(lineTrimmed);
     }
+
+    // Jangan lupa masukkan sisa blok terakhir
     if (currentBlock.length > 0) rawBlocks.push(currentBlock.join("\n"));
 
     // ==========================================
@@ -1388,33 +1439,51 @@ const GuruDashboard = () => {
       // Hapus nomor soal di awal
       rawText = rawText.replace(/^\s*\d+[\.\)]\s*/, "");
 
-      // Ekstrak Opsi & Format Bintang (*)
-      const extractOption = (letter, nextLetter) => {
-        const nextRegex = nextLetter
-          ? `\\n\\s*\\*?[${nextLetter.toLowerCase()}${nextLetter.toUpperCase()}]\\*?[\\.\\)]`
-          : `$`;
+      // ==========================================
+      // JURUS ANTI-KOLOM: Normalisasi opsi menyamping!
+      // Jika guru pakai spasi/tab untuk opsi C di sebelah A, kita paksa turun (Enter).
+      // Contoh: "A. Burung   C. Penyu" -> Menjadi "A. Burung \n C. Penyu"
+      // ==========================================
+      rawText = rawText.replace(
+        /([ \t]+)(\*?[a-eA-E]\*?[\.\)])(?=\s)/g,
+        "\n$2",
+      );
+
+      // Ekstrak Opsi & Format Bintang (*) - AI LEBIH CERDAS V7 (Tahan Acak)
+      const extractOption = (letter) => {
+        // AI sekarang akan BERHENTI mengambil teks jika ia menabrak huruf opsi APA SAJA (A, B, C, D, atau E), bukan cuma huruf selanjutnya.
+        const stopRegex = `(?:\\n\\s*\\*?[a-eA-E]\\*?(?:[\\.\\)]|\\s+)|$)`;
+
         const regex = new RegExp(
-          `(?:^|\\n)\\s*(\\*?)[${letter.toLowerCase()}${letter.toUpperCase()}](\\*?)[\\.\\)]\\s*(\\*?)(.+?)(?=${nextRegex})`,
+          `(?:^|\\n)\\s*(\\*?)[${letter.toLowerCase()}${letter.toUpperCase()}](\\*?)(?:[\\.\\)]|\\s+)(.+?)(?=${stopRegex})`,
           "is",
         );
 
         const match = rawText.match(regex);
         if (!match) return { text: "", isKey: false };
 
-        let isKey = match[1] === "*" || match[2] === "*" || match[3] === "*";
-        let text = match[4].trim();
-        if (text.startsWith("*")) {
-          isKey = true;
-          text = text.substring(1).trim();
-        }
-        return { text, isKey };
+        let starBefore = match[1];
+        let starAfter = match[2];
+        let rawOptionText = match[3];
+
+        // Cek keberadaan bintang di posisi manapun (depan, tengah, belakang)
+        let isKey =
+          starBefore === "*" ||
+          starAfter === "*" ||
+          rawOptionText.includes("*");
+
+        // Bersihkan semua tanda bintang dari teks agar rapi
+        let cleanText = rawOptionText.replace(/\*/g, "").trim();
+
+        return { text: cleanText, isKey };
       };
 
-      const optA = extractOption("A", "B");
-      const optB = extractOption("B", "C");
-      const optC = extractOption("C", "D");
-      const optD = extractOption("D", "E"); // Aman meski soal SMP cuma sampai D
-      const optE = extractOption("E", null);
+      // Panggil tanpa parameter nextLetter karena AI sekarang sudah mandiri
+      const optA = extractOption("A");
+      const optB = extractOption("B");
+      const optC = extractOption("C");
+      const optD = extractOption("D");
+      const optE = extractOption("E");
 
       if (optA.isKey) kunci = "A";
       else if (optB.isKey) kunci = "B";

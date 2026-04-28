@@ -937,7 +937,7 @@ const UjianDashboard = () => {
 
   return (
     <Dashboard menu={menuItems} active={activeTab} setActive={setActiveTab}>
-      <div className="flex flex-col h-[calc(100vh-100px)] max-w-[90rem] mx-auto p-2 md:p-4 font-sans select-none overflow-hidden gap-4 relative">
+      <div className="flex flex-col h-[calc(115vh)] max-w-[90rem] mx-auto p-2 md:p-4 font-sans select-none overflow-hidden gap-4 relative">
         <div className="bg-white p-4 md:p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between shrink-0 gap-4">
           <div>
             <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2">
