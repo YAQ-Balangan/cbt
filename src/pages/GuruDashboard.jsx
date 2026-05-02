@@ -373,7 +373,7 @@ OPSI_KELAS_LENGKAP.push({
 });
 TINGKAT_SEKOLAH.forEach((t) => {
   OPSI_KELAS_LENGKAP.push({
-    label: `Kelas ${t} (Gabungan MIPA & IPS)`,
+    label: `Kelas ${t} (Semua)`,
     value: t,
   });
 });
@@ -2103,7 +2103,27 @@ const GuruDashboard = () => {
     let mapelsToExport = [];
     let isLogMode = tab === "nilai" && nilaiViewMode === "log";
 
-    // 1. KUMPULKAN DATA (Cerdas Mendeteksi Lokasi Tab)
+    // ==========================================
+    // 1. LOGIKA PENAMAAN FILE DINAMIS (BARU)
+    // ==========================================
+    const dateObj = new Date();
+    const dateStr = `${dateObj.getDate()}-${dateObj.getMonth() + 1}-${dateObj.getFullYear()}`;
+
+    // Hilangkan spasi pada nama mapel & kelas untuk nama file yang rapi
+    const mapelStr = filters.mapel
+      ? filters.mapel.replace(/\s+/g, "_")
+      : "SemuaMapel";
+    const kelasStr = filters.kelas
+      ? filters.kelas.replace(/\s+/g, "_")
+      : "SemuaKelas";
+    const prefixName = isLogMode ? "LogUjian" : "RekapNilai";
+
+    // Hasil Akhir Contoh: RekapNilai_X_MIPA_1_Matematika_2-5-2026
+    let fileName = `${prefixName}_${kelasStr}_${mapelStr}_${dateStr}`;
+
+    // ==========================================
+    // 2. KUMPULKAN DATA (Cerdas Mendeteksi Lokasi Tab)
+    // ==========================================
     if (tab === "nilai") {
       if (isLogMode) {
         if (processedData.length === 0)
@@ -2175,12 +2195,16 @@ const GuruDashboard = () => {
       }
     }
 
-    // 2. LOGIKA GENERATE PDF & PRINT (HTML Dibuat Manual, Bebas Tab)
+    // ==========================================
+    // 3. LOGIKA GENERATE PDF & PRINT (HTML Dibuat Manual)
+    // ==========================================
     if (type === "print" || type === "pdf") {
       const title = isLogMode
         ? "LOG RIWAYAT UJIAN SISWA"
         : "REKAPITULASI BUKU NILAI SISWA";
-      const subtitle = `Total Data: ${dataToExport.length} | Waktu Cetak: ${new Date().toLocaleString("id-ID")}`;
+
+      // Subtitle Print juga dibuat dinamis mengikuti filter!
+      const subtitle = `Mapel: ${filters.mapel || "Semua"} | Kelas: ${filters.kelas || "Semua"} | Total Data: ${dataToExport.length} | Waktu Cetak: ${new Date().toLocaleString("id-ID")}`;
 
       let tableHtml = `<table border="1" style="width:100%; border-collapse: collapse; text-align: center; margin-top: 15px; font-size: 10pt;">`;
       if (isLogMode) {
@@ -2206,7 +2230,8 @@ const GuruDashboard = () => {
       }
       tableHtml += `</tbody></table>`;
 
-      const printContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Cetak Data</title><style>@page { size: auto; margin: 15mm; } body { font-family: Arial, sans-serif; color: #000; } .header { text-align: center; margin-bottom: 20px; } .header h1 { margin:0 0 5px 0; font-size: 20pt; text-transform: uppercase; border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px; } .header p { margin:0; font-size: 11pt; color: #444; }</style></head><body><div class="header"><h1>${title}</h1><p>${subtitle}</p></div>${tableHtml}</body></html>`;
+      // Menambahkan <title> dinamis pada dokumen HTML yang di-print/PDF
+      const printContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>${fileName}</title><style>@page { size: auto; margin: 15mm; } body { font-family: Arial, sans-serif; color: #000; } .header { text-align: center; margin-bottom: 20px; } .header h1 { margin:0 0 5px 0; font-size: 20pt; text-transform: uppercase; border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px; } .header p { margin:0; font-size: 11pt; color: #444; }</style></head><body><div class="header"><h1>${title}</h1><p>${subtitle}</p></div>${tableHtml}</body></html>`;
 
       let printIframe = document.getElementById("print-iframe-cerdas");
       if (!printIframe) {
@@ -2219,16 +2244,21 @@ const GuruDashboard = () => {
       printIframe.contentWindow.document.open();
       printIframe.contentWindow.document.write(printContent);
       printIframe.contentWindow.document.close();
+
+      // Memberi nama pada title window iframe membantu beberapa browser menyimpan PDF dengan nama tersebut
+      printIframe.contentWindow.document.title = fileName;
+
       printIframe.contentWindow.focus();
       setTimeout(() => printIframe.contentWindow.print(), 500);
       return;
     }
 
-    // 3. LOGIKA GENERATE EXCEL & WORD
+    // ==========================================
+    // 4. LOGIKA GENERATE EXCEL & WORD
+    // ==========================================
     let exportHeaders = [];
     let exportDataMatrix = [];
     let wscols = [];
-    let fileName = isLogMode ? "Log_Riwayat_Ujian" : "Rekap_Nilai_Siswa";
 
     if (isLogMode) {
       exportHeaders = currentConfig.columns.map((c) => c.label);
@@ -2272,7 +2302,9 @@ const GuruDashboard = () => {
         worksheet,
         isLogMode ? "Log Ujian" : "Rekap Nilai",
       );
-      XLSX.writeFile(workbook, `${fileName}_${new Date().getTime()}.xlsx`);
+
+      // Simpan dengan nama dinamis (.xlsx)
+      XLSX.writeFile(workbook, `${fileName}.xlsx`);
     } else if (type === "doc") {
       try {
         const headerCells = exportHeaders.map(
@@ -2340,13 +2372,26 @@ const GuruDashboard = () => {
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 400 },
                 }),
+                // Tambahkan keterangan filter di file word agar rapi
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Kelas: ${filters.kelas || "Semua"} | Mapel: ${filters.mapel || "Semua"} | Tanggal: ${dateStr}`,
+                      size: 20,
+                    }),
+                  ],
+                  alignment: AlignmentType.CENTER,
+                  spacing: { after: 400 },
+                }),
                 docTable,
               ],
             },
           ],
         });
         const blob = await Packer.toBlob(doc);
-        saveAs(blob, `${fileName}_${new Date().getTime()}.docx`);
+
+        // Simpan dengan nama dinamis (.docx)
+        saveAs(blob, `${fileName}.docx`);
       } catch (error) {
         showAlert(
           "danger",
