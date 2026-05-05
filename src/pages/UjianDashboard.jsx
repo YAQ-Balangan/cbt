@@ -1,5 +1,6 @@
 // src/pages/UjianDashboard.jsx
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom"; // [BARU] Import navigasi
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MonitorSmartphone,
@@ -23,6 +24,7 @@ import {
   ZoomOut,
   Maximize,
   Info,
+  ArrowLeft, // [BARU] Import ikon panah kembali
 } from "lucide-react";
 import Dashboard from "../components/layout/Dashboard";
 import { api, supabase } from "../api/api";
@@ -137,6 +139,8 @@ const CustomAvatar = ({ gender, isDisqualified }) => {
 // KOMPONEN UTAMA DASHBOARD
 // ==========================================
 const UjianDashboard = () => {
+  const navigate = useNavigate(); // [BARU] Inisialisasi hook navigasi
+
   const [activeTab, setActiveTab] = useState("live");
   const [isSyncing, setIsSyncing] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState("IDLE");
@@ -939,24 +943,35 @@ const UjianDashboard = () => {
     <Dashboard menu={menuItems} active={activeTab} setActive={setActiveTab}>
       <div className="flex flex-col h-[calc(115vh)] max-w-[90rem] mx-auto p-2 md:p-4 font-sans select-none overflow-hidden gap-4 relative">
         <div className="bg-white p-4 md:p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between shrink-0 gap-4">
-          <div>
-            <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2">
-              {activeTab === "live" ? (
-                <>
-                  <MonitorSmartphone className="text-indigo-600" /> Pemantauan
-                  Kelas Virtual
-                </>
-              ) : (
-                <>
-                  <SettingsIcon className="text-indigo-500" /> Atur Denah Ujian
-                </>
-              )}
-            </h2>
-            <p className="text-xs md:text-sm text-slate-500 font-medium mt-0.5">
-              {activeTab === "live"
-                ? "Lihat simulasi ruang kelas dan aktivitas siswa dari sudut pandang pengawas."
-                : "Desain baris, kolom, dan atur posisi duduk siswa."}
-            </p>
+          
+          {/* [BARU] Header dengan Tombol Back */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all shadow-sm shrink-0"
+              title="Kembali ke halaman sebelumnya"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2">
+                {activeTab === "live" ? (
+                  <>
+                    <MonitorSmartphone className="text-indigo-600" /> Pemantauan
+                    Kelas Virtual
+                  </>
+                ) : (
+                  <>
+                    <SettingsIcon className="text-indigo-500" /> Atur Denah Ujian
+                  </>
+                )}
+              </h2>
+              <p className="text-xs md:text-sm text-slate-500 font-medium mt-0.5">
+                {activeTab === "live"
+                  ? "Lihat simulasi ruang kelas dan aktivitas siswa dari sudut pandang pengawas."
+                  : "Desain baris, kolom, dan atur posisi duduk siswa."}
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
