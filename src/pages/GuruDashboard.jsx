@@ -356,46 +356,39 @@ const GoogleFormEditor = ({
 };
 
 // ==========================================
-// GENERATOR OPSI KELAS OTOMATIS
+// GENERATOR OPSI KELAS OTOMATIS (TERSTRUKTUR & MINIMALIS)
 // ==========================================
-const TINGKAT_SEKOLAH = ["VII", "VIII", "IX", "X", "XI", "XII"];
-const JURUSAN_SEKOLAH = ["MIPA", "IPS"];
+const TINGKAT_SMP = ["VII", "VIII", "IX"];
+const TINGKAT_SMA = ["X", "XI", "XII"];
+const JURUSAN_SMA = ["MIPA", "IPS"];
 const MAKSIMAL_ROMBEL = 2;
 
-const OPSI_KELAS_LENGKAP = [
-  { label: "KATEGORI GLOBAL", isLabel: true },
-  { label: "Semua Kelas (Umum)", value: "SEMUA" },
-];
+const OPSI_KELAS_LENGKAP = [];
+
+OPSI_KELAS_LENGKAP.push({ label: "--- SMP / MTS ---", isLabel: true });
+TINGKAT_SMP.forEach((t) => OPSI_KELAS_LENGKAP.push({ label: t, value: t }));
+
+OPSI_KELAS_LENGKAP.push({ label: "--- JURUSAN ---", isLabel: true });
+JURUSAN_SMA.forEach((j) =>
+  OPSI_KELAS_LENGKAP.push({ label: `Semua Jurusan ${j}`, value: j }),
+);
+
+OPSI_KELAS_LENGKAP.push({ label: "--- KELAS (UMUM) ---", isLabel: true });
+TINGKAT_SMA.forEach((t) => {
+  JURUSAN_SMA.forEach((j) =>
+    OPSI_KELAS_LENGKAP.push({
+      label: `${t} ${j} (Semua)`,
+      value: `${t} ${j}`,
+    }),
+  );
+});
 
 OPSI_KELAS_LENGKAP.push({
-  label: "KATEGORI TINGKAT (GABUNGAN JURUSAN)",
+  label: "--- KELAS (SPESIFIK) ---",
   isLabel: true,
 });
-TINGKAT_SEKOLAH.forEach((t) => {
-  OPSI_KELAS_LENGKAP.push({
-    label: `Kelas ${t} (Semua)`,
-    value: t,
-  });
-});
-
-OPSI_KELAS_LENGKAP.push({ label: "KATEGORI JURUSAN GLOBAL", isLabel: true });
-JURUSAN_SEKOLAH.forEach((j) => {
-  OPSI_KELAS_LENGKAP.push({
-    label: `Semua ${j} (VII, VIII, IX, X, XI, XII)`,
-    value: j,
-  });
-});
-
-OPSI_KELAS_LENGKAP.push({ label: "KATEGORI TINGKAT & JURUSAN", isLabel: true });
-TINGKAT_SEKOLAH.forEach((t) => {
-  JURUSAN_SEKOLAH.forEach((j) => {
-    OPSI_KELAS_LENGKAP.push({ label: `${t} ${j}`, value: `${t} ${j}` });
-  });
-});
-
-OPSI_KELAS_LENGKAP.push({ label: "KELAS SPESIFIK (ROMBEL)", isLabel: true });
-TINGKAT_SEKOLAH.forEach((t) => {
-  JURUSAN_SEKOLAH.forEach((j) => {
+TINGKAT_SMA.forEach((t) => {
+  JURUSAN_SMA.forEach((j) => {
     for (let i = 1; i <= MAKSIMAL_ROMBEL; i++) {
       OPSI_KELAS_LENGKAP.push({
         label: `${t} ${j} ${i}`,
@@ -404,6 +397,10 @@ TINGKAT_SEKOLAH.forEach((t) => {
     }
   });
 });
+
+const FLAT_OPSI_KELAS = OPSI_KELAS_LENGKAP.filter((opt) => !opt.isLabel).map(
+  (opt) => opt.value,
+);
 
 const TAB_CONFIG = {
   soal: {
@@ -1863,152 +1860,18 @@ const GuruDashboard = () => {
       }
 
       elements.push(
-        <Card
+        <MemoizedSoalCard
           key={`soal-${s.id}`}
-          className={`p-5 md:p-8 border-t-[6px] transition-all relative group overflow-hidden bg-white rounded-[1.5rem] md:rounded-[2rem] z-10 w-full ${isSelected ? "border-t-red-500 ring-4 ring-red-500/10 shadow-lg" : s.wacana ? "border-t-blue-500" : "border-t-emerald-500"}`}
-        >
-          <div className="absolute top-4 left-4 md:top-6 md:left-6 z-10">
-            <button
-              onClick={() => toggleSelect(s.id)}
-              className={`flex items-center justify-center p-1.5 rounded-lg transition-all ${isSelected ? "bg-red-50 text-red-500" : "bg-slate-50 text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 border border-slate-200"}`}
-            >
-              {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
-            </button>
-          </div>
-
-          <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20">
-            <label
-              className={`p-1.5 md:p-2 bg-white border border-emerald-200 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition-all shadow-sm cursor-pointer ${uploadingImgId === s.id ? "opacity-50 cursor-wait" : ""}`}
-              title="Sisipkan Gambar"
-            >
-              {uploadingImgId === s.id ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : (
-                <ImagePlus size={16} />
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                disabled={uploadingImgId === s.id}
-                onChange={(e) => handleInlineImageUpload(e, s)}
-              />
-            </label>
-            <button
-              onClick={() => handleDuplicate(s)}
-              className="p-1.5 md:p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
-              title="Duplikat"
-            >
-              <Copy size={16} />
-            </button>
-            <button
-              onClick={() => openEditModal(s)}
-              className="p-1.5 md:p-2 bg-white border border-amber-200 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all shadow-sm"
-              title="Edit Teks Soal"
-            >
-              <Edit size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(s.id)}
-              className="p-1.5 md:p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"
-              title="Hapus Soal"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-
-          <div className="flex flex-wrap gap-2 items-center mb-6 pl-10 pr-24 md:pl-12 md:pr-40">
-            <span
-              className={`font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border ${isSelected ? "bg-red-50 border-red-200 text-red-600" : "bg-slate-100 border-slate-200 text-slate-500"}`}
-            >
-              #{s.id}
-            </span>
-            <span className="bg-amber-50 text-amber-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-amber-200 flex items-center gap-1">
-              <Target size={12} /> {formatPoinDisplay(s.poin)} POIN
-            </span>
-            <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-emerald-200">
-              {s.mapel} | {s.kelas}
-            </span>
-            {s.wacana && (
-              <span className="bg-blue-50 text-blue-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-blue-200 flex items-center gap-1">
-                <Link2 size={12} /> Terikat Wacana
-              </span>
-            )}
-            {s.guru_pembuat && (
-              <span className="bg-slate-50 text-slate-500 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-slate-200">
-                👤 {s.guru_pembuat}
-              </span>
-            )}
-          </div>
-
-          <div
-            className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap"
-            dangerouslySetInnerHTML={{ __html: s.pertanyaan }}
-          />
-          {s.link_gambar && (
-            <div className="mb-6 max-w-lg rounded-xl border border-slate-200 shadow-sm p-2 bg-slate-50 relative group/img w-max">
-              <button
-                onClick={() => handleRemoveInlineImage(s)}
-                disabled={uploadingImgId === s.id}
-                className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity shadow-md hover:bg-red-600 z-10 disabled:opacity-0"
-                title="Copot Gambar"
-              >
-                <X size={14} />
-              </button>
-              <img
-                src={s.link_gambar}
-                alt="Lampiran"
-                className={`max-h-56 object-contain rounded-lg ${uploadingImgId === s.id ? "opacity-50" : ""}`}
-              />
-              {uploadingImgId === s.id && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <RefreshCw
-                    className="animate-spin text-emerald-600 drop-shadow"
-                    size={32}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-          {!s.link_gambar && uploadingImgId === s.id && (
-            <div className="mb-6 max-w-lg h-32 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50 flex items-center justify-center">
-              <RefreshCw className="animate-spin text-emerald-600" size={24} />
-              <span className="ml-2 text-sm font-bold text-emerald-700">
-                Menganalisa & Mengunggah...
-              </span>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2.5">
-            {["A", "B", "C", "D", "E"].map((opt) => {
-              const keyMap = `opsi_${opt.toLowerCase()}`;
-              const isCorrect = String(s.jawaban_benar).toUpperCase() === opt;
-              if (!s[keyMap]) return null;
-              return (
-                <div
-                  key={opt}
-                  className={`px-4 py-2.5 md:px-5 md:py-3 rounded-xl border flex items-start gap-3 transition-all ${isCorrect ? "bg-emerald-50 border-emerald-300 shadow-sm" : "bg-white border-slate-200"}`}
-                >
-                  <span
-                    className={`font-bold text-xs md:text-sm w-5 flex-shrink-0 pt-0.5 ${isCorrect ? "text-emerald-700" : "text-slate-400"}`}
-                  >
-                    {opt}.
-                  </span>
-                  <span
-                    className={`text-xs md:text-sm font-medium leading-relaxed whitespace-pre-wrap flex-1 ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
-                    dangerouslySetInnerHTML={{ __html: s[keyMap] }}
-                  />
-                  {isCorrect && (
-                    <CheckCircle2
-                      size={16}
-                      className="text-emerald-500 ml-auto shrink-0 mt-0.5"
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>,
+          s={s}
+          isSelected={isSelected}
+          isUploadingImg={uploadingImgId === s.id}
+          onToggleSelect={toggleSelect}
+          onUploadImage={handleInlineImageUpload}
+          onRemoveImage={handleRemoveInlineImage}
+          onDuplicate={handleDuplicate}
+          onEdit={openEditModal}
+          onDelete={handleDelete}
+        />,
       );
     }
     return elements;

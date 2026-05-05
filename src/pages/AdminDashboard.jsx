@@ -116,6 +116,18 @@ const PremiumSelect = ({
             className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl max-h-52 md:max-h-60 overflow-y-auto py-1"
           >
             {options.map((opt, index) => {
+              // LOGIKA PEMBATAS (DIVIDER)
+              if (opt.isLabel) {
+                return (
+                  <div
+                    key={index}
+                    className="px-4 pt-3 pb-1 text-[10px] font-black text-emerald-700 uppercase tracking-widest bg-slate-50/50 sticky top-0 z-10"
+                  >
+                    {opt.label}
+                  </div>
+                );
+              }
+
               const isSelected = String(opt.value) === String(value);
               return (
                 <button
@@ -126,8 +138,8 @@ const PremiumSelect = ({
                     setIsOpen(false);
                   }}
                   className={`w-full flex items-center justify-between px-3 md:px-4 py-2.5 md:py-3 text-sm transition-colors text-left
-                    ${isSelected ? "bg-emerald-50 text-emerald-800 font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-emerald-700 font-medium"}
-                  `}
+        ${isSelected ? "bg-emerald-50 text-emerald-800 font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-emerald-700 font-medium"}
+      `}
                 >
                   <span className="whitespace-normal break-words pr-2">
                     {opt.label}
@@ -277,20 +289,60 @@ const PremiumMultiSelect = ({
 };
 
 // ==========================================
-// GENERATOR OPSI KELAS SMP (DINAMIS)
+// GENERATOR OPSI KELAS TERPUSAT (SINKRONISASI SMP & SMA)
 // ==========================================
-const TINGKAT_SEKOLAH = ["VII", "VIII", "IX"];
+const TINGKAT_SMP = ["VII", "VIII", "IX"];
+const TINGKAT_SMA = ["X", "XI", "XII"];
+const JURUSAN_SMA = ["MIPA", "IPS"];
+const MAKSIMAL_ROMBEL = 2; // Rombel 1 dan 2
 
 const OPSI_KELAS_LENGKAP = [
   { label: "KATEGORI GLOBAL", isLabel: true },
   { label: "Semua Kelas (Umum)", value: "SEMUA" },
-  { label: "KATEGORI TINGKAT", isLabel: true },
 ];
 
-TINGKAT_SEKOLAH.forEach((t) => {
-  OPSI_KELAS_LENGKAP.push({
-    label: `Kelas ${t}`,
-    value: t,
+// --- 1. BAGIAN SMP (Tanpa Jurusan) ---
+OPSI_KELAS_LENGKAP.push({ label: "TINGKAT SMP", isLabel: true });
+TINGKAT_SMP.forEach((t) => {
+  OPSI_KELAS_LENGKAP.push({ label: `Kelas ${t}`, value: t });
+});
+
+// --- 2. BAGIAN SMA (Tingkat Umum) ---
+OPSI_KELAS_LENGKAP.push({
+  label: "TINGKAT SMA (GABUNGAN JURUSAN)",
+  isLabel: true,
+});
+TINGKAT_SMA.forEach((t) => {
+  OPSI_KELAS_LENGKAP.push({ label: `Kelas ${t} (Semua)`, value: t });
+});
+
+// --- 3. BAGIAN SMA (Jurusan Global) ---
+OPSI_KELAS_LENGKAP.push({ label: "JURUSAN SMA GLOBAL", isLabel: true });
+JURUSAN_SMA.forEach((j) => {
+  OPSI_KELAS_LENGKAP.push({ label: `Semua ${j} (X, XI, XII)`, value: j });
+});
+
+// --- 4. BAGIAN SMA (Tingkat & Jurusan) ---
+OPSI_KELAS_LENGKAP.push({ label: "TINGKAT & JURUSAN SMA", isLabel: true });
+TINGKAT_SMA.forEach((t) => {
+  JURUSAN_SMA.forEach((j) => {
+    OPSI_KELAS_LENGKAP.push({ label: `${t} ${j}`, value: `${t} ${j}` });
+  });
+});
+
+// --- 5. BAGIAN SMA (Rombel Spesifik 1 & 2) ---
+OPSI_KELAS_LENGKAP.push({
+  label: "KELAS SPESIFIK (ROMBEL SMA)",
+  isLabel: true,
+});
+TINGKAT_SMA.forEach((t) => {
+  JURUSAN_SMA.forEach((j) => {
+    for (let i = 1; i <= MAKSIMAL_ROMBEL; i++) {
+      OPSI_KELAS_LENGKAP.push({
+        label: `${t} ${j} ${i}`,
+        value: `${t} ${j} ${i}`,
+      });
+    }
   });
 });
 
@@ -298,6 +350,28 @@ TINGKAT_SEKOLAH.forEach((t) => {
 const FLAT_OPSI_KELAS = OPSI_KELAS_LENGKAP.filter((opt) => !opt.isLabel).map(
   (opt) => opt.value,
 );
+
+// ==========================================
+// DAFTAR KELAS DENGAN PEMBATAS KATEGORI
+// ==========================================
+const OPSI_KELAS_SISWA = [
+  { label: "TINGKAT SMP / MTS", isLabel: true },
+  ...TINGKAT_SMP.map((t) => ({ label: t, value: t })),
+
+  { label: "SMA / MA / SMK", isLabel: true },
+];
+
+// Looping untuk memasukkan kelas spesifik SMA
+TINGKAT_SMA.forEach((t) => {
+  JURUSAN_SMA.forEach((j) => {
+    for (let i = 1; i <= MAKSIMAL_ROMBEL; i++) {
+      OPSI_KELAS_SISWA.push({
+        label: `${t} ${j} ${i}`,
+        value: `${t} ${j} ${i}`,
+      });
+    }
+  });
+});
 
 // ==========================================
 // 2. KONFIGURASI DINAMIS (SCHEMA)
@@ -323,8 +397,8 @@ const TAB_CONFIG = {
       {
         key: "kelas",
         label: "Kelas",
-        isCombobox: true,
-        options: FLAT_OPSI_KELAS,
+        isSelect: true,
+        options: OPSI_KELAS_SISWA,
         sortable: true,
         filterable: true,
       },
@@ -354,8 +428,8 @@ const TAB_CONFIG = {
       {
         key: "kelas",
         label: "Target Kelas",
-        isCombobox: true,
-        options: FLAT_OPSI_KELAS,
+        isSelect: true,
+        options: OPSI_KELAS_SISWA,
         sortable: true,
         filterable: true,
       },
@@ -382,8 +456,8 @@ const TAB_CONFIG = {
       {
         key: "kelas",
         label: "Kelas",
-        isCombobox: true,
-        options: FLAT_OPSI_KELAS,
+        isSelect: true,
+        options: OPSI_KELAS_SISWA,
         sortable: true,
         filterable: true,
       },
@@ -450,11 +524,35 @@ const EditableCell = ({ item, column, onSave }) => {
           onKeyDown={(e) => e.key === "Enter" && triggerSave()}
         >
           <option value="">Pilih...</option>
-          {column.options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
+          {column.options.map((opt, i) => {
+            // Jika opsi berupa Objek (Seperti daftar Kelas yang baru)
+            if (typeof opt === "object" && opt !== null) {
+              if (opt.isLabel) {
+                // Opsi disabled berfungsi sebagai pembatas kategori yang tidak bisa di-klik
+                return (
+                  <option
+                    key={`label-${i}`}
+                    disabled
+                    className="font-black bg-slate-200 text-slate-500"
+                  >
+                    --- {opt.label} ---
+                  </option>
+                );
+              }
+              return (
+                <option key={`opt-${i}`} value={opt.value}>
+                  {opt.label}
+                </option>
+              );
+            }
+
+            // Jika opsi berupa teks biasa (Seperti Role & Jenis Kelamin)
+            return (
+              <option key={`str-${i}`} value={opt}>
+                {opt}
+              </option>
+            );
+          })}
         </select>
       );
     }
