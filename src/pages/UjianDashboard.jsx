@@ -291,8 +291,13 @@ const UjianDashboard = () => {
         });
       }
 
-      const liveStudentsList = [];
+      // ==========================================
+      // [PERBAIKAN] LOGIK RIWAYAT LIVE & NILAI
+      // ==========================================
+      const allEvents = [];
+      const currentTime = Date.now();
 
+      // 1A. Kumpulkan Sesi Ujian (Sedang Berjalan / Terkunci)
       (resSesiUjian || []).forEach((sesi) => {
         const usernameSesiNormal = normalizeText(sesi.username_siswa);
         const userObj = siswaOnly.find(
@@ -313,47 +318,68 @@ const UjianDashboard = () => {
             ? Math.min(100, Math.round((dijawab / totalSoal) * 100))
             : 0;
 
-        liveStudentsList.push({
-          id: `live-${sesi.id_sesi}`,
-          username: sesi.username_siswa,
-          id_ujian: String(sesi.id_ujian),
-          mapel: jadwalMap[String(sesi.id_ujian)] || "Ujian",
-          nama: userObj ? userObj.nama : sesi.username_siswa,
-          gender: userObj ? userObj.gender : "L",
-          dijawab: dijawab,
-          totalSoal: totalSoal,
-          progress: percentage,
-          status: sesi.status === "LOCKED" ? "LOCKED" : "WORKING",
+        // Ambil waktu dari database (jika ada), fallback ke waktu sekarang
+        const eventTime = new Date(
+          sesi.updated_at || sesi.created_at || currentTime,
+        ).getTime();
+
+        allEvents.push({
+          userKey: usernameSesiNormal,
+          type: "LIVE",
+          timestamp: eventTime,
+          sortId: parseInt(sesi.id_sesi || sesi.id) || 0,
+          data: {
+            id: `live-${sesi.id_sesi}`,
+            username: sesi.username_siswa,
+            id_ujian: String(sesi.id_ujian),
+            mapel: jadwalMap[String(sesi.id_ujian)] || "Ujian",
+            nama: userObj ? userObj.nama : sesi.username_siswa,
+            gender: userObj ? userObj.gender : "L",
+            dijawab: dijawab,
+            totalSoal: totalSoal,
+            progress: percentage,
+            status: sesi.status === "LOCKED" ? "LOCKED" : "WORKING",
+          },
         });
       });
 
+      // 1B. Kumpulkan Nilai (Selesai Ujian / Diskualifikasi)
       (resNilai || []).forEach((nilai) => {
         const nNama = String(nilai.nama_siswa || nilai.Nama_Siswa || "")
           .toLowerCase()
           .trim();
+        const nUsername = String(nilai.username || nilai.Username || nNama)
+          .toLowerCase()
+          .trim();
+
+        const userObj = siswaOnly.find(
+          (u) =>
+            normalizeText(u.username) === nUsername ||
+            normalizeText(u.nama) === nNama,
+        );
+        const userKey = userObj ? normalizeText(userObj.username) : nUsername;
+
         const statusVal = String(
           nilai.status || nilai.Status || "",
         ).toUpperCase();
         const isDisqualified =
           statusVal.includes("DISKUALIFIKASI") || statusVal.includes("DIS");
 
-        const isAlreadyLive = liveStudentsList.find(
-          (ls) =>
-            normalizeText(ls.username) === nNama ||
-            normalizeText(ls.nama) === nNama,
-        );
+        // Ambil waktu submission dari DB (mengantisipasi beberapa variasi nama kolom waktu)
+        const dbTime = new Date(
+          nilai.created_at || nilai.waktu_selesai || nilai.waktu || 0,
+        ).getTime();
 
-        if (!isAlreadyLive) {
-          const userObj = siswaOnly.find(
-            (u) =>
-              normalizeText(u.nama) === nNama ||
-              normalizeText(u.username) === nNama,
-          );
-          liveStudentsList.push({
+        allEvents.push({
+          userKey: userKey,
+          type: "DONE",
+          timestamp: dbTime,
+          sortId: parseInt(nilai.id) || 0,
+          data: {
             id: `done-${nilai.id}`,
             username: userObj
               ? userObj.username
-              : nilai.nama_siswa || nilai.Nama_Siswa,
+              : nilai.username || nilai.nama_siswa,
             id_ujian: String(nilai.id_ujian || ""),
             mapel: nilai.mapel || nilai.Mapel || "Ujian",
             nama: userObj ? userObj.nama : nilai.nama_siswa || nilai.Nama_Siswa,
@@ -362,9 +388,43 @@ const UjianDashboard = () => {
             totalSoal: nilai.total_soal || nilai.Total_Soal || "-",
             progress: 100,
             status: isDisqualified ? "DISKUALIFIKASI" : "SELESAI",
-          });
+          },
+        });
+      });
+
+      // 2. Urutkan semua event: Paling BARU berada di atas (berdasarkan Waktu / ID)
+      allEvents.sort((a, b) => {
+        if (b.timestamp !== a.timestamp && a.timestamp > 0 && b.timestamp > 0) {
+          return b.timestamp - a.timestamp;
+        }
+        return b.sortId - a.sortId;
+      });
+
+      // 3. Filter Event: Ambil hanya status TERBARU untuk masing-masing siswa
+      const ONE_HOUR_MS = 60 * 60 * 1000;
+      const latestEventsMap = {};
+
+      allEvents.forEach((evt) => {
+        if (!latestEventsMap[evt.userKey]) {
+          // Aturan Kedaluwarsa 1 Jam (Khusus ujian yang sudah berstatus DONE/SELESAI)
+          const isExpiredDone =
+            evt.type === "DONE" &&
+            evt.timestamp > 0 &&
+            currentTime - evt.timestamp > ONE_HOUR_MS;
+
+          if (!isExpiredDone) {
+            latestEventsMap[evt.userKey] = evt.data;
+          } else {
+            // Tandai 'EXPIRED' agar loop mengabaikan nilai ini dan membiarkan bangku kosong
+            latestEventsMap[evt.userKey] = "EXPIRED";
+          }
         }
       });
+
+      // 4. Ekstrak data final tanpa event yang sudah expired
+      const liveStudentsList = Object.values(latestEventsMap).filter(
+        (data) => data !== "EXPIRED",
+      );
 
       setStudentsData(liveStudentsList);
     } catch (error) {
@@ -943,7 +1003,6 @@ const UjianDashboard = () => {
     <Dashboard menu={menuItems} active={activeTab} setActive={setActiveTab}>
       <div className="flex flex-col h-[calc(115vh)] max-w-[90rem] mx-auto p-2 md:p-4 font-sans select-none overflow-hidden gap-4 relative">
         <div className="bg-white p-4 md:p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between shrink-0 gap-4">
-          
           {/* [BARU] Header dengan Tombol Back */}
           <div className="flex items-center gap-3">
             <button
@@ -962,7 +1021,8 @@ const UjianDashboard = () => {
                   </>
                 ) : (
                   <>
-                    <SettingsIcon className="text-indigo-500" /> Atur Denah Ujian
+                    <SettingsIcon className="text-indigo-500" /> Atur Denah
+                    Ujian
                   </>
                 )}
               </h2>

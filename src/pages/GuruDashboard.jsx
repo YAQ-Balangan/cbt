@@ -372,7 +372,6 @@ OPSI_KELAS_LENGKAP.push({ label: "--- JURUSAN ---", isLabel: true });
 JURUSAN_SMA.forEach((j) =>
   OPSI_KELAS_LENGKAP.push({ label: `Semua Jurusan ${j}`, value: j }),
 );
-
 OPSI_KELAS_LENGKAP.push({ label: "--- KELAS (UMUM) ---", isLabel: true });
 TINGKAT_SMA.forEach((t) => {
   JURUSAN_SMA.forEach((j) =>
