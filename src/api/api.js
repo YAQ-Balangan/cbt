@@ -82,20 +82,58 @@ export const api = {
 
     // Auto-Save setiap 15 Detik & Saat Pindah Soal
     saveSesi: async (username, idUjian, jawaban, sisaWaktu, pelanggaran = 0, statusSesi = 'ACTIVE') => {
-        const idSesi = `${username}_${idUjian}`;
-        const { error } = await supabase
-            .from('sesi_ujian')
-            .upsert({
-                id_sesi: idSesi,
-                username_siswa: username,
-                id_ujian: idUjian,
-                jawaban_sementara: jawaban,
-                sisa_waktu: sisaWaktu,
-                pelanggaran: pelanggaran,
-                status: statusSesi
-            }, { onConflict: 'id_sesi' });
+        try {
+            const idSesi = `${username}_${idUjian}`;
+            const waktuSekarang = new Date().toISOString();
+            const jawabanString = typeof jawaban === 'string' ? jawaban : JSON.stringify(jawaban);
 
-        if (error) console.error("Gagal auto-save ke server:", error.message);
+            // 1. Cek apakah sesi ini sudah ada di database
+            const { data: existingSesi } = await supabase
+                .from('sesi_ujian')
+                .select('id_sesi')
+                .eq('id_sesi', idSesi)
+                .single();
+
+            if (existingSesi) {
+                // JIKA SUDAH ADA: Lakukan UPDATE (Hanya perbarui updated_at)
+                const payloadUpdate = {
+                    jawaban_sementara: jawabanString,
+                    sisa_waktu: sisaWaktu,
+                    pelanggaran: pelanggaran,
+                    status: statusSesi,
+                    updated_at: waktuSekarang
+                };
+
+                const { error: updateError } = await supabase
+                    .from('sesi_ujian')
+                    .update(payloadUpdate)
+                    .eq('id_sesi', idSesi);
+
+                if (updateError) console.error("Update error:", updateError.message);
+
+            } else {
+                // JIKA BELUM ADA (Baru Login): Lakukan INSERT (Isi created_at dan updated_at)
+                const payloadInsert = {
+                    id_sesi: idSesi,
+                    username_siswa: username,
+                    id_ujian: idUjian,
+                    jawaban_sementara: jawabanString,
+                    sisa_waktu: sisaWaktu,
+                    pelanggaran: pelanggaran,
+                    status: statusSesi,
+                    created_at: waktuSekarang,
+                    updated_at: waktuSekarang
+                };
+
+                const { error: insertError } = await supabase
+                    .from('sesi_ujian')
+                    .insert([payloadInsert]);
+
+                if (insertError) console.error("Insert error:", insertError.message);
+            }
+        } catch (error) {
+            console.error("Gagal save sesi ujian:", error);
+        }
     },
 
     // Tarik progres sebelumnya saat Siswa mulai/melanjutkan ujian
@@ -113,13 +151,14 @@ export const api = {
     },
 
     // GURU: Buka Kunci Siswa
-    updateSesiStatus: async (username, idUjian, status, pelanggaran = 0) => {
+    updateSesiStatus: async (username, idUjian, statusUpdate, pelanggaranReset = 0) => {
         const idSesi = `${username}_${idUjian}`;
         const { error } = await supabase
             .from('sesi_ujian')
             .update({
-                status: status,
-                pelanggaran: pelanggaran
+                status: statusUpdate,
+                pelanggaran: pelanggaranReset,
+                updated_at: new Date().toISOString()
             })
             .eq('id_sesi', idSesi);
 

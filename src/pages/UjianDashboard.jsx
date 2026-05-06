@@ -297,6 +297,24 @@ const UjianDashboard = () => {
       const allEvents = [];
       const currentTime = Date.now();
 
+      // HELPER: Fungsi kebal error untuk memparsing tanggal dari DB
+      const safeGetTime = (dateVal) => {
+        if (!dateVal) return 0;
+        let cleanDate = String(dateVal).replace(" ", "T");
+
+        // Memastikan terbaca sebagai UTC dari database Supabase
+        if (
+          !cleanDate.includes("Z") &&
+          !cleanDate.includes("+") &&
+          !cleanDate.includes("-")
+        ) {
+          cleanDate += "Z";
+        }
+
+        const time = new Date(cleanDate).getTime();
+        return isNaN(time) ? 0 : time;
+      };
+
       // 1A. Kumpulkan Sesi Ujian (Sedang Berjalan / Terkunci)
       (resSesiUjian || []).forEach((sesi) => {
         const usernameSesiNormal = normalizeText(sesi.username_siswa);
@@ -318,9 +336,8 @@ const UjianDashboard = () => {
             ? Math.min(100, Math.round((dijawab / totalSoal) * 100))
             : 0;
 
-        const eventTime = new Date(
-          sesi.updated_at || sesi.created_at || currentTime,
-        ).getTime();
+        const parsedTime = safeGetTime(sesi.updated_at || sesi.created_at);
+        const eventTime = parsedTime > 0 ? parsedTime : currentTime;
 
         allEvents.push({
           userKey: usernameSesiNormal,
@@ -364,9 +381,9 @@ const UjianDashboard = () => {
         const isDisqualified =
           statusVal.includes("DISKUALIFIKASI") || statusVal.includes("DIS");
 
-        const dbTime = new Date(
-          nilai.created_at || nilai.waktu_selesai || nilai.waktu || 0,
-        ).getTime();
+        const dbTime = safeGetTime(
+          nilai.created_at || nilai.waktu_selesai || nilai.waktu,
+        );
 
         allEvents.push({
           userKey: userKey,
@@ -390,47 +407,33 @@ const UjianDashboard = () => {
         });
       });
 
-      // ==========================================
-      // [REVISI] 2. Urutkan semua event: Prioritas LIVE -> Waktu -> ID
-      // ==========================================
+      // 2. Urutkan semua event: Prioritas UTAMA pada Waktu Terbaru
       allEvents.sort((a, b) => {
-        // Selalu prioritaskan status yang sedang berjalan (LIVE) di atas riwayat (DONE)
-        if (a.type !== b.type) {
-          return a.type === "LIVE" ? -1 : 1;
-        }
-
-        // Jika tipenya sama, baru diurutkan berdasarkan waktu terbaru
-        if (b.timestamp !== a.timestamp && a.timestamp > 0 && b.timestamp > 0) {
+        if (a.timestamp > 0 && b.timestamp > 0 && a.timestamp !== b.timestamp) {
           return b.timestamp - a.timestamp;
         }
-
-        // Fallback terakhir: ID paling besar (terbaru dibuat)
+        if (a.type !== b.type) return a.type === "LIVE" ? -1 : 1;
         return b.sortId - a.sortId;
       });
 
-      // 3. Filter Event: Ambil hanya status TERBARU untuk masing-masing siswa
-      const ONE_HOUR_MS = 60 * 60 * 1000;
-      const LIVE_TIMEOUT_MS = 3 * 60 * 60 * 1000; // Sesi LIVE dianggap hantu/nyangkut jika umurnya lebih dari 3 Jam
+      // 3. Filter Event: Tahan animasi meja "Selesai" selama 5 MENIT lalu bersihkan
+      const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 Menit
+      const LIVE_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 Jam
       const latestEventsMap = {};
 
       allEvents.forEach((evt) => {
         if (!latestEventsMap[evt.userKey]) {
-          // 1. Aturan Kedaluwarsa 1 Jam (Khusus ujian yang sudah berstatus DONE/SELESAI)
-          const isExpiredDone =
-            evt.type === "DONE" &&
-            evt.timestamp > 0 &&
-            currentTime - evt.timestamp > ONE_HOUR_MS;
+          const age = Math.abs(currentTime - evt.timestamp);
 
-          // 2. Aturan Kedaluwarsa Sesi Hantu (LIVE yang nyangkut lebih dari 3 jam tanpa update)
+          const isExpiredDone =
+            evt.type === "DONE" && evt.timestamp > 0 && age > FIVE_MINUTES_MS; // Kedaluwarsa dalam 5 Menit
+
           const isExpiredLive =
-            evt.type === "LIVE" &&
-            evt.timestamp > 0 &&
-            currentTime - evt.timestamp > LIVE_TIMEOUT_MS;
+            evt.type === "LIVE" && evt.timestamp > 0 && age > LIVE_TIMEOUT_MS;
 
           if (!isExpiredDone && !isExpiredLive) {
             latestEventsMap[evt.userKey] = evt.data;
           } else {
-            // Tandai 'EXPIRED' agar loop mengabaikan nilai ini dan membiarkan bangku kosong (OFFLINE)
             latestEventsMap[evt.userKey] = "EXPIRED";
           }
         }
@@ -450,12 +453,27 @@ const UjianDashboard = () => {
     }
   };
 
+  // Anti-DDoS: Rantai setTimeout
   useEffect(() => {
-    fetchAllData();
-    const interval = setInterval(() => {
-      if (activeTab === "live") fetchAllData();
-    }, 5000);
-    return () => clearInterval(interval);
+    let isMounted = true;
+    let timeoutId = null;
+
+    const loopFetch = async () => {
+      if (activeTab === "live" && isMounted) {
+        await fetchAllData();
+      }
+
+      if (isMounted) {
+        timeoutId = setTimeout(loopFetch, 5000);
+      }
+    };
+
+    loopFetch();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [activeTab]);
 
   // 2. AUTO-SAVE BACKGROUND
@@ -508,7 +526,7 @@ const UjianDashboard = () => {
     return () => clearTimeout(timeoutId);
   }, [layoutConfig, isInitialLoad, configId]);
 
-  // 3. FULL AUTO-PILOT SCREEN SCALING (MEMISAHKAN DESKTOP & MOBILE)
+  // 3. FULL AUTO-PILOT SCREEN SCALING
   useEffect(() => {
     const calculateScale = () => {
       const desktopMode = window.innerWidth > 768;
@@ -519,29 +537,25 @@ const UjianDashboard = () => {
         const containerH = containerRef.current.clientHeight;
         if (containerW === 0 || containerH === 0) return;
 
-        // Content Width & Height ditambahkan ekstra margin agar tidak terpotong saat Maximize
         const contentW = boardWidth + 60;
-        const contentH = boardHeight + 120; // 120 = Ruang untuk mt-10 (40px) & mb-20 (80px)
+        const contentH = boardHeight + 120;
 
         const scaleW = containerW / contentW;
         const scaleH = containerH / contentH;
 
         if (desktopMode) {
-          // DESKTOP: Hitung agar muat SEMUA tanpa scroll untuk tombol Maximize
           const fitScale = Math.min(scaleW, scaleH);
           setAutoScale(fitScale);
 
-          // Default selalu terzoom besar (1.15) pertama kali masuk layar Desktop
           if (!hasInitializedScale.current) {
             setBoardScale(1.15);
             hasInitializedScale.current = true;
           }
         } else {
-          // MOBILE: Kembali ke original, selalu fit lebar dengan auto-update presisi
           const fitScale = Math.min(scaleW, 1);
           setAutoScale(fitScale);
-          setBoardScale(fitScale); // Memaksa HP update real-time
-          hasInitializedScale.current = false; // Buka kunci jika dilipat/direkues ke Mobile
+          setBoardScale(fitScale);
+          hasInitializedScale.current = false;
         }
       }
     };
@@ -607,20 +621,30 @@ const UjianDashboard = () => {
 
   const handleAssignStudent = (siswa) => {
     if (!activeRoom || selectedDesk === null) return;
-    setLayoutConfig((prev) => ({
-      ...prev,
-      [activeRoom]: {
-        ...prev[activeRoom],
-        assignments: {
-          ...prev[activeRoom].assignments,
-          [selectedDesk]: {
-            nama: siswa.nama,
-            username: siswa.username,
-            gender: siswa.gender || "L",
-          },
-        },
-      },
-    }));
+
+    setLayoutConfig((prev) => {
+      const newConfig = JSON.parse(JSON.stringify(prev));
+
+      Object.keys(newConfig).forEach((roomKey) => {
+        const assignments = newConfig[roomKey].assignments;
+        Object.keys(assignments).forEach((deskKey) => {
+          if (assignments[deskKey].username === siswa.username) {
+            delete assignments[deskKey];
+          }
+        });
+      });
+
+      if (!newConfig[activeRoom].assignments)
+        newConfig[activeRoom].assignments = {};
+      newConfig[activeRoom].assignments[selectedDesk] = {
+        nama: siswa.nama,
+        username: siswa.username,
+        gender: siswa.gender || "L",
+      };
+
+      return newConfig;
+    });
+
     setIsModalSiswaOpen(false);
   };
 
@@ -681,7 +705,7 @@ const UjianDashboard = () => {
 
     return (
       <div className="flex-1 relative rounded-[2rem] overflow-hidden border-4 border-slate-200 bg-slate-100 shadow-inner min-h-0">
-        {/* --- KONTROL ZOOM DESKTOP (Fix diam di pojok, hilang di HP) --- */}
+        {/* KONTROL ZOOM DESKTOP */}
         {isDesktop && (
           <div className="absolute top-6 right-6 z-[200] flex flex-col gap-2 bg-white/90 backdrop-blur-md p-2 rounded-[1.2rem] shadow-xl border border-slate-200">
             <button
@@ -708,7 +732,7 @@ const UjianDashboard = () => {
           </div>
         )}
 
-        {/* --- AREA WADAH KELAS --- */}
+        {/* AREA WADAH KELAS */}
         <div
           ref={containerRef}
           className="w-full h-full flex bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] overflow-auto custom-scrollbar items-start justify-center relative"

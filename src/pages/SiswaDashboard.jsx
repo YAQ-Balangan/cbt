@@ -67,7 +67,6 @@ const formatTanggalLokal = (dateString) => {
   }
 };
 
-// Variasi Ukuran Font (Zoom In/Out)
 const fontClasses = {
   wacana: [
     "text-[13px] md:text-[15px]",
@@ -83,9 +82,9 @@ const fontClasses = {
 };
 
 // ==========================================
-// KOMPONEN TIMER INDEPENDEN (ANTI RE-RENDER GLOBAL)
+// KOMPONEN TIMER INDEPENDEN
 // ==========================================
-const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp }) => {
+const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp, timeRef }) => {
   const [timeLeft, setTimeLeft] = useState(initialTime);
 
   useEffect(() => {
@@ -99,7 +98,9 @@ const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp }) => {
       setTimeLeft((prev) => {
         const newTime = prev - 1;
 
-        // Informasikan ke komponen induk setiap 15 detik untuk save ke DB
+        // Membisikkan waktu terbaru ke komponen induk setiap 1 detik
+        if (timeRef) timeRef.current = newTime;
+
         if (newTime % 15 === 0) onTick(newTime);
 
         if (newTime <= 0) {
@@ -111,7 +112,7 @@ const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp }) => {
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [timeLeft, onTick, onTimeUp]);
+  }, [timeLeft, onTick, onTimeUp, timeRef]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600);
@@ -144,6 +145,7 @@ const SiswaDashboard = () => {
   const [activeTab, setActiveTab] = useState("home");
   const [loading, setLoading] = useState(true);
   const [isAppBlocked, setIsAppBlocked] = useState(false);
+
   const isWebView = () => {
     const userAgent = navigator.userAgent.toLowerCase();
     return (
@@ -151,6 +153,7 @@ const SiswaDashboard = () => {
       (userAgent.includes("android") && userAgent.includes("version/"))
     );
   };
+
   const [errorMsg, setErrorMsg] = useState("");
 
   const [exams, setExams] = useState([]);
@@ -163,17 +166,15 @@ const SiswaDashboard = () => {
   const [currentSoalIndex, setCurrentSoalIndex] = useState(0);
 
   const [answers, setAnswers] = useState({});
-  const [raguRagu, setRaguRagu] = useState({}); // STATE BARU UNTUK FITUR RAGU-RAGU
+  const [raguRagu, setRaguRagu] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // STATE NAMA UJIAN DINAMIS DARI ADMIN
   const [appSettings, setAppSettings] = useState({
     title: "TADBIRA",
     desc: "Online Based Test 2026",
   });
 
-  // STATE ANTI-CHEAT (DIPERBAIKI LOGIKANYA AGAR ANTI CRASH)
   const [isLocked, setIsLocked] = useState(false);
   const [pelanggaran, setPelanggaran] = useState(0);
   const [isAntiCheatActive, setIsAntiCheatActive] = useState(true);
@@ -183,7 +184,6 @@ const SiswaDashboard = () => {
     isAntiCheatActiveRef.current = isAntiCheatActive;
   }, [isAntiCheatActive]);
 
-  // STATE UKURAN HURUF (0 = Normal, 1 = Besar, 2 = Sangat Besar)
   const [fontLevel, setFontLevel] = useState(0);
 
   const [zoomedImg, setZoomedImg] = useState(null);
@@ -204,7 +204,6 @@ const SiswaDashboard = () => {
     [],
   );
 
-  // REFS UNTUK EVENT LISTENER VISIBILITY ANTI-CHEAT
   const activeExamRef = useRef(activeExam);
   const answersRef = useRef(answers);
   const soalDataRef = useRef(soalData);
@@ -231,8 +230,9 @@ const SiswaDashboard = () => {
   useEffect(() => {
     pelanggaranRef.current = pelanggaran;
   }, [pelanggaran]);
+
   useEffect(() => {
-    timeLeftRef.current = timeLeft;
+    if (timeLeft > 0) timeLeftRef.current = timeLeft;
   }, [timeLeft]);
 
   const userKelasFull = String(getVal(user, "Kelas") || "")
@@ -359,7 +359,10 @@ const SiswaDashboard = () => {
 
         if (currentPelanggaran === 0) {
           setPelanggaran(1);
+          // [PERBAIKAN]: Amankan detik terakhir sebelum timer utama dihancurkan layar kunci
+          setTimeLeft(timeLeftRef.current);
           setIsLocked(true);
+
           await api.saveSesi(
             username,
             examId,
@@ -397,6 +400,10 @@ const SiswaDashboard = () => {
         const sesi = await api.getSesi(username, examId);
         if (sesi && sesi.status === "ACTIVE") {
           setIsLocked(false);
+
+          // [PERBAIKAN]: Saat kunci dibuka, gunakan waktu hasil pengurangan dari Timer Siluman
+          setTimeLeft(timeLeftRef.current);
+
           showAlert(
             "success",
             "Kunci Dibuka",
@@ -448,9 +455,8 @@ const SiswaDashboard = () => {
     setActiveExam(exam);
     setLoadingSoal(true);
     setIsMobileDrawerOpen(false);
-    setRaguRagu({}); // Reset ragu-ragu saat mulai ujian baru
+    setRaguRagu({});
 
-    // MASUK KE MODE FULLSCREEN OTOMATIS
     try {
       const docElm = document.documentElement;
       if (docElm.requestFullscreen) {
@@ -605,12 +611,11 @@ const SiswaDashboard = () => {
       setIsSubmitting(false);
       setActiveExam(null);
       setAnswers({});
-      setRaguRagu({}); // Bersihkan ragu-ragu
+      setRaguRagu({});
       setCurrentSoalIndex(0);
       setIsMobileDrawerOpen(false);
       setActiveTab("nilai");
 
-      // KELUAR DARI MODE FULLSCREEN OTOMATIS
       try {
         if (
           document.fullscreenElement ||
@@ -713,6 +718,27 @@ const SiswaDashboard = () => {
   if (isLocked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white flex-col p-6 z-[9999] fixed inset-0 select-none">
+        {/* [KUNCI PERBAIKAN]: TIMER SILUMAN AGAR EFEK JERA BERFUNGSI MAKSIMAL */}
+        <div className="hidden">
+          <ExamTimer
+            initialTime={timeLeft}
+            timeRef={timeLeftRef}
+            onTick={(newTime) => {
+              if (activeExamRef.current) {
+                api.saveSesi(
+                  getVal(user, "Username"),
+                  getVal(activeExamRef.current, "ID"),
+                  answersRef.current,
+                  newTime,
+                  pelanggaranRef.current,
+                  "LOCKED",
+                );
+              }
+            }}
+            onTimeUp={() => handleEndExamClick(true)}
+          />
+        </div>
+
         <Lock size={80} className="text-red-500 mb-6 animate-pulse" />
         <h1 className="text-3xl md:text-5xl font-black mb-3 text-center tracking-tight">
           UJIAN TERKUNCI
@@ -724,6 +750,9 @@ const SiswaDashboard = () => {
           Anda bisa melanjutkan ujian.
           <br />
           <br />
+          <strong className="text-amber-400 font-black tracking-widest text-xs uppercase animate-pulse block mb-4">
+            — WAKTU UJIAN ANDA TERUS BERJALAN —
+          </strong>
           <strong className="text-red-400">Peringatan Keras:</strong> Jika Anda
           mengulanginya lagi, ujian akan langsung dihentikan dan Anda dinyatakan{" "}
           <strong className="text-red-500 underline uppercase">
@@ -818,6 +847,7 @@ const SiswaDashboard = () => {
 
             <ExamTimer
               initialTime={timeLeft}
+              timeRef={timeLeftRef}
               onTick={(newTime) => {
                 if (activeExamRef.current) {
                   api.saveSesi(
@@ -864,7 +894,6 @@ const SiswaDashboard = () => {
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-8">
                   <div className="max-w-4xl mx-auto pb-6">
-                    {/* Menggunakan dangerouslySetInnerHTML agar format HTML (tebal, miring, dll) dari database dapat dirender dengan baik */}
                     {getVal(currentSoal, "Wacana") && (
                       <div className="p-5 md:p-6 bg-amber-50/50 border border-amber-200 rounded-[1.5rem] relative shadow-sm mb-6 mt-2">
                         <div className="absolute -top-3 left-6 bg-amber-500 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1.5">
@@ -930,7 +959,7 @@ const SiswaDashboard = () => {
                                 getVal(user, "Username"),
                                 getVal(activeExam, "ID"),
                                 newAnswers,
-                                timeLeft,
+                                timeLeftRef.current,
                                 pelanggaranRef.current,
                                 isLockedRef.current ? "LOCKED" : "ACTIVE",
                               );
@@ -958,7 +987,6 @@ const SiswaDashboard = () => {
                               {opt}
                             </span>
 
-                            {/* Opsi juga mendukung HTML Rendering untuk memuat tabel, sub/sup, dll */}
                             <div
                               className={`font-medium pt-1 md:pt-2 leading-relaxed transition-all z-10 w-full ${fontClasses.opsi[fontLevel]} ${
                                 isSelected
@@ -975,7 +1003,6 @@ const SiswaDashboard = () => {
                   </div>
                 </div>
 
-                {/* Navigasi Desktop ANBK Style */}
                 <div className="hidden lg:flex px-6 py-4 border-t border-slate-100 bg-slate-50/50 justify-between items-center shrink-0 gap-4">
                   <button
                     onClick={() =>
@@ -1018,7 +1045,6 @@ const SiswaDashboard = () => {
                 </div>
               </div>
 
-              {/* Sidebar Kanan Desktop */}
               <div className="hidden lg:flex w-[320px] xl:w-[380px] flex-col h-full bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden shrink-0">
                 <div className="p-6 border-b border-slate-100 bg-slate-50/50 shrink-0">
                   <div className="flex justify-between items-end mb-2">
@@ -1095,7 +1121,6 @@ const SiswaDashboard = () => {
           )}
         </main>
 
-        {/* BOTTOM NAVIGATION (MOBILE - GAYA ANBK) */}
         {!loadingSoal && (
           <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 px-3 flex justify-between items-center z-40 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] pb-6 sm:pb-4 gap-2">
             <button
