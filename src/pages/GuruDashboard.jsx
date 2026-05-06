@@ -1890,11 +1890,19 @@ const GuruDashboard = () => {
         grouped[key] = { nama_siswa: row.nama_siswa, kelas: row.kelas };
       if (grouped[key][mapelKey] === undefined)
         grouped[key][mapelKey] = parseFloat(row.skor) || 0;
-    });
+    }); // 1. FILTER MAPEL TERLEBIH DAHULU SEBELUM MENGHITUNG RATA-RATA
+
+    let filteredMapels = mapels;
+    if (filters.mapel) {
+      filteredMapels = mapels.filter(
+        (m) => String(m).toLowerCase() === String(filters.mapel).toLowerCase(),
+      );
+    } // 2. HITUNG RATA-RATA DINAMIS (Berdasarkan mapel yang sedang difilter)
+
     const finalData = Object.values(grouped).map((student) => {
       let total = 0,
         count = 0;
-      mapels.forEach((m) => {
+      filteredMapels.forEach((m) => {
         if (student[m] !== undefined) {
           total += student[m];
           count++;
@@ -1902,12 +1910,8 @@ const GuruDashboard = () => {
       });
       student.RataRata = count > 0 ? (total / count).toFixed(1) : 0;
       return student;
-    });
-    finalData.sort((a, b) => {
-      const classCmp = String(a.kelas).localeCompare(String(b.kelas));
-      if (classCmp !== 0) return classCmp;
-      return String(a.nama_siswa).localeCompare(String(b.nama_siswa));
-    });
+    }); // 3. TERAPKAN PENCARIAN & FILTER KELAS KE DATA SISWA
+
     let filteredPivot = finalData;
     if (search)
       filteredPivot = filteredPivot.filter((s) =>
@@ -1918,15 +1922,18 @@ const GuruDashboard = () => {
         String(s.kelas).toLowerCase().includes(filters.kelas.toLowerCase()),
       );
     }
-    let filteredMapels = mapels;
     if (filters.mapel) {
-      filteredMapels = mapels.filter(
-        (m) => String(m).toLowerCase() === String(filters.mapel).toLowerCase(),
-      );
       filteredPivot = filteredPivot.filter(
         (s) => s[filters.mapel] !== undefined,
       );
-    }
+    } // 4. URUTKAN SESUAI KELAS DAN NAMA
+
+    filteredPivot.sort((a, b) => {
+      const classCmp = String(a.kelas).localeCompare(String(b.kelas));
+      if (classCmp !== 0) return classCmp;
+      return String(a.nama_siswa).localeCompare(String(b.nama_siswa));
+    });
+
     return { data: filteredPivot, mapels: filteredMapels };
   }, [data, tab, search, filters.kelas, filters.mapel]);
 

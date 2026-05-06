@@ -1,6 +1,6 @@
 // src/pages/UjianDashboard.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom"; // [BARU] Import navigasi
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MonitorSmartphone,
@@ -24,7 +24,7 @@ import {
   ZoomOut,
   Maximize,
   Info,
-  ArrowLeft, // [BARU] Import ikon panah kembali
+  ArrowLeft,
 } from "lucide-react";
 import Dashboard from "../components/layout/Dashboard";
 import { api, supabase } from "../api/api";
@@ -139,16 +139,16 @@ const CustomAvatar = ({ gender, isDisqualified }) => {
 // KOMPONEN UTAMA DASHBOARD
 // ==========================================
 const UjianDashboard = () => {
-  const navigate = useNavigate(); // [BARU] Inisialisasi hook navigasi
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("live");
   const [isSyncing, setIsSyncing] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState("IDLE");
 
-  // STATE LAYOUT & AUTO-SCALE (ANTI-RESET & FIT SCREEN)
+  // STATE LAYOUT & AUTO-SCALE
   const containerRef = useRef(null);
   const hasInitializedScale = useRef(false);
-  const [boardScale, setBoardScale] = useState(1.15); // Default Zoom Besar
+  const [boardScale, setBoardScale] = useState(1.15);
   const [autoScale, setAutoScale] = useState(1);
   const [isDesktop, setIsDesktop] = useState(true);
 
@@ -202,7 +202,7 @@ const UjianDashboard = () => {
     setBoardScale((prev) => Math.min(prev + 0.15, 2.5));
   const handleZoomOut = () =>
     setBoardScale((prev) => Math.max(prev - 0.15, 0.3));
-  const handleResetZoom = () => setBoardScale(autoScale); // Tombol Fit Layar: mengecilkan ke ukuran muat 1 layar
+  const handleResetZoom = () => setBoardScale(autoScale);
 
   const activeRoomConf = layoutConfig[activeRoom] || {
     cols: 5,
@@ -318,7 +318,6 @@ const UjianDashboard = () => {
             ? Math.min(100, Math.round((dijawab / totalSoal) * 100))
             : 0;
 
-        // Ambil waktu dari database (jika ada), fallback ke waktu sekarang
         const eventTime = new Date(
           sesi.updated_at || sesi.created_at || currentTime,
         ).getTime();
@@ -365,7 +364,6 @@ const UjianDashboard = () => {
         const isDisqualified =
           statusVal.includes("DISKUALIFIKASI") || statusVal.includes("DIS");
 
-        // Ambil waktu submission dari DB (mengantisipasi beberapa variasi nama kolom waktu)
         const dbTime = new Date(
           nilai.created_at || nilai.waktu_selesai || nilai.waktu || 0,
         ).getTime();
@@ -392,30 +390,47 @@ const UjianDashboard = () => {
         });
       });
 
-      // 2. Urutkan semua event: Paling BARU berada di atas (berdasarkan Waktu / ID)
+      // ==========================================
+      // [REVISI] 2. Urutkan semua event: Prioritas LIVE -> Waktu -> ID
+      // ==========================================
       allEvents.sort((a, b) => {
+        // Selalu prioritaskan status yang sedang berjalan (LIVE) di atas riwayat (DONE)
+        if (a.type !== b.type) {
+          return a.type === "LIVE" ? -1 : 1;
+        }
+
+        // Jika tipenya sama, baru diurutkan berdasarkan waktu terbaru
         if (b.timestamp !== a.timestamp && a.timestamp > 0 && b.timestamp > 0) {
           return b.timestamp - a.timestamp;
         }
+
+        // Fallback terakhir: ID paling besar (terbaru dibuat)
         return b.sortId - a.sortId;
       });
 
       // 3. Filter Event: Ambil hanya status TERBARU untuk masing-masing siswa
       const ONE_HOUR_MS = 60 * 60 * 1000;
+      const LIVE_TIMEOUT_MS = 3 * 60 * 60 * 1000; // Sesi LIVE dianggap hantu/nyangkut jika umurnya lebih dari 3 Jam
       const latestEventsMap = {};
 
       allEvents.forEach((evt) => {
         if (!latestEventsMap[evt.userKey]) {
-          // Aturan Kedaluwarsa 1 Jam (Khusus ujian yang sudah berstatus DONE/SELESAI)
+          // 1. Aturan Kedaluwarsa 1 Jam (Khusus ujian yang sudah berstatus DONE/SELESAI)
           const isExpiredDone =
             evt.type === "DONE" &&
             evt.timestamp > 0 &&
             currentTime - evt.timestamp > ONE_HOUR_MS;
 
-          if (!isExpiredDone) {
+          // 2. Aturan Kedaluwarsa Sesi Hantu (LIVE yang nyangkut lebih dari 3 jam tanpa update)
+          const isExpiredLive =
+            evt.type === "LIVE" &&
+            evt.timestamp > 0 &&
+            currentTime - evt.timestamp > LIVE_TIMEOUT_MS;
+
+          if (!isExpiredDone && !isExpiredLive) {
             latestEventsMap[evt.userKey] = evt.data;
           } else {
-            // Tandai 'EXPIRED' agar loop mengabaikan nilai ini dan membiarkan bangku kosong
+            // Tandai 'EXPIRED' agar loop mengabaikan nilai ini dan membiarkan bangku kosong (OFFLINE)
             latestEventsMap[evt.userKey] = "EXPIRED";
           }
         }
@@ -534,7 +549,7 @@ const UjianDashboard = () => {
     calculateScale();
     window.addEventListener("resize", calculateScale);
     return () => window.removeEventListener("resize", calculateScale);
-  }, [boardWidth, boardHeight, activeRoom]); // activeRoom menjaga pergantian lokal
+  }, [boardWidth, boardHeight, activeRoom]);
 
   const handleAddRoom = () => {
     showAlert(
@@ -693,7 +708,7 @@ const UjianDashboard = () => {
           </div>
         )}
 
-        {/* --- AREA WADAH KELAS KEMBALI SEPERTI ORIGINAL (Scroll Aman & Fit Sempurna untuk HP) --- */}
+        {/* --- AREA WADAH KELAS --- */}
         <div
           ref={containerRef}
           className="w-full h-full flex bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] overflow-auto custom-scrollbar items-start justify-center relative"
@@ -1003,7 +1018,6 @@ const UjianDashboard = () => {
     <Dashboard menu={menuItems} active={activeTab} setActive={setActiveTab}>
       <div className="flex flex-col h-[calc(115vh)] max-w-[90rem] mx-auto p-2 md:p-4 font-sans select-none overflow-hidden gap-4 relative">
         <div className="bg-white p-4 md:p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between shrink-0 gap-4">
-          {/* [BARU] Header dengan Tombol Back */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
