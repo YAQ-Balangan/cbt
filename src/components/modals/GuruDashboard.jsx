@@ -1114,7 +1114,7 @@ const GuruDashboard = () => {
       return showAlert("warning", "Kosong", "Tidak ada data untuk dihapus.");
     showAlert(
       "danger",
-      "Hapus Bersih Database?",
+      "Sapu Bersih Database?",
       "Anda akan menghapus SELURUH soal yang tampil di tabel ini secara permanen. Lanjutkan?",
       async () => {
         closeAlert();
@@ -2368,6 +2368,19 @@ const GuruDashboard = () => {
                 </span>
               </button>
               <button
+                onClick={() => setIsSSModeOpen(true)}
+                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
+              >
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-[1rem] flex items-center justify-center shadow-inner border border-emerald-100">
+                  <ScanSearch size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
+                  Snap PDF
+                  <br />
+                  Mode
+                </span>
+              </button>
+              <button
                 onClick={() => {
                   setTab("soal");
                   openAddModal();
@@ -2383,19 +2396,7 @@ const GuruDashboard = () => {
                   Soal
                 </span>
               </button>
-              <button
-                onClick={() => setIsSSModeOpen(true)}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-[1rem] flex items-center justify-center shadow-inner border border-amber-100">
-                  <ScanSearch size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Snap Soal
-                  <br />
-                  Mode
-                </span>
-              </button>
+
               <button
                 onClick={() => {
                   setTab("soal");
@@ -2412,6 +2413,7 @@ const GuruDashboard = () => {
                   (Sekaligus)
                 </span>
               </button>
+
               <button
                 onClick={() => {
                   setTab("soal");
@@ -2675,7 +2677,7 @@ const GuruDashboard = () => {
                   }}
                   className="flex-1 md:flex-none bg-white text-emerald-700 border border-emerald-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-emerald-50 active:scale-95 transition-all text-sm"
                 >
-                  <FileText size={18} /> Import Soal (Otomatis)
+                  <FileText size={18} /> Import Soal Otomatis
                 </button>
                 <button
                   onClick={() => setIsDummyModalOpen(true)}
@@ -2685,15 +2687,15 @@ const GuruDashboard = () => {
                 </button>
                 <button
                   onClick={() => setIsSSModeOpen(true)}
-                  className="flex-1 md:flex-none bg-amber-50 text-amber-700 border border-amber-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-amber-100 active:scale-95 transition-all text-sm"
+                  className="flex-1 md:flex-none bg-emerald-50 text-emerald-700 border border-emerald-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all text-sm"
                 >
-                  <ScanSearch size={18} /> Snap Soal
+                  <ScanSearch size={18} /> Snap PDF Soal
                 </button>
                 <button
                   onClick={openAddModal}
                   className="flex-1 md:flex-none bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-5 py-3 rounded-xl font-bold shadow-md shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400"
                 >
-                  <Plus size={18} /> Soal Manual
+                  <Plus size={18} /> Buat Manual
                 </button>
               </div>
             )}
@@ -2847,7 +2849,7 @@ const GuruDashboard = () => {
                       className="flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-50"
                       title="Hapus seluruh data yang tampil di tabel ini"
                     >
-                      <Trash2 size={16} /> Hapus Semua Soal
+                      <Trash2 size={16} /> Sapu Bersih
                     </button>
                   </div>
                 )}
@@ -2927,7 +2929,7 @@ const GuruDashboard = () => {
                 ) : (
                   <Trash2 size={14} />
                 )}{" "}
-                Hapus yang ditandai
+                Hapus Masal
               </button>
               <button
                 onClick={() => setSelectedIds([])}
@@ -4338,7 +4340,6 @@ const GuruDashboard = () => {
           onUploadSuccess={() => {
             fetchData(false);
           }}
-          namaGuru={namaGuruLog}
         />
       </div>
     </Dashboard>
