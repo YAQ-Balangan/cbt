@@ -431,7 +431,7 @@ const TAB_CONFIG = {
     title: "Monitoring Nilai",
     subtitle: "Pantau Hasil Ujian Siswa Secara Real-Time",
     columns: [
-      { key: "id", label: "ID Ujian" },
+      { key: "id", label: "No" },
       { key: "nama_siswa", label: "Nama Siswa" },
       { key: "kelas", label: "Kelas" },
       { key: "mapel", label: "Mata Pelajaran" },
@@ -2080,9 +2080,9 @@ const GuruDashboard = () => {
 
       let tableHtml = `<table border="1" style="width:100%; border-collapse: collapse; text-align: center; margin-top: 15px; font-size: 10pt;">`;
       if (isLogMode) {
-        tableHtml += `<thead><tr><th style="padding:8px; background:#f1f5f9;">ID</th><th style="padding:8px; background:#f1f5f9; text-align:left;">Nama Siswa</th><th style="padding:8px; background:#f1f5f9;">Kelas</th><th style="padding:8px; background:#f1f5f9;">Mapel</th><th style="padding:8px; background:#f1f5f9;">Skor</th><th style="padding:8px; background:#f1f5f9;">Status</th></tr></thead><tbody>`;
-        dataToExport.forEach((item) => {
-          tableHtml += `<tr><td style="padding:8px;">${item.id || "-"}</td><td style="padding:8px; text-align:left; font-weight:bold;">${item.nama_siswa || "-"}</td><td style="padding:8px;">${item.kelas || "-"}</td><td style="padding:8px;">${item.mapel || "-"}</td><td style="padding:8px; font-weight:bold;">${item.skor || "-"}</td><td style="padding:8px;">${item.status || "-"}</td></tr>`;
+        tableHtml += `<thead><tr><th style="padding:8px; background:#f1f5f9;">No</th><th style="padding:8px; background:#f1f5f9; text-align:left;">Nama Siswa</th><th style="padding:8px; background:#f1f5f9;">Kelas</th><th style="padding:8px; background:#f1f5f9;">Mapel</th><th style="padding:8px; background:#f1f5f9;">Skor</th><th style="padding:8px; background:#f1f5f9;">Status</th></tr></thead><tbody>`;
+        dataToExport.forEach((item, idx) => {
+          tableHtml += `<tr><td style="padding:8px;">${idx + 1}</td><td style="padding:8px; text-align:left; font-weight:bold;">${item.nama_siswa || "-"}</td><td style="padding:8px;">${item.kelas || "-"}</td><td style="padding:8px;">${item.mapel || "-"}</td><td style="padding:8px; font-weight:bold;">${item.skor || "-"}</td><td style="padding:8px;">${item.status || "-"}</td></tr>`;
         });
       } else {
         tableHtml += `<thead><tr><th style="padding:8px; background:#f1f5f9;">No</th><th style="padding:8px; background:#f1f5f9; text-align:left;">Nama Siswa</th><th style="padding:8px; background:#f1f5f9;">Kelas</th>`;
@@ -2134,8 +2134,10 @@ const GuruDashboard = () => {
 
     if (isLogMode) {
       exportHeaders = currentConfig.columns.map((c) => c.label);
-      exportDataMatrix = dataToExport.map((item) =>
-        currentConfig.columns.map((c) => item[c.key] || "-"),
+      exportDataMatrix = dataToExport.map((item, idx) =>
+        currentConfig.columns.map((c) =>
+          c.key === "id" ? idx + 1 : item[c.key] || "-",
+        ),
       );
       wscols = exportHeaders.map(() => ({ wch: 20 }));
     } else {
@@ -3209,7 +3211,11 @@ const GuruDashboard = () => {
                                     style={stickyStyle}
                                     className={`px-6 py-4 font-semibold text-slate-700 ${isID || isName ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}
                                   >
-                                    {col.key === "status" ? (
+                                    {col.key === "id" ? (
+                                      <span className="font-bold text-slate-500">
+                                        {i + 1}
+                                      </span>
+                                    ) : col.key === "status" ? (
                                       <Badge type={item[col.key]} />
                                     ) : col.key === "skor" ? (
                                       <span
@@ -3265,8 +3271,8 @@ const GuruDashboard = () => {
                           <span className="font-black text-slate-800 text-[15px] leading-tight line-clamp-2">
                             {item.nama_siswa}
                           </span>
-                          <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 shrink-0">
-                            #{item.id}
+                          <span className="font-mono font-bold text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 shrink-0">
+                            No. {i + 1}
                           </span>
                         </div>
                         <div className="space-y-2 mb-4">

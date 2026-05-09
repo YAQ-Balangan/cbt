@@ -81,38 +81,51 @@ const fontClasses = {
   ],
 };
 
-// ==========================================
-// KOMPONEN TIMER INDEPENDEN
+/// ==========================================
+// KOMPONEN TIMER INDEPENDEN (ANTI-BUG LOADING)
 // ==========================================
 const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp, timeRef }) => {
   const [timeLeft, setTimeLeft] = useState(initialTime);
+  const hasStarted = useRef(false); // Otak timer agar tahu kapan mulai
 
+  // Sinkronisasi dengan waktu dari server
   useEffect(() => {
     setTimeLeft(initialTime);
   }, [initialTime]);
 
+  // LOGIKA COUNTDOWN MURNI 
   useEffect(() => {
     if (timeLeft <= 0) return;
-
     const timerId = setInterval(() => {
-      setTimeLeft((prev) => {
-        const newTime = prev - 1;
-
-        // Membisikkan waktu terbaru ke komponen induk setiap 1 detik
-        if (timeRef) timeRef.current = newTime;
-
-        if (newTime % 15 === 0) onTick(newTime);
-
-        if (newTime <= 0) {
-          clearInterval(timerId);
-          onTimeUp();
-        }
-        return newTime;
-      });
+      setTimeLeft((prev) => prev - 1);
     }, 1000);
-
     return () => clearInterval(timerId);
-  }, [timeLeft, onTick, onTimeUp, timeRef]);
+  }, [timeLeft]);
+
+  // LOGIKA PENYIMPANAN SESI & WAKTU HABIS
+  useEffect(() => {
+    if (timeRef) timeRef.current = timeLeft;
+
+    // Tandai bahwa waktu ujian yang sebenarnya (> 0) sudah diterima timer
+    if (timeLeft > 0) {
+      hasStarted.current = true;
+    }
+
+    // Timer HANYA boleh bereaksi JIKA sudah pernah berjalan normal
+    if (hasStarted.current) {
+      // Bisikkan waktu ke server setiap 15 detik (menghindari spam server)
+      if (timeLeft > 0 && timeLeft % 15 === 0 && timeLeft !== initialTime) {
+        onTick(timeLeft);
+      }
+      
+      // Jika waktu benar-benar habis dari hitungan mundur normal
+      if (timeLeft <= 0) {
+        hasStarted.current = false; // Kunci agar tidak terpanggil berkali-kali
+        onTimeUp();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, initialTime]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600);
@@ -359,7 +372,6 @@ const SiswaDashboard = () => {
 
         if (currentPelanggaran === 0) {
           setPelanggaran(1);
-          // [PERBAIKAN]: Amankan detik terakhir sebelum timer utama dihancurkan layar kunci
           setTimeLeft(timeLeftRef.current);
           setIsLocked(true);
 
@@ -400,8 +412,6 @@ const SiswaDashboard = () => {
         const sesi = await api.getSesi(username, examId);
         if (sesi && sesi.status === "ACTIVE") {
           setIsLocked(false);
-
-          // [PERBAIKAN]: Saat kunci dibuka, gunakan waktu hasil pengurangan dari Timer Siluman
           setTimeLeft(timeLeftRef.current);
 
           showAlert(
@@ -540,7 +550,7 @@ const SiswaDashboard = () => {
     }
   };
 
-  // 5. KALKULASI SKOR & SUBMIT
+  // 5. KALKULASI SKOR & SUBMIT (FINAL FIX)
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
     setIsSubmitting(true);
     let skorSiswa = 0;
@@ -580,17 +590,17 @@ const SiswaDashboard = () => {
     let salahCount = totalSoal - benarCount;
 
     try {
-      const allNilai = (await api.read("Nilai")) || [];
-      let maxId = 0;
-      if (allNilai && allNilai.length > 0) {
-        allNilai.forEach((n) => {
-          const currentId = parseInt(getVal(n, "ID"));
-          if (!isNaN(currentId) && currentId > maxId) maxId = currentId;
-        });
-      }
+      // BIKIN ID SUPER AMAN UNTUK INT8 SUPABASE (Kombinasi Tanggal/Jam + Angka Acak)
+      // Menghasilkan angka unik yang PASTI muat di kolom int8 dan bebas dari bentrokan
+      const amanId = Number(
+        Date.now().toString() +
+          Math.floor(Math.random() * 1000)
+            .toString()
+            .padStart(3, "0"),
+      );
 
       const dataNilai = {
-        id: maxId + 1,
+        id: amanId, // ID Unik Mandiri tanpa pusing setting Auto Increment Supabase
         nama_siswa: getVal(user, "Nama"),
         kelas: getVal(user, "Kelas"),
         mapel: getVal(activeExamRef.current, "Mapel"),
@@ -602,11 +612,18 @@ const SiswaDashboard = () => {
         detail_jawaban: JSON.stringify(detailJawabanArray),
       };
 
+      // 1. Simpan nilai ke Supabase
       await api.create("Nilai", dataNilai);
-      await api.deleteSesi(
-        getVal(user, "Username"),
-        getVal(activeExamRef.current, "ID"),
-      );
+
+      // 2. Hapus sesi (Dibungkus try-catch pisah, agar jika gagal, nilai TETAP TERSIMPAN)
+      try {
+        await api.deleteSesi(
+          getVal(user, "Username"),
+          getVal(activeExamRef.current, "ID"),
+        );
+      } catch (errSesi) {
+        console.warn("Sesi gagal dihapus, tapi nilai sudah aman:", errSesi);
+      }
 
       setIsSubmitting(false);
       setActiveExam(null);
@@ -657,7 +674,7 @@ const SiswaDashboard = () => {
       showAlert(
         "danger",
         "Gagal Mengirim",
-        "Server sedang sibuk. Pastikan internet stabil dan lapor ke pengawas.",
+        "Sistem error: " + (err.message || "Pastikan internet stabil."),
       );
       setIsSubmitting(false);
     }
@@ -718,7 +735,6 @@ const SiswaDashboard = () => {
   if (isLocked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white flex-col p-6 z-[9999] fixed inset-0 select-none">
-        {/* [KUNCI PERBAIKAN]: TIMER SILUMAN AGAR EFEK JERA BERFUNGSI MAKSIMAL */}
         <div className="hidden">
           <ExamTimer
             initialTime={timeLeft}
