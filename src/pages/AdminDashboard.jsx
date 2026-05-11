@@ -296,15 +296,12 @@ const TINGKAT_SMA = ["X", "XI", "XII"];
 const JURUSAN_SMA = ["MIPA", "IPS"];
 const MAKSIMAL_ROMBEL = 2; // Rombel 1 dan 2
 
-const OPSI_KELAS_LENGKAP = [
-  { label: "KATEGORI GLOBAL", isLabel: true },
-  { label: "Semua Kelas (Umum)", value: "SEMUA" },
-];
+const OPSI_KELAS_LENGKAP = [];
 
 // --- 1. BAGIAN SMP (Tanpa Jurusan) ---
 OPSI_KELAS_LENGKAP.push({ label: "TINGKAT SMP", isLabel: true });
 TINGKAT_SMP.forEach((t) => {
-  OPSI_KELAS_LENGKAP.push({ label: `Kelas ${t}`, value: t });
+  OPSI_KELAS_LENGKAP.push({ label: `${t}`, value: t });
 });
 
 // --- 2. BAGIAN SMA (Tingkat Umum) ---
@@ -313,13 +310,13 @@ OPSI_KELAS_LENGKAP.push({
   isLabel: true,
 });
 TINGKAT_SMA.forEach((t) => {
-  OPSI_KELAS_LENGKAP.push({ label: `Kelas ${t} (Semua)`, value: t });
+  OPSI_KELAS_LENGKAP.push({ label: `${t}`, value: t });
 });
 
 // --- 3. BAGIAN SMA (Jurusan Global) ---
 OPSI_KELAS_LENGKAP.push({ label: "JURUSAN SMA GLOBAL", isLabel: true });
 JURUSAN_SMA.forEach((j) => {
-  OPSI_KELAS_LENGKAP.push({ label: `Semua ${j} (X, XI, XII)`, value: j });
+  OPSI_KELAS_LENGKAP.push({ label: `Semua ${j}`, value: j });
 });
 
 // --- 4. BAGIAN SMA (Tingkat & Jurusan) ---
@@ -422,14 +419,16 @@ const TAB_CONFIG = {
       {
         key: "mapel",
         label: "Mata Pelajaran",
+        isCombobox: true,
+        options: [],
         sortable: true,
         filterable: true,
       },
       {
         key: "kelas",
         label: "Target Kelas",
-        isSelect: true,
-        options: OPSI_KELAS_SISWA,
+        isMultiSelect: true,
+        options: OPSI_KELAS_LENGKAP,
         sortable: true,
         filterable: true,
       },
@@ -456,8 +455,8 @@ const TAB_CONFIG = {
       {
         key: "kelas",
         label: "Kelas",
-        isSelect: true,
-        options: OPSI_KELAS_SISWA,
+        isMultiSelect: true,
+        options: OPSI_KELAS_LENGKAP,
         sortable: true,
         filterable: true,
       },
@@ -513,6 +512,39 @@ const EditableCell = ({ item, column, onSave }) => {
   };
 
   if (isEditing) {
+    if (column.isMultiSelect) {
+      return (
+        <div className="flex flex-col gap-1.5 min-w-[200px]">
+          <PremiumMultiSelect
+            value={val}
+            onChange={(newVal) => setVal(newVal)}
+            options={column.options}
+            placeholder="Pilih Kelas..."
+          />
+          <div className="flex gap-1 mt-1">
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                triggerSave();
+              }}
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black tracking-widest uppercase py-1.5 rounded shadow-sm transition-colors"
+            >
+              Simpan
+            </button>
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsEditing(false);
+                setVal(item[column.key] || "");
+              }}
+              className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-600 text-[10px] font-black tracking-widest uppercase py-1.5 rounded transition-colors"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      );
+    }
     if (column.isSelect) {
       return (
         <select
@@ -1190,17 +1222,29 @@ const AdminDashboard = () => {
                           <EditableCell
                             item={item}
                             column={
-                              col.isCombobox
+                              // Logika integrasi: Jika sedang di tab jadwal dan kolomnya mapel, tarik data dari allData.mapel
+                              col.key === "mapel" && tab === "jadwal"
                                 ? {
                                     ...col,
                                     options: [
-                                      ...new Set([
-                                        ...col.options,
-                                        ...getFilterOptions(col.key),
-                                      ]),
+                                      ...new Set(
+                                        allData.mapel
+                                          .map((m) => m.nama_mapel)
+                                          .filter(Boolean),
+                                      ),
                                     ],
                                   }
-                                : col
+                                : col.isCombobox
+                                  ? {
+                                      ...col,
+                                      options: [
+                                        ...new Set([
+                                          ...col.options,
+                                          ...getFilterOptions(col.key),
+                                        ]),
+                                      ],
+                                    }
+                                  : col
                             }
                             onSave={handleSaveCell}
                           />
@@ -1457,17 +1501,29 @@ const AdminDashboard = () => {
                             <EditableCell
                               item={item}
                               column={
-                                col.isCombobox
+                                // Logika integrasi: Jika sedang di tab jadwal dan kolomnya mapel, tarik data dari allData.mapel
+                                col.key === "mapel" && tab === "jadwal"
                                   ? {
                                       ...col,
                                       options: [
-                                        ...new Set([
-                                          ...col.options,
-                                          ...getFilterOptions(col.key),
-                                        ]),
+                                        ...new Set(
+                                          allData.mapel
+                                            .map((m) => m.nama_mapel)
+                                            .filter(Boolean),
+                                        ),
                                       ],
                                     }
-                                  : col
+                                  : col.isCombobox
+                                    ? {
+                                        ...col,
+                                        options: [
+                                          ...new Set([
+                                            ...col.options,
+                                            ...getFilterOptions(col.key),
+                                          ]),
+                                        ],
+                                      }
+                                    : col
                               }
                               onSave={handleSaveCell}
                             />

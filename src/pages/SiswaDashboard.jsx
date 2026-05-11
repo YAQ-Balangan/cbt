@@ -93,7 +93,7 @@ const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp, timeRef }) => {
     setTimeLeft(initialTime);
   }, [initialTime]);
 
-  // LOGIKA COUNTDOWN MURNI 
+  // LOGIKA COUNTDOWN MURNI
   useEffect(() => {
     if (timeLeft <= 0) return;
     const timerId = setInterval(() => {
@@ -117,7 +117,7 @@ const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp, timeRef }) => {
       if (timeLeft > 0 && timeLeft % 15 === 0 && timeLeft !== initialTime) {
         onTick(timeLeft);
       }
-      
+
       // Jika waktu benar-benar habis dari hitungan mundur normal
       if (timeLeft <= 0) {
         hasStarted.current = false; // Kunci agar tidak terpanggil berkali-kali
@@ -355,64 +355,141 @@ const SiswaDashboard = () => {
     return () => clearInterval(intervalId);
   }, [user, userKelasFull, userTingkat, userJurusan, userTingkatJurusan]);
 
-  // 2. LOGIKA ANTI-CHEAT (Keluar Aplikasi)
+  // ==============================================================
+  // 2. LOGIKA ANTI-CHEAT SUPER KETAT (Keluar, ESC, Overlay & Refresh)
+  // ==============================================================
   useEffect(() => {
-    const handleVisibilityChange = async () => {
+    let isProcessing = false; // <-- ANTI DOUBLE-TRIGGER (Kunci Ganda)
+
+    const triggerLock = async (jenisPelanggaran) => {
       if (!isAntiCheatActiveRef.current) return;
-
       if (
-        document.hidden &&
-        activeExamRef.current &&
-        !isSubmittingRef.current &&
-        !isLockedRef.current
-      ) {
-        let currentPelanggaran = pelanggaranRef.current;
-        const username = getVal(user, "Username");
-        const examId = getVal(activeExamRef.current, "ID");
+        !activeExamRef.current ||
+        isSubmittingRef.current ||
+        isLockedRef.current ||
+        isProcessing
+      )
+        return;
 
-        if (currentPelanggaran === 0) {
-          setPelanggaran(1);
-          setTimeLeft(timeLeftRef.current);
-          setIsLocked(true);
+      isProcessing = true;
+      console.warn("TERDETEKSI KECURANGAN:", jenisPelanggaran);
 
-          await api.saveSesi(
-            username,
-            examId,
-            answersRef.current,
-            timeLeftRef.current,
-            1,
-            "LOCKED",
-          );
-        } else if (currentPelanggaran >= 1) {
-          setPelanggaran(2);
-          await api.saveSesi(
-            username,
-            examId,
-            answersRef.current,
-            timeLeftRef.current,
-            2,
-            "DISQUALIFIED",
-          );
-          executeEndExam(true, "Diskualifikasi");
-        }
+      let currentPelanggaran = pelanggaranRef.current;
+      const username = getVal(user, "Username"); // <-- MURNI PAKAI USERNAME
+      const examId = getVal(activeExamRef.current, "ID");
+
+      if (currentPelanggaran === 0) {
+        pelanggaranRef.current = 1;
+        isLockedRef.current = true;
+
+        setPelanggaran(1);
+        setTimeLeft(timeLeftRef.current);
+        setIsLocked(true);
+
+        // FORMAT LAMA YANG AMAN
+        await api.saveSesi(
+          username,
+          examId,
+          answersRef.current,
+          timeLeftRef.current,
+          1,
+          "LOCKED",
+        );
+
+        setTimeout(() => {
+          isProcessing = false;
+        }, 2000);
+      } else if (currentPelanggaran >= 1) {
+        pelanggaranRef.current = 2;
+        isLockedRef.current = true;
+
+        setPelanggaran(2);
+        await api.saveSesi(
+          username,
+          examId,
+          answersRef.current,
+          timeLeftRef.current,
+          2,
+          "DISQUALIFIED",
+        );
+        executeEndExam(true, "Diskualifikasi");
       }
     };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) triggerLock("Tab Disembunyikan / Pindah Tab");
+    };
+
+    const handleBlur = () => {
+      triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
+    };
+
+    const handleFullscreenChange = () => {
+      if (
+        !document.fullscreenElement &&
+        !document.webkitFullscreenElement &&
+        !document.msFullscreenElement
+      ) {
+        triggerLock("Menekan ESC / Keluar Fullscreen");
+      }
+    };
+
+    const handleBeforeUnload = (e) => {
+      if (activeExamRef.current && !isSubmittingRef.current) {
+        e.preventDefault();
+        e.returnValue = "Yakin ingin keluar? Ujian akan bermasalah!";
+      }
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () =>
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("msfullscreenchange", handleFullscreenChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        handleFullscreenChange,
+      );
+      document.removeEventListener(
+        "msfullscreenchange",
+        handleFullscreenChange,
+      );
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   }, [user]);
 
   // 3. POLLING BUKA KUNCI DARI GURU
   useEffect(() => {
     if (!activeExam || !isLocked) return;
     const interval = setInterval(async () => {
-      const username = getVal(user, "Username");
+      const username = getVal(user, "Username"); // <-- MURNI PAKAI USERNAME
       const examId = getVal(activeExam, "ID");
       try {
         const sesi = await api.getSesi(username, examId);
         if (sesi && sesi.status === "ACTIVE") {
           setIsLocked(false);
+          isLockedRef.current = false;
           setTimeLeft(timeLeftRef.current);
+
+          // PAKSA FULLSCREEN LAGI
+          try {
+            const docElm = document.documentElement;
+            if (docElm.requestFullscreen) {
+              docElm.requestFullscreen().catch((err) => console.log(err));
+            } else if (docElm.webkitRequestFullscreen) {
+              docElm.webkitRequestFullscreen();
+            } else if (docElm.msRequestFullscreen) {
+              docElm.msRequestFullscreen();
+            }
+          } catch (error) {
+            console.warn("Fullscreen auto-resume tidak didukung.");
+          }
 
           showAlert(
             "success",
@@ -446,8 +523,8 @@ const SiswaDashboard = () => {
     if (realToken && inputToken !== realToken)
       return showAlert(
         "danger",
-        "Akses Ditolak",
-        "TOKEN SALAH! Silakan periksa kembali token ujian Anda.",
+        "TOKEN SALAH!",
+        "Akses DITOLAK. Silakan periksa kembali token ujian Anda.",
       );
 
     const sudahMengerjakan = myResults.some(
@@ -507,11 +584,22 @@ const SiswaDashboard = () => {
         serverSession = await api.getSesi(usernameSiswa, examId);
       } catch (e) {}
 
+      // ...
       let finalAnswers = {};
       let finalTimeLeft = examDurasi * 60;
 
       if (serverSession) {
-        finalAnswers = serverSession.jawaban_sementara || {};
+        let parsedJawaban = {};
+        try {
+          parsedJawaban =
+            typeof serverSession.jawaban_sementara === "string"
+              ? JSON.parse(serverSession.jawaban_sementara)
+              : serverSession.jawaban_sementara || {};
+        } catch (e) {
+          console.warn("Gagal membaca history jawaban", e);
+        }
+
+        finalAnswers = parsedJawaban;
         finalTimeLeft = serverSession.sisa_waktu || examDurasi * 60;
         setPelanggaran(serverSession.pelanggaran || 0);
         setIsLocked(serverSession.status === "LOCKED");
@@ -519,6 +607,7 @@ const SiswaDashboard = () => {
         setPelanggaran(0);
         setIsLocked(false);
       }
+      // ...
 
       if (!serverSession) {
         try {
