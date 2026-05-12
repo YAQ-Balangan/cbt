@@ -1,6 +1,9 @@
 // src/pages/GuruDashboard.jsx
 import React, { useState, useEffect, useMemo, useRef, useContext } from "react";
 import {
+  Folder,
+  ArrowLeft,
+  Library,
   Layers,
   Award,
   Plus,
@@ -632,6 +635,7 @@ const GuruDashboard = () => {
   const namaGuruLog = user?.nama || user?.username || "Guru";
 
   const [tab, setTab] = useState("soal");
+  const [soalViewMode, setSoalViewMode] = useState("folder");
 
   // 1. STATE CACHE GLOBAL (Sama seperti Admin Dashboard)
   const [allData, setAllData] = useState({
@@ -1768,6 +1772,39 @@ const GuruDashboard = () => {
       setIsSaving(false);
       setBulkProgress(0);
     }
+  }; // LOGIKA PENGELOMPOKAN FOLDER (ANTI-LAG)
+  // ==========================================
+
+  // ==========================================
+  const folderSoal = useMemo(() => {
+    if (tab !== "soal" || data.length === 0) return [];
+    const groups = {};
+    data.forEach((item) => {
+      if (!item.mapel || !item.kelas) return;
+      const kls = String(item.kelas).trim();
+      const key = `${item.mapel}___${kls}`;
+      if (!groups[key]) {
+        groups[key] = { mapel: item.mapel, kelas: kls, count: 0 };
+      }
+      groups[key].count += 1;
+    });
+    return Object.values(groups).sort((a, b) => {
+      const mapelCmp = a.mapel.localeCompare(b.mapel);
+      if (mapelCmp !== 0) return mapelCmp;
+      return a.kelas.localeCompare(b.kelas);
+    });
+  }, [data, tab]);
+
+  const handleOpenFolder = (mapel, kelas) => {
+    setFilters({ ...filters, mapel: mapel, kelas: kelas });
+    setSearch("");
+    setSoalViewMode("list");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleBackToFolder = () => {
+    setFilters({ ...filters, mapel: "", kelas: "" });
+    setSoalViewMode("folder");
   };
 
   const processedData = useMemo(() => {
@@ -2280,7 +2317,6 @@ const GuruDashboard = () => {
     <Dashboard menu={MENU_ITEMS} active={tab} setActive={setTab}>
       <div className="space-y-6 max-w-7xl mx-auto pb-24 relative">
         {/* CSS animasi background dihapus agar ringan */}
-
         {/* ============================================================== */}
         {/* BANNER PERINGATAN GLOBAL (Jika Ada Siswa Terkunci - ANTI CHEAT) */}
         {/* ============================================================== */}
@@ -2311,7 +2347,6 @@ const GuruDashboard = () => {
             </div>
           </div>
         )}
-
         {/* ============================================================== */}
         {/* TAMPILAN M-BANKING (KHUSUS HP) - SAT SET SAT SET */}
         {/* ============================================================== */}
@@ -2547,7 +2582,10 @@ const GuruDashboard = () => {
                     tab === "soal" ? "Cari soal..." : "Cari siswa..."
                   }
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    if (tab === "soal") setSoalViewMode("list");
+                  }}
                 />
               </div>
               <button
@@ -2614,7 +2652,6 @@ const GuruDashboard = () => {
             <div className="bg-slate-200 h-1 w-12 rounded-full mb-2"></div>
           </div>
         </div>
-
         {/* HEADER STATIS (DISEMBUNYIKAN DI HP) */}
         <header className="hidden md:flex relative flex-col md:flex-row justify-between items-start md:items-center p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-200 gap-4 overflow-hidden bg-emerald-50 z-0">
           {/* Bola dekorasi motion.div dihapus total agar ringan */}
@@ -2730,7 +2767,6 @@ const GuruDashboard = () => {
             )}
           </div>
         </header>
-
         {/* TOGGLE VIEW MODE & STATISTIK (KHUSUS NILAI + ANTI CHEAT) */}
         {tab === "nilai" && (
           <div>
@@ -2803,7 +2839,6 @@ const GuruDashboard = () => {
             )}
           </div>
         )}
-
         {/* STATISTIK & TOOLBAR GLOBAL (Disembunyikan di mode Control Anti-Curang) */}
         {!(tab === "nilai" && nilaiViewMode === "pelanggaran") && (
           <div className="hidden md:flex flex-col xl:flex-row gap-4">
@@ -2860,7 +2895,10 @@ const GuruDashboard = () => {
                     className="w-full bg-transparent border-none outline-none font-medium text-base text-slate-700 placeholder:text-slate-400 min-w-0 py-2"
                     placeholder={`Cari di ${tab === "soal" ? "soal" : "siswa"}...`}
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      if (tab === "soal") setSoalViewMode("list");
+                    }}
                   />
                 </div>
 
@@ -2871,9 +2909,10 @@ const GuruDashboard = () => {
                         <div key={key} className="w-full md:w-40">
                           <PremiumSelect
                             value={filters[key] || ""}
-                            onChange={(val) =>
-                              setFilters({ ...filters, [key]: val })
-                            }
+                            onChange={(val) => {
+                              setFilters({ ...filters, [key]: val });
+                              if (tab === "soal") setSoalViewMode("list");
+                            }}
                             options={[
                               { label: `Semua ${key}`, value: "" },
                               ...getFilterOptions(key).map((opt) => ({
@@ -2905,7 +2944,6 @@ const GuruDashboard = () => {
             </Card>
           </div>
         )}
-
         {/* PANEL AKSI MELAYANG (FLOATING BULK DELETE) */}
         {selectedIds.length > 0 && tab === "soal" && (
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[50] w-max max-w-lg shadow-2xl shadow-red-500/20">
@@ -2940,23 +2978,220 @@ const GuruDashboard = () => {
             </div>
           </div>
         )}
-
-        {/* ============================================================== */}
-        {/* KONTEN UTAMA: BANK SOAL ATAU NILAI ATAU PELANGGARAN */}
-        {/* ============================================================== */}
+        {/* ============================================================== */} 
+              {/* KONTEN UTAMA: BANK SOAL ATAU NILAI ATAU PELANGGARAN */}       {" "}
+        {/* ============================================================== */} 
+             {" "}
         {loading && data.length === 0 ? (
           <div className="py-20 text-center flex flex-col items-center">
+                       {" "}
             <RefreshCw
               className="animate-spin text-emerald-500 mb-4"
               size={32}
             />
+                       {" "}
             <span className="font-bold text-slate-400 uppercase tracking-widest text-xs">
-              Memuat Database...
+                            Memuat Database...            {" "}
             </span>
+                     {" "}
           </div>
         ) : tab === "soal" ? (
-          <div className="flex flex-col gap-0 max-w-5xl mx-auto relative">
-            {renderBankSoal()}
+          <div className="max-w-6xl mx-auto relative">
+                        {/* TAMPILAN FOLDER */}           {" "}
+            {soalViewMode === "folder" && (
+              <div className="space-y-6">
+                               {" "}
+                <div className="flex justify-between items-end mb-2 px-2">
+                                   {" "}
+                  <div>
+                                       {" "}
+                    <h3 className="text-lg font-black text-slate-700 flex items-center gap-2">
+                                           {" "}
+                      <Library className="text-emerald-500" /> Direktori Soal  
+                                       {" "}
+                    </h3>
+                                       {" "}
+                    <p className="text-sm text-slate-500 font-medium mt-1">
+                                            Pilih folder mapel dan kelas untuk
+                      mengelola soal.                    {" "}
+                    </p>
+                                     {" "}
+                  </div>
+                                   {" "}
+                  <button
+                    onClick={() => {
+                      setFilters({ mapel: "", kelas: "" });
+                      setSoalViewMode("list");
+                    }}
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 underline hidden md:block"
+                  >
+                                        Tampilkan Semua Soal                
+                     {" "}
+                  </button>
+                                 {" "}
+                </div>
+                               {" "}
+                {folderSoal.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 font-bold border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
+                                        Belum ada soal tersedia.                
+                     {" "}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                       {" "}
+                    {folderSoal.map((folder, idx) => {
+                      // Logika Warna Pintar Berdasarkan Kelas
+                      let color = {
+                        border:
+                          "hover:border-violet-400 hover:shadow-violet-500/10",
+                        icon: "bg-violet-50 text-violet-600 border-violet-200",
+                        text: "group-hover:text-violet-700",
+                        badge: "bg-violet-50 text-violet-700 border-violet-200",
+                      };
+                      const kelasStr = String(folder.kelas).toUpperCase();
+                      if (
+                        kelasStr.includes("VII") ||
+                        kelasStr.includes("VIII") ||
+                        kelasStr.includes("IX") ||
+                        kelasStr.includes("SMP") ||
+                        kelasStr.includes("MTS")
+                      ) {
+                        color = {
+                          border:
+                            "hover:border-blue-400 hover:shadow-blue-500/10",
+                          icon: "bg-blue-50 text-blue-600 border-blue-200",
+                          text: "group-hover:text-blue-700",
+                          badge: "bg-blue-50 text-blue-700 border-blue-200",
+                        };
+                      } else if (
+                        kelasStr.includes("MIPA") ||
+                        kelasStr.includes("IPA")
+                      ) {
+                        color = {
+                          border:
+                            "hover:border-emerald-400 hover:shadow-emerald-500/10",
+                          icon: "bg-emerald-50 text-emerald-600 border-emerald-200",
+                          text: "group-hover:text-emerald-700",
+                          badge:
+                            "bg-emerald-50 text-emerald-700 border-emerald-200",
+                        };
+                      } else if (kelasStr.includes("IPS")) {
+                        color = {
+                          border:
+                            "hover:border-amber-400 hover:shadow-amber-500/10",
+                          icon: "bg-amber-50 text-amber-600 border-amber-200",
+                          text: "group-hover:text-amber-700",
+                          badge: "bg-amber-50 text-amber-700 border-amber-200",
+                        };
+                      }
+
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() =>
+                            handleOpenFolder(folder.mapel, folder.kelas)
+                          }
+                          className={`bg-white border border-slate-200 p-5 rounded-[1.5rem] cursor-pointer transition-all group relative overflow-hidden ${color.border}`}
+                        >
+                                                   {" "}
+                          <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                                                        <Folder size={100} />   
+                                                 {" "}
+                          </div>
+                                                   {" "}
+                          <div
+                            className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-sm border ${color.icon}`}
+                          >
+                                                       {" "}
+                            <Folder
+                              size={24}
+                              fill="currentColor"
+                              className="opacity-20"
+                            />
+                                                       {" "}
+                            <Folder size={24} className="absolute" />           
+                                         {" "}
+                          </div>
+                                                   {" "}
+                          <h4
+                            className={`font-black text-slate-800 text-lg leading-tight mb-2 transition-colors line-clamp-2 ${color.text}`}
+                          >
+                                                        {folder.mapel}         
+                                           {" "}
+                          </h4>
+                                                   {" "}
+                          <div className="flex flex-wrap gap-2 items-center">
+                                                       {" "}
+                            <span
+                              className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${color.badge}`}
+                            >
+                                                            Kelas {folder.kelas}
+                                                         {" "}
+                            </span>
+                                                       {" "}
+                            <span className="bg-slate-100 text-slate-500 px-2.5 py-1 rounded-md text-[10px] font-bold border border-slate-200">
+                                                            {folder.count} Soal
+                                                         {" "}
+                            </span>
+                                                     {" "}
+                          </div>
+                                                 {" "}
+                        </div>
+                      );
+                    })}
+                                     {" "}
+                  </div>
+                )}
+                             {" "}
+              </div>
+            )}
+                        {/* TAMPILAN DAFTAR SOAL (LIST) */}           {" "}
+            {soalViewMode === "list" && (
+              <div className="flex flex-col gap-0 max-w-5xl mx-auto relative">
+                               {" "}
+                <div className="sticky top-[70px] md:top-[90px] z-30 bg-slate-50/90 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex justify-between items-center">
+                                   {" "}
+                  <div className="flex items-center gap-3">
+                                       {" "}
+                    <button
+                      onClick={handleBackToFolder}
+                      className="p-2 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all shadow-sm border border-slate-200"
+                    >
+                                            <ArrowLeft size={20} />             
+                           {" "}
+                    </button>
+                                       {" "}
+                    <div>
+                                           {" "}
+                      <h3 className="font-black text-slate-800 text-sm md:text-base flex items-center gap-2">
+                                                {filters.mapel || "Semua Mapel"}
+                                               {" "}
+                        {filters.kelas && (
+                          <span className="text-slate-400 font-normal">|</span>
+                        )}
+                                               {" "}
+                        {filters.kelas && (
+                          <span className="text-emerald-600">
+                            {filters.kelas}
+                          </span>
+                        )}
+                                             {" "}
+                      </h3>
+                                           {" "}
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                                                Menampilkan{" "}
+                        {processedData.length} Soal                      {" "}
+                      </p>
+                                         {" "}
+                    </div>
+                                     {" "}
+                  </div>
+                                 {" "}
+                </div>
+                                {renderBankSoal()}             {" "}
+              </div>
+            )}
+                     {" "}
           </div>
         ) : (
           <div>
@@ -3601,7 +3836,6 @@ const GuruDashboard = () => {
             </div>
           </div>
         )}
-
         {/* MODAL BUAT/EDIT MANUAL SEDERHANA */}
         {isModalOpen && tab === "soal" && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 overflow-y-auto">
@@ -3837,7 +4071,6 @@ const GuruDashboard = () => {
             </div>
           </div>
         )}
-
         {/* MODAL IMPORT MASAL */}
         {isBulkOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 overflow-y-auto">
@@ -4045,7 +4278,6 @@ const GuruDashboard = () => {
             </div>
           </div>
         )}
-
         {/* MODAL CUSTOM ALERT */}
         {customAlert.isOpen && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/80">
@@ -4101,7 +4333,6 @@ const GuruDashboard = () => {
             </div>
           </div>
         )}
-
         {/* EXPORT MENU MODAL */}
         {isExportMenuOpen && (
           <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center bg-slate-900/80 sm:p-4">
@@ -4164,7 +4395,6 @@ const GuruDashboard = () => {
             </div>
           </div>
         )}
-
         {/* MOBILE FILTER MODAL */}
         {isMobileFilterOpen && (
           <div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-900/80 md:hidden">
@@ -4195,9 +4425,10 @@ const GuruDashboard = () => {
                       </label>
                       <PremiumSelect
                         value={filters[key] || ""}
-                        onChange={(val) =>
-                          setFilters({ ...filters, [key]: val })
-                        }
+                        onChange={(val) => {
+                          setFilters({ ...filters, [key]: val });
+                          if (tab === "soal") setSoalViewMode("list");
+                        }}
                         options={[
                           { label: `Semua ${key}`, value: "" },
                           ...getFilterOptions(key).map((opt) => ({

@@ -200,6 +200,14 @@ const SiswaDashboard = () => {
   const [fontLevel, setFontLevel] = useState(0);
 
   const [zoomedImg, setZoomedImg] = useState(null);
+
+  // KODE BARU DIMULAI DARI SINI
+  const zoomedImgRef = useRef(zoomedImg);
+  useEffect(() => {
+    zoomedImgRef.current = zoomedImg;
+  }, [zoomedImg]);
+  // KODE BARU BERAKHIR DI SINI
+
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [customAlert, setCustomAlert] = useState({
     isOpen: false,
@@ -416,11 +424,27 @@ const SiswaDashboard = () => {
       }
     };
 
+    // KODE BARU: Pelacak Zoom & Resize Layar
+    let resizeTimeout;
+    let isZoomingOrResizing = false;
+
+    const handleResize = () => {
+      isZoomingOrResizing = true;
+      clearTimeout(resizeTimeout);
+      // Berikan masa toleransi 1 detik saat sedang nge-zoom agar tidak kena kunci
+      resizeTimeout = setTimeout(() => {
+        isZoomingOrResizing = false;
+      }, 1000);
+    };
+
     const handleVisibilityChange = () => {
+      if (zoomedImgRef.current) return;
       if (document.hidden) triggerLock("Tab Disembunyikan / Pindah Tab");
     };
 
     const handleBlur = () => {
+      if (zoomedImgRef.current) return;
+      if (isZoomingOrResizing) return; // KODE BARU: Abaikan hilang fokus jika sedang nge-zoom
       triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
     };
 
@@ -441,6 +465,7 @@ const SiswaDashboard = () => {
       }
     };
 
+    window.addEventListener("resize", handleResize); // KODE BARU
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleBlur);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -449,6 +474,8 @@ const SiswaDashboard = () => {
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
+      window.removeEventListener("resize", handleResize); // KODE BARU
+      clearTimeout(resizeTimeout); // KODE BARU
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
