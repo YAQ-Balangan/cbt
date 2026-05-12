@@ -602,8 +602,12 @@ const SiswaDashboard = () => {
             target === userTingkat,
         );
       });
-
-      const shuffledSoal = filterSoal.sort(() => Math.random() - 0.5);
+      // Menggunakan Fisher-Yates Shuffle untuk acakan 100% murni tanpa pola
+      const shuffledSoal = [...filterSoal];
+      for (let i = shuffledSoal.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledSoal[i], shuffledSoal[j]] = [shuffledSoal[j], shuffledSoal[i]];
+      }
       setSoalData(shuffledSoal);
 
       const usernameSiswa = getVal(user, "Username");
