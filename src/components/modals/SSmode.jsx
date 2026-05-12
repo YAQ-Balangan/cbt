@@ -180,6 +180,7 @@ const SSmode = ({
   const [poin, setPoin] = useState(2.5);
   const [mapel, setMapel] = useState("");
   const [kelas, setKelas] = useState("");
+  const [toastMsg, setToastMsg] = useState(false); // <--- STATE NOTIF DITAMBAHKAN DI SINI
 
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -334,6 +335,11 @@ const SSmode = ({
       });
 
       onUploadSuccess();
+
+      // <--- KODE NOTIF DIPANGGIL DI SINI --->
+      setToastMsg(true);
+      setTimeout(() => setToastMsg(false), 2500); // Otomatis hilang dalam 2.5 detik
+
       setCrop((prev) => ({
         ...prev,
         y: Math.min(prev.y + prev.height + 2, 75),
@@ -351,6 +357,16 @@ const SSmode = ({
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950 md:backdrop-blur-md md:p-[10mm] lg:p-[20mm] font-sans text-slate-200">
+      {/* <--- UI NOTIFIKASI MELAYANG (TOAST) ---> */}
+      {toastMsg && (
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[1005] bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 rounded-full shadow-2xl shadow-emerald-900/50 flex items-center gap-2 animate-bounce border border-emerald-400">
+          <CheckCircle size={20} />
+          <span className="font-black text-sm tracking-widest uppercase">
+            Snap Tersimpan!
+          </span>
+        </div>
+      )}
+
       <div className="bg-slate-900 w-full h-full md:rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl border-slate-700 md:border">
         {/* HEADER (Gaya App Bar M-Banking) */}
         <div className="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/95 shrink-0 z-20">
