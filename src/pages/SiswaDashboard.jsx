@@ -32,6 +32,7 @@ import { AuthContext } from "../context/AuthContext";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 const staggerContainer = {
   hidden: { opacity: 0 },
@@ -1405,15 +1406,34 @@ const SiswaDashboard = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setZoomedImg(null)}
-              className="fixed inset-0 z-[999999] bg-slate-900/95 flex items-center justify-center p-4 md:p-10 cursor-zoom-out"
+              className="fixed inset-0 z-[999999] bg-slate-900/95 flex flex-col items-center justify-center p-0"
             >
-              <img
-                src={zoomedImg}
-                alt="Zoomed"
-                className="max-w-full max-h-full object-contain rounded-xl"
-                onClick={(e) => e.stopPropagation()}
-              />
+              <button
+                onClick={() => setZoomedImg(null)}
+                className="absolute top-4 right-4 md:top-8 md:right-8 z-[1000] p-3 bg-white/10 hover:bg-red-500 text-white rounded-full backdrop-blur-md transition-all shadow-lg"
+              >
+                <X size={24} />
+              </button>
+
+              {/* Fitur Cubit, Geser, dan Zoom */}
+              <TransformWrapper
+                initialScale={1}
+                minScale={0.8}
+                maxScale={8}
+                centerOnInit={true}
+                wheel={{ step: 0.1 }}
+              >
+                <TransformComponent
+                  wrapperStyle={{ width: "100vw", height: "100vh" }}
+                >
+                  <img
+                    src={zoomedImg}
+                    alt="Zoomed"
+                    className="max-w-full max-h-full object-contain cursor-grab active:cursor-grabbing"
+                    onDragStart={(e) => e.preventDefault()}
+                  />
+                </TransformComponent>
+              </TransformWrapper>
             </motion.div>
           )}
         </AnimatePresence>
