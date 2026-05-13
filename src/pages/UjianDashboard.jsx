@@ -215,7 +215,7 @@ const UjianDashboard = () => {
   const boardWidth = cols * 130 + (cols - 1) * 24;
   const boardHeight = rows * 140 + (rows - 1) * 24 + 160;
 
-  // 1. FETCH DATA API
+  // 1. FETCH DATA API (DENGAN PERBAIKAN CCTV & EXACT TOTAL SOAL)
   const fetchAllData = async () => {
     setIsSyncing(true);
     try {
@@ -275,34 +275,51 @@ const UjianDashboard = () => {
         } catch (e) {}
       }
 
-      const examTotalSoal = {};
       const jadwalMap = {};
-
-      if (resJadwal && resSoal) {
+      if (resJadwal) {
         resJadwal.forEach((jadwal) => {
-          const mapelJadwal = String(jadwal.mapel || jadwal.Mapel || "");
-          jadwalMap[String(jadwal.id)] = mapelJadwal || "Ujian";
-          const total = resSoal.filter(
-            (s) =>
-              String(s.mapel || s.Mapel || "").toUpperCase() ===
-              mapelJadwal.toUpperCase(),
-          ).length;
-          examTotalSoal[String(jadwal.id)] = total > 0 ? total : 0;
+          jadwalMap[String(jadwal.id)] = String(
+            jadwal.mapel || jadwal.Mapel || "Ujian",
+          );
         });
       }
 
-      // ==========================================
-      // [PERBAIKAN] LOGIK RIWAYAT LIVE & NILAI
-      // ==========================================
+      // HELPER: Menghitung total soal AKURAT sesuai kelas
+      const getExactTotalSoal = (mapelJadwal, userKelasRaw, allSoal) => {
+        const mapelUpper = String(mapelJadwal).toUpperCase();
+        const userKelasFull = String(userKelasRaw || "")
+          .toUpperCase()
+          .trim();
+        const userParts = userKelasFull.split(" ");
+        const userTingkat = userParts[0] || "";
+        const userJurusan = userParts[1] || "";
+        const userTingkatJurusan = `${userTingkat} ${userJurusan}`.trim();
+
+        return allSoal.filter((s) => {
+          const soalMapel = String(s.mapel || s.Mapel || "").toUpperCase();
+          if (soalMapel !== mapelUpper) return false;
+
+          const soalKelasRaw = String(s.kelas || s.Kelas || "").toUpperCase();
+          if (soalKelasRaw === "" || soalKelasRaw.includes("SEMUA"))
+            return true;
+
+          const targetArray = soalKelasRaw.split(",").map((t) => t.trim());
+          return targetArray.some(
+            (target) =>
+              target === userKelasFull ||
+              target === userTingkatJurusan ||
+              target === userJurusan ||
+              target === userTingkat,
+          );
+        }).length;
+      };
+
       const allEvents = [];
       const currentTime = Date.now();
 
-      // HELPER: Fungsi kebal error untuk memparsing tanggal dari DB
       const safeGetTime = (dateVal) => {
         if (!dateVal) return 0;
         let cleanDate = String(dateVal).replace(" ", "T");
-
-        // Memastikan terbaca sebagai UTC dari database Supabase
         if (
           !cleanDate.includes("Z") &&
           !cleanDate.includes("+") &&
@@ -310,14 +327,84 @@ const UjianDashboard = () => {
         ) {
           cleanDate += "Z";
         }
-
         const time = new Date(cleanDate).getTime();
         return isNaN(time) ? 0 : time;
       };
 
-      // 1A. Kumpulkan Sesi Ujian (Sedang Berjalan / Terkunci)
+      const finishedExamsSet = new Set();
+
+      // 1A. Kumpulkan Nilai DULUAN (Selesai Ujian / Diskualifikasi)
+      (resNilai || []).forEach((nilai) => {
+        const nNama = String(nilai.nama_siswa || nilai.Nama_Siswa || "")
+          .toLowerCase()
+          .trim();
+        const nUsername = String(nilai.username || nilai.Username || nNama)
+          .toLowerCase()
+          .trim();
+
+        const userObj = siswaOnly.find(
+          (u) =>
+            normalizeText(u.username) === nUsername ||
+            normalizeText(u.nama) === nNama,
+        );
+        const userKey = userObj ? normalizeText(userObj.username) : nUsername;
+        const idUjian = String(nilai.id_ujian || "");
+
+        finishedExamsSet.add(`${userKey}_${idUjian}`);
+
+        const statusVal = String(
+          nilai.status || nilai.Status || "",
+        ).toUpperCase();
+        const isDisqualified =
+          statusVal.includes("DISKUALIFIKASI") || statusVal.includes("DIS");
+
+        const rawTime =
+          nilai.created_at ||
+          nilai.Created_at ||
+          nilai.Created_At ||
+          nilai.updated_at ||
+          nilai.waktu ||
+          null;
+        const dbTime = safeGetTime(rawTime);
+
+        let totalSoal = nilai.total_soal || nilai.Total_Soal;
+        if (!totalSoal || totalSoal === "-") {
+          const mapel =
+            nilai.mapel || nilai.Mapel || jadwalMap[idUjian] || "Ujian";
+          totalSoal = getExactTotalSoal(mapel, userObj?.kelas, resSoal || []);
+        }
+
+        allEvents.push({
+          userKey: userKey,
+          type: "DONE",
+          timestamp: dbTime,
+          sortId: parseInt(nilai.id) || 0,
+          data: {
+            id: `done-${nilai.id}`,
+            username: userObj
+              ? userObj.username
+              : nilai.username || nilai.nama_siswa,
+            id_ujian: idUjian,
+            mapel: nilai.mapel || nilai.Mapel || "Ujian",
+            nama: userObj ? userObj.nama : nilai.nama_siswa || nilai.Nama_Siswa,
+            gender: userObj ? userObj.gender : "L",
+            dijawab: totalSoal,
+            totalSoal: totalSoal,
+            progress: 100,
+            status: isDisqualified ? "DISKUALIFIKASI" : "SELESAI",
+          },
+        });
+      });
+
+      // 1B. Kumpulkan Sesi Ujian (Sedang Berjalan / Terkunci)
       (resSesiUjian || []).forEach((sesi) => {
         const usernameSesiNormal = normalizeText(sesi.username_siswa);
+        const idUjian = String(sesi.id_ujian);
+
+        if (finishedExamsSet.has(`${usernameSesiNormal}_${idUjian}`)) {
+          return;
+        }
+
         const userObj = siswaOnly.find(
           (u) => normalizeText(u.username) === usernameSesiNormal,
         );
@@ -330,7 +417,13 @@ const UjianDashboard = () => {
         } catch (e) {}
 
         const dijawab = Object.keys(jawaban).length;
-        const totalSoal = examTotalSoal[String(sesi.id_ujian)] || 0;
+        const mapel = jadwalMap[idUjian] || "Ujian";
+        const totalSoal = getExactTotalSoal(
+          mapel,
+          userObj?.kelas,
+          resSoal || [],
+        );
+
         let percentage =
           totalSoal > 0
             ? Math.min(100, Math.round((dijawab / totalSoal) * 100))
@@ -347,8 +440,8 @@ const UjianDashboard = () => {
           data: {
             id: `live-${sesi.id_sesi}`,
             username: sesi.username_siswa,
-            id_ujian: String(sesi.id_ujian),
-            mapel: jadwalMap[String(sesi.id_ujian)] || "Ujian",
+            id_ujian: idUjian,
+            mapel: mapel,
             nama: userObj ? userObj.nama : sesi.username_siswa,
             gender: userObj ? userObj.gender : "L",
             dijawab: dijawab,
@@ -359,55 +452,7 @@ const UjianDashboard = () => {
         });
       });
 
-      // 1B. Kumpulkan Nilai (Selesai Ujian / Diskualifikasi)
-      (resNilai || []).forEach((nilai) => {
-        const nNama = String(nilai.nama_siswa || nilai.Nama_Siswa || "")
-          .toLowerCase()
-          .trim();
-        const nUsername = String(nilai.username || nilai.Username || nNama)
-          .toLowerCase()
-          .trim();
-
-        const userObj = siswaOnly.find(
-          (u) =>
-            normalizeText(u.username) === nUsername ||
-            normalizeText(u.nama) === nNama,
-        );
-        const userKey = userObj ? normalizeText(userObj.username) : nUsername;
-
-        const statusVal = String(
-          nilai.status || nilai.Status || "",
-        ).toUpperCase();
-        const isDisqualified =
-          statusVal.includes("DISKUALIFIKASI") || statusVal.includes("DIS");
-
-        const dbTime = safeGetTime(
-          nilai.created_at || nilai.waktu_selesai || nilai.waktu,
-        );
-
-        allEvents.push({
-          userKey: userKey,
-          type: "DONE",
-          timestamp: dbTime,
-          sortId: parseInt(nilai.id) || 0,
-          data: {
-            id: `done-${nilai.id}`,
-            username: userObj
-              ? userObj.username
-              : nilai.username || nilai.nama_siswa,
-            id_ujian: String(nilai.id_ujian || ""),
-            mapel: nilai.mapel || nilai.Mapel || "Ujian",
-            nama: userObj ? userObj.nama : nilai.nama_siswa || nilai.Nama_Siswa,
-            gender: userObj ? userObj.gender : "L",
-            dijawab: nilai.total_soal || nilai.Total_Soal || "-",
-            totalSoal: nilai.total_soal || nilai.Total_Soal || "-",
-            progress: 100,
-            status: isDisqualified ? "DISKUALIFIKASI" : "SELESAI",
-          },
-        });
-      });
-
-      // 2. Urutkan semua event: Prioritas UTAMA pada Waktu Terbaru
+      // 2. Urutkan semua event
       allEvents.sort((a, b) => {
         if (a.timestamp > 0 && b.timestamp > 0 && a.timestamp !== b.timestamp) {
           return b.timestamp - a.timestamp;
@@ -416,30 +461,29 @@ const UjianDashboard = () => {
         return b.sortId - a.sortId;
       });
 
-      // 3. Filter Event: Tahan animasi meja "Selesai" selama 5 MENIT lalu bersihkan
-      const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 Menit
-      const LIVE_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 Jam
+      // 3. Filter Event: Real-time CCTV Logic (Menjadi Offline sesuai waktu)
+      const DONE_TIMEOUT_MS = 15 * 60 * 1000; // 15 Menit setelah kumpul -> OFFLINE
+      const LIVE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 Jam jika nyangkut di LIVE -> OFFLINE
       const latestEventsMap = {};
 
       allEvents.forEach((evt) => {
         if (!latestEventsMap[evt.userKey]) {
           const age = Math.abs(currentTime - evt.timestamp);
 
+          // Mengecek apakah sudah lewat masa tayang
           const isExpiredDone =
-            evt.type === "DONE" && evt.timestamp > 0 && age > FIVE_MINUTES_MS; // Kedaluwarsa dalam 5 Menit
-
+            evt.type === "DONE" && evt.timestamp > 0 && age > DONE_TIMEOUT_MS;
           const isExpiredLive =
             evt.type === "LIVE" && evt.timestamp > 0 && age > LIVE_TIMEOUT_MS;
 
           if (!isExpiredDone && !isExpiredLive) {
             latestEventsMap[evt.userKey] = evt.data;
           } else {
-            latestEventsMap[evt.userKey] = "EXPIRED";
+            latestEventsMap[evt.userKey] = "EXPIRED"; // Disapu menjadi Offline
           }
         }
       });
 
-      // 4. Ekstrak data final tanpa event yang sudah expired
       const liveStudentsList = Object.values(latestEventsMap).filter(
         (data) => data !== "EXPIRED",
       );
