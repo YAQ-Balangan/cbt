@@ -94,7 +94,7 @@ export default function App() {
           font-display: swap;
           
           /* SESUAIKAN UKURAN ARAB: 115% biasanya paling pas saat bersanding dengan Noto Sans */
-          size-adjust: 115%; 
+          size-adjust: 120%; 
         }
 
         /* 3. PAKSA SEMUA ELEMEN TUNDUK PADA ATURAN FONT INI (Prioritaskan Arab, lalu Latin) */

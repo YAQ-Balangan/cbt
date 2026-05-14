@@ -1015,7 +1015,7 @@ const SiswaDashboard = () => {
             </div>
           ) : (
             <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 w-full h-[calc(100vh-140px)] lg:h-[calc(100vh-120px)] min-h-[500px]">
-              <div className="flex-1 flex flex-col h-full bg-white border border-slate-200 rounded-[1.5rem] lg:rounded-[2rem] shadow-sm overflow-hidden relative">
+              <div className="flex-1 flex flex-col h-full bg-[#F4F4F0] border border-slate-200 rounded-[1.5rem] lg:rounded-[2rem] shadow-sm overflow-hidden relative">
                 <div className="px-5 lg:px-6 py-3 lg:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 lg:gap-3">
                     <span className="bg-slate-800 text-white font-black px-3 py-1.5 lg:px-4 rounded-lg text-xs lg:text-sm shadow-sm">
@@ -1182,7 +1182,7 @@ const SiswaDashboard = () => {
                 </div>
               </div>
 
-              <div className="hidden lg:flex w-[320px] xl:w-[380px] flex-col h-full bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden shrink-0">
+              <div className="hidden lg:flex w-[320px] xl:w-[380px] flex-col h-full bg-[#F4F4F0] border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden shrink-0 relative z-20">
                 <div className="p-6 border-b border-slate-100 bg-slate-50/50 shrink-0">
                   <div className="flex justify-between items-end mb-2">
                     <span className="text-xs font-black uppercase text-slate-500 tracking-widest">
@@ -1212,18 +1212,19 @@ const SiswaDashboard = () => {
                       const isRagu = !!raguRagu[sId];
 
                       let btnClass = isCurrent
-                        ? "border-slate-800 z-10 "
-                        : "border-transparent ";
+                        ? "border-slate-800 shadow-md z-10 "
+                        : "border-slate-200 shadow-sm "; // <-- Tambah border jelas & shadow
+
                       if (hasAnswered) {
                         btnClass += isRagu
-                          ? "bg-amber-400 text-amber-900"
-                          : "bg-emerald-500 text-white";
+                          ? "bg-amber-400 text-amber-900 border-amber-500"
+                          : "bg-emerald-500 text-white border-emerald-600";
                       } else {
                         btnClass += isRagu
                           ? "bg-amber-100 text-amber-800 border-amber-300"
                           : isCurrent
                             ? "bg-slate-800 text-white"
-                            : "bg-slate-100 text-slate-500 hover:bg-slate-200";
+                            : "bg-white text-slate-500 hover:border-emerald-300 hover:text-emerald-600"; // <-- Background putih bersih agar kontras dengan #F4F4F0
                       }
 
                       return (
@@ -1259,56 +1260,79 @@ const SiswaDashboard = () => {
         </main>
 
         {!loadingSoal && (
-          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 px-3 flex justify-between items-center z-40 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] pb-6 sm:pb-4 gap-2">
-            <button
-              onClick={() =>
-                setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
-              }
-              disabled={currentSoalIndex === 0}
-              className="p-3.5 bg-slate-100 text-slate-600 rounded-xl disabled:opacity-30 active:scale-95 transition-colors border border-slate-200"
-            >
-              <ArrowLeft size={20} />
-            </button>
+          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F4F4F0] border-t border-slate-200 z-40 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] pb-6 sm:pb-4 flex flex-col">
+            {/* 1. Bar Progress Tipis Memanjang di Atas Navigasi */}
+            <div className="w-full h-1.5 bg-slate-200 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+                style={{ width: `${progressPercent}%` }}
+              ></div>
+            </div>
 
-            <button
-              onClick={toggleRaguRagu}
-              className={`flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl font-bold text-xs border transition-colors shadow-sm ${
-                isCurrentRagu
-                  ? "bg-amber-400 text-amber-900 border-amber-500"
-                  : "bg-amber-50 text-amber-700 border-amber-200"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={isCurrentRagu}
-                readOnly
-                className="w-4 h-4 accent-amber-600 pointer-events-none"
-              />
-              <span className="hidden sm:inline">RAGU-RAGU</span>
-              <span className="sm:hidden">RAGU</span>
-            </button>
-
-            <button
-              onClick={() => setIsMobileDrawerOpen(true)}
-              className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 active:scale-95 transition-transform flex items-center justify-center relative"
-            >
-              <LayoutDashboard size={20} />
-              <span className="absolute -top-1.5 -right-1.5 text-[9px] font-black bg-emerald-500 text-white min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center shadow-sm">
-                {answeredCount}
+            {/* 2. Teks Indikator (Terjawab X dari Y) */}
+            <div className="flex justify-between items-center px-4 pt-2.5 pb-1">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Terjawab{" "}
+                <span className="text-emerald-600">{answeredCount}</span> dari{" "}
+                {soalData.length} Soal
               </span>
-            </button>
+              <span className="text-[10px] font-black text-emerald-600">
+                {Math.round(progressPercent)}%
+              </span>
+            </div>
 
-            <button
-              onClick={() =>
-                setCurrentSoalIndex((prev) =>
-                  Math.min(soalData.length - 1, prev + 1),
-                )
-              }
-              disabled={currentSoalIndex === soalData.length - 1}
-              className="p-3.5 bg-emerald-500 text-white rounded-xl shadow-sm disabled:opacity-30 active:scale-95 transition-colors"
-            >
-              <ArrowRight size={20} />
-            </button>
+            {/* 3. Barisan Tombol Bawah */}
+            <div className="px-3 pt-1.5 flex justify-between items-center gap-2">
+              <button
+                onClick={() =>
+                  setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
+                }
+                disabled={currentSoalIndex === 0}
+                className="p-3.5 bg-white text-slate-600 rounded-xl disabled:opacity-30 active:scale-95 transition-colors border border-slate-200 shadow-sm hover:text-emerald-600"
+              >
+                <ArrowLeft size={20} />
+              </button>
+
+              <button
+                onClick={toggleRaguRagu}
+                className={`flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl font-bold text-xs border transition-colors shadow-sm ${
+                  isCurrentRagu
+                    ? "bg-amber-400 text-amber-900 border-amber-500"
+                    : "bg-white text-amber-700 border-amber-200"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isCurrentRagu}
+                  readOnly
+                  className="w-4 h-4 accent-amber-600 pointer-events-none"
+                />
+                <span className="hidden sm:inline">RAGU-RAGU</span>
+                <span className="sm:hidden">RAGU</span>
+              </button>
+
+              <button
+                onClick={() => setIsMobileDrawerOpen(true)}
+                className="p-3.5 bg-white text-emerald-600 rounded-xl border border-emerald-200 active:scale-95 transition-transform flex items-center justify-center relative shadow-sm"
+              >
+                <LayoutDashboard size={20} />
+                <span className="absolute -top-1.5 -right-1.5 text-[9px] font-black bg-emerald-500 text-white min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center shadow-sm border border-white">
+                  {answeredCount}
+                </span>
+              </button>
+
+              <button
+                onClick={() =>
+                  setCurrentSoalIndex((prev) =>
+                    Math.min(soalData.length - 1, prev + 1),
+                  )
+                }
+                disabled={currentSoalIndex === soalData.length - 1}
+                className="p-3.5 bg-emerald-500 text-white rounded-xl shadow-sm disabled:opacity-30 active:scale-95 transition-colors"
+              >
+                <ArrowRight size={20} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -1326,7 +1350,7 @@ const SiswaDashboard = () => {
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
-                className="lg:hidden fixed bottom-0 left-0 right-0 bg-white rounded-t-[2rem] z-[101] flex flex-col max-h-[85vh] shadow-2xl"
+                className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F4F4F0] rounded-t-[2rem] z-[101] flex flex-col max-h-[85vh] shadow-2xl"
               >
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
                   <div>
@@ -1353,18 +1377,19 @@ const SiswaDashboard = () => {
                       const isRagu = !!raguRagu[sId];
 
                       let btnClass = isCurrent
-                        ? "border-emerald-500 z-10 "
-                        : "border-slate-100 ";
+                        ? "border-emerald-500 shadow-md z-10 "
+                        : "border-slate-200 shadow-sm "; // <-- Tambah border abu halus & bayangan
+
                       if (hasAnswered) {
                         btnClass += isRagu
-                          ? "bg-amber-400 text-amber-900 shadow-md shadow-amber-500/20"
-                          : "bg-emerald-500 text-white shadow-md shadow-emerald-500/20";
+                          ? "bg-amber-400 text-amber-900 shadow-md border-amber-500"
+                          : "bg-emerald-500 text-white shadow-md border-emerald-600";
                       } else {
                         btnClass += isRagu
                           ? "bg-amber-100 text-amber-800 border-amber-300"
                           : isCurrent
-                            ? "bg-slate-800 text-white shadow-md"
-                            : "bg-white text-slate-400";
+                            ? "bg-slate-800 text-white shadow-md border-slate-800"
+                            : "bg-white text-slate-500 hover:border-emerald-300"; // <-- Tetap bg-white agar timbul dari laci krem
                       }
 
                       return (
@@ -1558,7 +1583,7 @@ const SiswaDashboard = () => {
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5">
                     <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-md uppercase tracking-wider border border-white/10">
-                      KLS: {userKelasFull || "-"}
+                      KELAS: {userKelasFull || "-"}
                     </span>
                     <span className="text-[10px] font-bold bg-amber-400/20 text-amber-200 px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-400/20">
                       {getVal(user, "Username")}
