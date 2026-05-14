@@ -83,10 +83,43 @@ export default function App() {
 
       {/* Global Styles & Font */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,600;0,700;0,800;1,400;1,600;1,700;1,800&display=swap');
+        /* 1. IMPORT NOTO SANS DARI GOOGLE FONTS (Khusus Teks Latin/Standar) */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
         
-        body { 
-          font-family: 'Plus Jakarta Sans', sans-serif; 
+        /* 2. DAFTARKAN FONT ISEP MISBAH LOKAL (Khusus Teks Arab) */
+        @font-face {
+          font-family: 'IsepMisbah';
+          src: url('/fonts/IsepMisbah.ttf') format('truetype');
+          unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+          font-display: swap;
+          
+          /* SESUAIKAN UKURAN ARAB: 115% biasanya paling pas saat bersanding dengan Noto Sans */
+          size-adjust: 115%; 
+        }
+
+        /* 3. PAKSA SEMUA ELEMEN TUNDUK PADA ATURAN FONT INI (Prioritaskan Arab, lalu Latin) */
+        * { 
+          font-family: 'IsepMisbah', 'Noto Sans', sans-serif !important; 
+        }
+
+        /* 4. PENGATURAN DASAR UNTUK SELURUH TEKS (Teks Standar) */
+        body {
+          color: #333333; 
+          line-height: 1.6;
+          font-size: 16px;
+        }
+
+        .teks-standar {
+          font-size: 16px;
+        }
+
+        /* 5. PENGATURAN KHUSUS UNTUK TEKS ARAB MANUAL (BLOK BESAR) */
+        .teks-arab {
+          font-size: 24px !important;
+          line-height: 2.0 !important;
+          direction: rtl;
+          text-align: right;
+          display: block; /* Agar RTL (Right-to-Left) bekerja sempurna */
         }
         
         @keyframes shake { 
