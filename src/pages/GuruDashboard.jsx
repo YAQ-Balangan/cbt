@@ -828,14 +828,11 @@ const GuruDashboard = () => {
     if (!dummyConfig.mapel || !dummyConfig.kelas)
       return showAlert("warning", "Validasi", "Harap pilih Mapel dan Kelas.");
     setIsSaving(true);
+
     try {
-      let nextId =
-        data.length > 0
-          ? Math.max(...data.map((item) => parseInt(item.id) || 0)) + 1
-          : 1;
       const dummyItems = [];
       for (let i = 0; i < dummyConfig.jumlah; i++) {
-        const newItem = {
+        dummyItems.push({
           mapel: dummyConfig.mapel,
           kelas: dummyConfig.kelas,
           wacana: "",
@@ -849,18 +846,21 @@ const GuruDashboard = () => {
           opsi_e: "Opsi E",
           jawaban_benar: "A",
           guru_pembuat: namaGuruLog,
-        };
-        dummyItems.push(newItem);
-        await api.create(currentConfig.sheet, newItem);
-        await new Promise((r) => setTimeout(r, 200));
+        });
       }
-      pushAction({ type: "BULK_CREATE", items: dummyItems });
+
+      // SIMPAN MASSAL DALAM 1 DETIK!
+      const resData = await api.createBulk(currentConfig.sheet, dummyItems);
+
+      // Masukkan ke log sejarah Undo agar aman
+      pushAction({ type: "BULK_CREATE", items: resData });
+
       await fetchData(false);
       setIsDummyModalOpen(false);
       showAlert(
         "success",
         "Berhasil",
-        `${dummyConfig.jumlah} Soal Dummy berhasil dibuat!`,
+        `${dummyConfig.jumlah} Soal Template berhasil dibuat!`,
       );
     } catch (err) {
       showAlert("danger", "Gagal", err.message);
@@ -952,6 +952,32 @@ const GuruDashboard = () => {
     }
   };
 
+  // --- FUNGSI BARU: HANYA MENARIK NILAI & SESI (HEMAT KUOTA) ---
+  const fetchLiveMonitoring = async () => {
+    setIsSyncing(true);
+    try {
+      const [resNilai, lockedRes] = await Promise.all([
+        api.read(TAB_CONFIG.nilai.sheet),
+        api.getSesiTerkunci().catch(() => []),
+      ]);
+
+      setAllData((prev) => {
+        const newData = {
+          ...prev, // Pertahankan data soal yang sudah ada di memori
+          nilai: resNilai || [],
+        };
+        return JSON.stringify(prev) !== JSON.stringify(newData)
+          ? newData
+          : prev;
+      });
+      setSesiUjianData(lockedRes || []);
+    } catch (error) {
+      console.error("Gagal refresh live monitoring:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // A. HANYA JALANKAN FETCH ALL SAAT PERTAMA KALI MASUK APLIKASI
   useEffect(() => {
     fetchAllData(false);
@@ -964,8 +990,8 @@ const GuruDashboard = () => {
     fetchCount();
 
     const intervalId = setInterval(() => {
-      fetchAllData(true);
-      fetchCount(); // Update indikator juga tiap 30 detik
+      fetchLiveMonitoring();
+      fetchCount();
     }, 30000);
 
     return () => clearInterval(intervalId);
@@ -1106,12 +1132,7 @@ const GuruDashboard = () => {
         setLoading(true);
         try {
           const itemsToDelete = data.filter((d) => selectedIds.includes(d.id));
-          for (let i = 0; i < selectedIds.length; i++) {
-            const res = await api.delete(currentConfig.sheet, selectedIds[i]);
-            if (res && res.error)
-              throw new Error(res.error.message || JSON.stringify(res.error));
-            await new Promise((r) => setTimeout(r, 300));
-          }
+          await api.deleteBulk(currentConfig.sheet, selectedIds);
           pushAction({ type: "BULK_DELETE", items: itemsToDelete });
           await fetchData(false);
           setSelectedIds([]);
@@ -1138,12 +1159,8 @@ const GuruDashboard = () => {
         setIsDeletingBulk(true);
         try {
           const itemsToDelete = [...processedData];
-          for (let item of processedData) {
-            const res = await api.delete(currentConfig.sheet, item.id);
-            if (res && res.error)
-              throw new Error(res.error.message || JSON.stringify(res.error));
-            await new Promise((r) => setTimeout(r, 300));
-          }
+          const allVisibleIds = processedData.map((item) => item.id);
+          await api.deleteBulk(currentConfig.sheet, allVisibleIds);
           pushAction({ type: "BULK_DELETE", items: itemsToDelete });
           await fetchData(false);
           setSelectedIds([]);
@@ -1216,13 +1233,15 @@ const GuruDashboard = () => {
           pushAction({ type: "UPDATE", oldItem, newItem: payloadToSave });
       } else {
         res = await api.create(currentConfig.sheet, payloadToSave);
-        if (!(res && res.error))
-          pushAction({ type: "CREATE", item: payloadToSave });
+        if (!(res && res.error)) {
+          const newItemWithId = Array.isArray(res) ? res[0] : res;
+          pushAction({ type: "CREATE", item: newItemWithId });
+        }
       }
 
       if (res && res.error) {
         throw new Error(
-          `Airtable menolak data. Detail: ${JSON.stringify(res.error)}`,
+          `Database menolak data. Detail: ${JSON.stringify(res.error)}`,
         );
       }
 
@@ -1750,30 +1769,28 @@ const GuruDashboard = () => {
   const handleSaveBulk = async () => {
     if (parsedBulkData.length === 0) return;
     setIsSaving(true);
-    setBulkProgress(0);
+    setBulkProgress(100);
 
     try {
-      const savedItems = [];
-      for (let i = 0; i < parsedBulkData.length; i++) {
-        const payloadToSave = {
-          ...parsedBulkData[i],
-          poin:
-            parseFloat(String(parsedBulkData[i].poin).replace(",", ".")) || 0,
+      // 1. Siapkan semua soal sekaligus (tanpa ID)
+      const itemsToInsert = parsedBulkData.map((item) => {
+        const newItem = {
+          ...item,
+          poin: parseFloat(String(item.poin).replace(",", ".")) || 0,
         };
-        delete payloadToSave.id;
+        delete newItem.id; // Supabase yang akan bikin ID
+        return newItem;
+      });
 
-        const res = await api.create(currentConfig.sheet, payloadToSave);
-        if (res && res.error)
-          throw new Error(
-            `Airtable menolak Soal ke-${i + 1}. Detail: ${JSON.stringify(res.error)}`,
-          );
+      // 2. SIMPAN MASSAL DALAM 1 DETIK!
+      const savedItems = await api.createBulk(
+        currentConfig.sheet,
+        itemsToInsert,
+      );
 
-        savedItems.push(payloadToSave);
-        setBulkProgress(i + 1);
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-
+      // 3. Simpan data yang SUDAH PUNYA ID ke dalam sejarah Undo
       pushAction({ type: "BULK_CREATE", items: savedItems });
+
       await fetchData(false);
       showAlert(
         "info",
@@ -1784,14 +1801,14 @@ const GuruDashboard = () => {
       setBulkText("");
       setParsedBulkData([]);
     } catch (error) {
-      showAlert("danger", "Gagal Import Massal!", error.message);
+      showAlert("danger", "Gagal Import Otomatis!", error.message);
     } finally {
       setIsSaving(false);
       setBulkProgress(0);
     }
-  }; // LOGIKA PENGELOMPOKAN FOLDER (ANTI-LAG)
+  };
   // ==========================================
-
+  // LOGIKA PENGELOMPOKAN FOLDER (ANTI-LAG)
   // ==========================================
   const folderSoal = useMemo(() => {
     if (tab !== "soal" || data.length === 0) return [];
@@ -2387,17 +2404,32 @@ const GuruDashboard = () => {
             <div className="grid grid-cols-2 gap-3 relative z-10">
               <div className="bg-black/20 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
                 <p className="text-[10px] uppercase tracking-widest opacity-80 font-bold mb-1">
-                  Total Soal
+                  {tab === "soal" ? "Total Bank Soal" : "Siswa Sudah Ujian"}
                 </p>
-                <p className="text-2xl font-black">{indikatorTotalSoal}</p>{" "}
-                {/* <--- SEKARANG SUDAH PAKAI INDIKATOR REAL TIME */}
+                <p className="text-2xl font-black">
+                  {tab === "soal"
+                    ? indikatorTotalSoal
+                    : pivotNilaiData?.data?.length || 0}
+                </p>
               </div>
               <div className="bg-black/20 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
                 <p className="text-[10px] uppercase tracking-widest opacity-80 font-bold mb-1">
-                  Siswa Sudah Ujian
+                  {tab === "soal"
+                    ? "Direktori Folder"
+                    : nilaiViewMode === "rekap"
+                      ? "Siswa Remedial"
+                      : nilaiViewMode === "log"
+                        ? "Log Riwayat"
+                        : "Siswa Terkunci"}
                 </p>
                 <p className="text-2xl font-black">
-                  {pivotNilaiData?.data?.length || 0}
+                  {tab === "soal"
+                    ? folderSoal.length
+                    : nilaiViewMode === "rekap"
+                      ? statsNilai?.remedial || 0
+                      : nilaiViewMode === "log"
+                        ? processedData.length
+                        : lockedSessions.length}
                 </p>
               </div>
             </div>
@@ -2866,17 +2898,24 @@ const GuruDashboard = () => {
               </div>
               <div className="flex justify-between items-start relative z-10">
                 <p className="text-xs font-bold text-amber-400 uppercase tracking-widest">
-                  Total{" "}
-                  {tab === "nilai" && nilaiViewMode === "rekap"
-                    ? "Siswa"
-                    : "Data"}
+                  {tab === "soal"
+                    ? "Total Soal"
+                    : nilaiViewMode === "rekap"
+                      ? "Total Siswa"
+                      : nilaiViewMode === "log"
+                        ? "Total Log Riwayat"
+                        : "Total Pelanggaran"}
                 </p>
               </div>
               <div className="flex items-baseline gap-2 mt-3 relative z-10">
                 <p className="text-4xl font-bold text-white">
-                  {tab === "nilai" && nilaiViewMode === "rekap"
-                    ? pivotNilaiData.data.length
-                    : indikatorTotalSoal}
+                  {tab === "soal"
+                    ? indikatorTotalSoal
+                    : nilaiViewMode === "rekap"
+                      ? pivotNilaiData.data.length
+                      : nilaiViewMode === "log"
+                        ? processedData.length
+                        : lockedSessions.length + disqualifiedSessions.length}
                 </p>
               </div>
             </Card>

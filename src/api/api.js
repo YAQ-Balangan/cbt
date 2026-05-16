@@ -51,6 +51,18 @@ export const api = {
         return data;
     },
 
+    // 3.5 CREATE MASSAL (Import Ratusan Data dalam 1 Detik)
+    createBulk: async (sheet, payloadArray) => {
+        const tableName = sheet.toLowerCase();
+        const { data, error } = await supabase
+            .from(tableName)
+            .insert(payloadArray)
+            .select();
+
+        if (error) throw new Error(error.message);
+        return data;
+    },
+
     // 4. UPDATE (Edit Data)
     update: async (sheet, numericId, payloadData) => {
         const tableName = sheet.toLowerCase();
@@ -76,6 +88,18 @@ export const api = {
         return data;
     },
 
+    // --- FUNGSI BARU: HAPUS MASSAL SUPER CEPAT (1 DETIK) ---
+    deleteBulk: async (sheet, arrayIds) => {
+        const tableName = sheet.toLowerCase();
+        const { error } = await supabase
+            .from(tableName)
+            .delete()
+            .in('id', arrayIds);
+
+        if (error) throw new Error(error.message);
+        return true;
+    },
+
     // 6. HITUNG TOTAL SOAL (INDIKATOR SAJA)
     getTotalSoal: async () => {
         try {
@@ -90,62 +114,56 @@ export const api = {
             return 0;
         }
     },
+    // 7. GET SOAL SPESIFIK MAPEL (Backend Filtering Anti-Lag)
+    getSoalUjian: async (mapel) => {
+        const { data, error } = await supabase
+            .from('soal')
+            .select('*')
+            .ilike('mapel', mapel); // ilike = mencari teks walau huruf besar/kecil beda
+
+        if (error) throw new Error(error.message);
+        return data || [];
+    },
+
+    // 8. GET NILAI SPESIFIK SISWA (Backend Filtering Anti-Lag)
+    getNilaiSiswa: async (namaSiswa) => {
+        const { data, error } = await supabase
+            .from('nilai')
+            .select('*')
+            .ilike('nama_siswa', namaSiswa);
+
+        if (error) throw new Error(error.message);
+        return data || [];
+    },
 
     // ========================================================
     // FITUR AUTO-SAVE KE SERVER & ANTI-CHEAT
     // ========================================================
 
-    // Auto-Save setiap 15 Detik & Saat Pindah Soal
+    // Auto-Save setiap 15 Detik & Saat Pindah Soal (Optimasi Jalur Kilat 300 Siswa)
     saveSesi: async (username, idUjian, jawaban, sisaWaktu, pelanggaran = 0, statusSesi = 'ACTIVE') => {
         try {
             const idSesi = `${username}_${idUjian}`;
             const waktuSekarang = new Date().toISOString();
             const jawabanString = typeof jawaban === 'string' ? jawaban : JSON.stringify(jawaban);
 
-            // 1. Cek apakah sesi ini sudah ada di database
-            const { data: existingSesi } = await supabase
+            // GANTI LOGIKA LAMA MENJADI JALUR TUNGGAL (UPSERT)
+            const payload = {
+                id_sesi: idSesi,
+                username_siswa: username,
+                id_ujian: idUjian,
+                jawaban_sementara: jawabanString,
+                sisa_waktu: sisaWaktu,
+                pelanggaran: pelanggaran,
+                status: statusSesi,
+                updated_at: waktuSekarang
+            };
+
+            const { error } = await supabase
                 .from('sesi_ujian')
-                .select('id_sesi')
-                .eq('id_sesi', idSesi)
-                .single();
+                .upsert(payload, { onConflict: 'id_sesi' });
 
-            if (existingSesi) {
-                // JIKA SUDAH ADA: Lakukan UPDATE (Hanya perbarui updated_at)
-                const payloadUpdate = {
-                    jawaban_sementara: jawabanString,
-                    sisa_waktu: sisaWaktu,
-                    pelanggaran: pelanggaran,
-                    status: statusSesi,
-                    updated_at: waktuSekarang
-                };
-
-                const { error: updateError } = await supabase
-                    .from('sesi_ujian')
-                    .update(payloadUpdate)
-                    .eq('id_sesi', idSesi);
-
-                if (updateError) console.error("Update error:", updateError.message);
-
-            } else {
-                // JIKA BELUM ADA (Baru Login): Lakukan INSERT (Isi created_at dan updated_at)
-                const payloadInsert = {
-                    id_sesi: idSesi,
-                    username_siswa: username,
-                    id_ujian: idUjian,
-                    jawaban_sementara: jawabanString,
-                    sisa_waktu: sisaWaktu,
-                    pelanggaran: pelanggaran,
-                    status: statusSesi,
-                    created_at: waktuSekarang,
-                    updated_at: waktuSekarang
-                };
-
-                const { error: insertError } = await supabase
-                    .from('sesi_ujian')
-                    .insert([payloadInsert]);
-
-                if (insertError) console.error("Insert error:", insertError.message);
-            }
+            if (error) console.error("Upsert error:", error.message);
         } catch (error) {
             console.error("Gagal save sesi ujian:", error);
         }

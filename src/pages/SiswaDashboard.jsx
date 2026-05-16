@@ -310,10 +310,12 @@ const SiswaDashboard = () => {
         } catch (setErr) {
           console.warn("Gagal menarik konfigurasi pengaturan admin:", setErr);
         }
-
+        if (activeExamRef.current) {
+          return;
+        }
         const jadwalRes = await api.read("Jadwal");
-        const nilaiRes = await api.read("Nilai");
-
+        const userName = String(getVal(user, "Nama") || "");
+        const finalNilai = await api.getNilaiSiswa(userName);
         let finalJadwal = [];
         if (jadwalRes && jadwalRes.length > 0) {
           finalJadwal = jadwalRes.filter((j) => {
@@ -331,15 +333,6 @@ const SiswaDashboard = () => {
                 target === userTingkat,
             );
           });
-        }
-
-        let finalNilai = [];
-        if (nilaiRes && nilaiRes.length > 0) {
-          const userName = String(getVal(user, "Nama") || "").toLowerCase();
-          finalNilai = nilaiRes.filter(
-            (n) =>
-              String(getVal(n, "Nama_Siswa") || "").toLowerCase() === userName,
-          );
         }
 
         setExams((prev) =>
@@ -586,7 +579,7 @@ const SiswaDashboard = () => {
     }
 
     try {
-      const allSoal = await api.read("Soal");
+      const allSoal = await api.getSoalUjian(examMapel);
       const examMapelUpper = String(examMapel).toUpperCase();
       const filterSoal = allSoal.filter((s) => {
         const soalMapel = String(getVal(s, "Mapel")).toUpperCase();
@@ -639,24 +632,20 @@ const SiswaDashboard = () => {
         setPelanggaran(0);
         setIsLocked(false);
       }
-      // ...
-
-      if (!serverSession) {
-        try {
-          await api.saveSesi(
-            getVal(user, "Username"),
-            examId,
-            {},
-            finalTimeLeft,
-            0,
-            "ACTIVE",
-          );
-        } catch (e) {
-          console.error("Gagal sinkron awal", e);
-        }
+      try {
+        await api.saveSesi(
+          getVal(user, "Username"),
+          examId,
+          finalAnswers,
+          finalTimeLeft,
+          serverSession ? serverSession.pelanggaran : 0,
+          serverSession ? serverSession.status : "ACTIVE",
+        );
+      } catch (e) {
+        console.error("Gagal sinkron awal sesi ujian:", e);
       }
 
-      setAnswers(finalAnswers);
+      setAnswers(finalAnswers); // Sekarang jawaban lama murid sukses dimuat kembali ke layar!
       setTimeLeft(finalTimeLeft);
       setCurrentSoalIndex(0);
     } catch (error) {
