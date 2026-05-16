@@ -636,6 +636,7 @@ const GuruDashboard = () => {
 
   const [tab, setTab] = useState("soal");
   const [soalViewMode, setSoalViewMode] = useState("folder");
+  const [indikatorTotalSoal, setIndikatorTotalSoal] = useState(0);
 
   // 1. STATE CACHE GLOBAL (Sama seperti Admin Dashboard)
   const [allData, setAllData] = useState({
@@ -835,7 +836,6 @@ const GuruDashboard = () => {
       const dummyItems = [];
       for (let i = 0; i < dummyConfig.jumlah; i++) {
         const newItem = {
-          id: nextId + i,
           mapel: dummyConfig.mapel,
           kelas: dummyConfig.kelas,
           wacana: "",
@@ -955,7 +955,19 @@ const GuruDashboard = () => {
   // A. HANYA JALANKAN FETCH ALL SAAT PERTAMA KALI MASUK APLIKASI
   useEffect(() => {
     fetchAllData(false);
-    const intervalId = setInterval(() => fetchAllData(true), 30000);
+
+    // Ambil angka total soal dari Supabase
+    const fetchCount = async () => {
+      const total = await api.getTotalSoal();
+      setIndikatorTotalSoal(total);
+    };
+    fetchCount();
+
+    const intervalId = setInterval(() => {
+      fetchAllData(true);
+      fetchCount(); // Update indikator juga tiap 30 detik
+    }, 30000);
+
     return () => clearInterval(intervalId);
   }, []);
 
@@ -1184,10 +1196,15 @@ const GuruDashboard = () => {
 
     const payloadToSave = {
       ...formData,
-      id: parseInt(formData.id),
       poin: parseFloat(String(formData.poin).replace(",", ".")) || 0,
       guru_pembuat: namaGuruLog,
     };
+
+    if (isEdit) {
+      payloadToSave.id = parseInt(formData.id);
+    } else {
+      delete payloadToSave.id;
+    }
 
     setIsSaving(true);
     try {
@@ -1740,10 +1757,10 @@ const GuruDashboard = () => {
       for (let i = 0; i < parsedBulkData.length; i++) {
         const payloadToSave = {
           ...parsedBulkData[i],
-          id: parseInt(parsedBulkData[i].id),
           poin:
             parseFloat(String(parsedBulkData[i].poin).replace(",", ".")) || 0,
         };
+        delete payloadToSave.id;
 
         const res = await api.create(currentConfig.sheet, payloadToSave);
         if (res && res.error)
@@ -2372,7 +2389,8 @@ const GuruDashboard = () => {
                 <p className="text-[10px] uppercase tracking-widest opacity-80 font-bold mb-1">
                   Total Soal
                 </p>
-                <p className="text-2xl font-black">{data.length}</p>
+                <p className="text-2xl font-black">{indikatorTotalSoal}</p>{" "}
+                {/* <--- SEKARANG SUDAH PAKAI INDIKATOR REAL TIME */}
               </div>
               <div className="bg-black/20 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
                 <p className="text-[10px] uppercase tracking-widest opacity-80 font-bold mb-1">
@@ -2858,7 +2876,7 @@ const GuruDashboard = () => {
                 <p className="text-4xl font-bold text-white">
                   {tab === "nilai" && nilaiViewMode === "rekap"
                     ? pivotNilaiData.data.length
-                    : processedData.length}
+                    : indikatorTotalSoal}
                 </p>
               </div>
             </Card>

@@ -76,6 +76,21 @@ export const api = {
         return data;
     },
 
+    // 6. HITUNG TOTAL SOAL (INDIKATOR SAJA)
+    getTotalSoal: async () => {
+        try {
+            const { count, error } = await supabase
+                .from('soal')
+                .select('*', { count: 'exact', head: true });
+
+            if (error) throw error;
+            return count;
+        } catch (error) {
+            console.error("Gagal menghitung total soal:", error);
+            return 0;
+        }
+    },
+
     // ========================================================
     // FITUR AUTO-SAVE KE SERVER & ANTI-CHEAT
     // ========================================================
