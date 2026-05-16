@@ -3097,22 +3097,28 @@ const GuruDashboard = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                        {" "}
                     {folderSoal.map((folder, idx) => {
-                      // Logika Warna Pintar Berdasarkan Kelas
+                      // Logika Warna Pintar Berdasarkan Kelas (UI Theme TADBIRA Harmony)
                       let color = {
                         border:
-                          "hover:border-violet-400 hover:shadow-violet-500/10",
-                        icon: "bg-violet-50 text-violet-600 border-violet-200",
-                        text: "group-hover:text-violet-700",
-                        badge: "bg-violet-50 text-violet-700 border-violet-200",
+                          "hover:border-rose-400 hover:shadow-rose-500/10",
+                        icon: "bg-rose-50 text-rose-600 border-rose-200",
+                        text: "group-hover:text-rose-700",
+                        badge: "bg-rose-50 text-rose-700 border-rose-200",
                       };
+
                       const kelasStr = String(folder.kelas).toUpperCase();
-                      if (
+                      const isSMP =
                         kelasStr.includes("VII") ||
                         kelasStr.includes("VIII") ||
                         kelasStr.includes("IX") ||
                         kelasStr.includes("SMP") ||
-                        kelasStr.includes("MTS")
-                      ) {
+                        kelasStr.includes("MTS");
+                      const hasMipa =
+                        kelasStr.includes("MIPA") || kelasStr.includes("IPA");
+                      const hasIps = kelasStr.includes("IPS");
+
+                      if (isSMP) {
+                        // 1. KELAS SMP / MTS: Biru Modern
                         color = {
                           border:
                             "hover:border-blue-400 hover:shadow-blue-500/10",
@@ -3120,10 +3126,8 @@ const GuruDashboard = () => {
                           text: "group-hover:text-blue-700",
                           badge: "bg-blue-50 text-blue-700 border-blue-200",
                         };
-                      } else if (
-                        kelasStr.includes("MIPA") ||
-                        kelasStr.includes("IPA")
-                      ) {
+                      } else if (hasMipa && hasIps) {
+                        // 2. GABUNGAN MIPA & IPS: Emerald (Hijau Mewah)
                         color = {
                           border:
                             "hover:border-emerald-400 hover:shadow-emerald-500/10",
@@ -3132,7 +3136,17 @@ const GuruDashboard = () => {
                           badge:
                             "bg-emerald-50 text-emerald-700 border-emerald-200",
                         };
-                      } else if (kelasStr.includes("IPS")) {
+                      } else if (hasMipa) {
+                        // 3. HANYA MIPA SAJA: Rose / Ruby (Aksen Merah Premium)
+                        color = {
+                          border:
+                            "hover:border-rose-400 hover:shadow-rose-500/10",
+                          icon: "bg-rose-50 text-rose-600 border-rose-200",
+                          text: "group-hover:text-rose-700",
+                          badge: "bg-rose-50 text-rose-700 border-rose-200",
+                        };
+                      } else if (hasIps) {
+                        // 4. HANYA IPS SAJA: Amber (Oranye Keemasan Khas TADBIRA)
                         color = {
                           border:
                             "hover:border-amber-400 hover:shadow-amber-500/10",

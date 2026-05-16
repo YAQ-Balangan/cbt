@@ -744,8 +744,6 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchAllData(false);
-    const intervalId = setInterval(() => fetchAllData(true), 30000);
-    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
