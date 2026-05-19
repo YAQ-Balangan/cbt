@@ -33,6 +33,8 @@ import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import "katex/dist/katex.min.css";
+import Latex from "react-latex-next";
 
 const staggerContainer = {
   hidden: { opacity: 0 },
@@ -1028,20 +1030,18 @@ const SiswaDashboard = () => {
                         <div
                           className={`font-medium text-slate-700 leading-relaxed mt-1 transition-all ${fontClasses.wacana[fontLevel]}`}
                           style={{ whiteSpace: "pre-wrap" }}
-                          dangerouslySetInnerHTML={{
-                            __html: getVal(currentSoal, "Wacana"),
-                          }}
-                        />
+                        >
+                          <Latex>{getVal(currentSoal, "Wacana") || ""}</Latex>
+                        </div>
                       </div>
                     )}
 
                     <div
                       className={`font-bold text-slate-800 leading-relaxed mb-6 md:mb-8 transition-all ${fontClasses.soal[fontLevel]}`}
                       style={{ whiteSpace: "pre-wrap" }}
-                      dangerouslySetInnerHTML={{
-                        __html: getVal(currentSoal, "Pertanyaan"),
-                      }}
-                    />
+                    >
+                      <Latex>{getVal(currentSoal, "Pertanyaan") || ""}</Latex>
+                    </div>
 
                     {getVal(currentSoal, "Link_Gambar") && (
                       <div className="mb-8 w-full flex justify-start">
@@ -1114,14 +1114,11 @@ const SiswaDashboard = () => {
                             </span>
 
                             <div
-                              className={`font-medium pt-1 md:pt-2 leading-relaxed transition-all z-10 w-full ${fontClasses.opsi[fontLevel]} ${
-                                isSelected
-                                  ? "text-emerald-900 font-bold"
-                                  : "text-slate-700"
-                              }`}
+                              className={`font-medium pt-1 md:pt-2 leading-relaxed transition-all z-10 w-full ${fontClasses.opsi[fontLevel]} ${isSelected ? "text-emerald-900 font-bold" : "text-slate-700"}`}
                               style={{ whiteSpace: "pre-wrap" }}
-                              dangerouslySetInnerHTML={{ __html: optText }}
-                            />
+                            >
+                              <Latex>{optText || ""}</Latex>
+                            </div>
                           </button>
                         );
                       })}

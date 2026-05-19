@@ -48,10 +48,11 @@ import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
 import { AuthContext } from "../context/AuthContext";
 import SSmode from "../components/modals/SSmode";
+import "katex/dist/katex.min.css";
+import Latex from "react-latex-next";
 
 // IMPORT LIBRARY EXPORT
 import * as XLSX from "xlsx";
-import * as mammoth from "mammoth";
 import {
   Document,
   Packer,
@@ -549,10 +550,9 @@ const MemoizedSoalCard = React.memo(
           )}
         </div>
 
-        <div
-          className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap"
-          dangerouslySetInnerHTML={{ __html: s.pertanyaan }}
-        />
+        <div className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap">
+          <Latex>{s.pertanyaan || ""}</Latex>
+        </div>
 
         {s.link_gambar && (
           <div className="mb-6 max-w-lg rounded-xl border border-slate-200 shadow-sm p-2 bg-slate-50 relative group/img w-max">
@@ -605,8 +605,9 @@ const MemoizedSoalCard = React.memo(
                 </span>
                 <span
                   className={`text-xs md:text-sm font-medium leading-relaxed whitespace-pre-wrap flex-1 ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
-                  dangerouslySetInnerHTML={{ __html: s[keyMap] }}
-                />
+                >
+                  <Latex>{s[keyMap] || ""}</Latex>
+                </span>
                 {isCorrect && (
                   <CheckCircle2
                     size={16}
@@ -699,6 +700,7 @@ const GuruDashboard = () => {
   const [isSSModeOpen, setIsSSModeOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [isReadingFile, setIsReadingFile] = useState(false);
+  const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [parsedBulkData, setParsedBulkData] = useState([]);
   const [bulkMapel, setBulkMapel] = useState("");
   const [bulkKelas, setBulkKelas] = useState("");
@@ -1670,99 +1672,67 @@ const GuruDashboard = () => {
     setParsedBulkData(parsed);
   };
 
-  // ==========================================
-  // FUNGSI MALAS: BACA FILE WORD/TXT OTOMATIS
-  // ==========================================
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const handleRapikanDenganAI = async () => {
+    if (!bulkText.trim()) {
+      return showAlert(
+        "warning",
+        "Teks Kosong",
+        "Silakan paste teks soal terlebih dahulu.",
+      );
+    }
 
-    setIsReadingFile(true);
+    setIsProcessingAI(true);
     try {
-      const fileExt = file.name.split(".").pop().toLowerCase();
+      const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-      if (fileExt === "docx") {
-        const arrayBuffer = await file.arrayBuffer();
+      if (!API_KEY) {
+        throw new Error("API Key tidak terbaca! Cek file .env Anda.");
+      }
 
-        // 1. KUNCI PERUBAHAN: Gunakan convertToHtml agar format list (1,2,3 / A,B,C) tidak hilang
-        const result = await mammoth.convertToHtml({ arrayBuffer });
+      const promptAI = `Kamu adalah asisten pembuat soal CBT. Berikut adalah teks hasil copy-paste berantakan dari Microsoft Word. 
+      Tugasmu:
+      1. Rapikan susunan teksnya agar mudah dibaca.
+      2. DETEKSI semua rumus matematika/fisika/kimia, ubah menjadi format LaTeX ($...$ atau $$...$$).
+      3. JANGAN mengubah redaksi kalimat soal atau opsi A/B/C/D/E.
+      Teks Asli: ${bulkText}`;
 
-        // 2. Buat wadah virtual untuk menerjemahkan HTML kembali menjadi Teks biasa
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = result.value;
+      // URL ini sekarang menggunakan model yang 100% tepat sesuai daftar di API Anda
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
-        let extractedText = "";
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptAI }] }],
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          ],
+        }),
+      });
 
-        // 3. Looping PINTAR untuk mendeteksi mana Soal dan mana Opsi
-        Array.from(tempDiv.children).forEach((el) => {
-          if (el.tagName === "P") {
-            extractedText += el.innerText + "\n";
-          } else if (el.tagName === "OL" || el.tagName === "UL") {
-            const lis = Array.from(el.children).filter(
-              (c) => c.tagName === "LI",
-            );
-
-            lis.forEach((li, idx) => {
-              const childList = li.querySelector("ol, ul");
-              if (childList) {
-                // KASUS A: Nested List (Soal dan Opsi menyatu di Word)
-                const questionClone = li.cloneNode(true);
-                const innerLists = questionClone.querySelectorAll("ol, ul");
-                innerLists.forEach((il) => il.remove()); // Buang opsi sementara
-
-                extractedText += `${idx + 1}. ${questionClone.innerText.trim()}\n`;
-
-                Array.from(childList.children).forEach((optLi, optIdx) => {
-                  const letter = String.fromCharCode(65 + optIdx); // 65 adalah kode ASCII untuk 'A'
-                  extractedText += `${letter}. ${optLi.innerText.trim()}\n`;
-                });
-              } else {
-                // KASUS B: Flat List (Soal dan Opsi terpisah paragrafnya)
-                // TRIK: Jika list ini berisi 2 hingga 5 baris, sistem menebak ini adalah OPSI JAWABAN (A, B, C, D, E)
-                if (lis.length >= 2 && lis.length <= 5) {
-                  const letter = String.fromCharCode(65 + idx);
-                  extractedText += `${letter}. ${li.innerText.trim()}\n`;
-                } else {
-                  // Jika listnya panjang tak wajar atau sendirian, jadikan angka biasa
-                  extractedText += `${idx + 1}. ${li.innerText.trim()}\n`;
-                }
-              }
-            });
-          } else {
-            extractedText += el.innerText + "\n";
-          }
-          extractedText += "\n"; // Jarak antar paragraf
-        });
-
-        // 4. Bersihkan spasi kosong yang berlebihan agar rapi
-        extractedText = extractedText.replace(/\n{3,}/g, "\n\n");
-
-        setBulkText(extractedText.trim());
-        showAlert(
-          "success",
-          "Berhasil Ekstrak",
-          "Auto-Numbering Word berhasil dikembalikan ke teks!",
-        );
-      } else if (fileExt === "txt") {
-        const text = await file.text();
-        setBulkText(text);
-        showAlert(
-          "success",
-          "Berhasil Ekstrak",
-          "Teks berhasil disalin otomatis.",
-        );
-      } else {
-        showAlert(
-          "warning",
-          "Format Ditolak",
-          "Silakan upload file Microsoft Word (.docx) atau Text (.txt).",
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error?.message ||
+            `Koneksi gagal (Status: ${response.status})`,
         );
       }
+
+      const data = await response.json();
+
+      if (!data.candidates || data.candidates.length === 0) {
+        throw new Error("AI tidak merespon/terblokir filter.");
+      }
+
+      const teksRapi = data.candidates[0].content.parts[0].text;
+      setBulkText(teksRapi);
+      showAlert("success", "Sihir Berhasil!", "Soal telah dirapikan!");
     } catch (error) {
-      showAlert("danger", "Gagal Membaca File", "Detail: " + error.message);
+      console.error("AI Error:", error);
+      showAlert("danger", "AI Gagal Memproses", error.message);
     } finally {
-      setIsReadingFile(false);
-      e.target.value = null;
+      setIsProcessingAI(false);
     }
   };
 
@@ -1915,10 +1885,9 @@ const GuruDashboard = () => {
               <div className="absolute -top-3.5 left-6 bg-linear-to-r from-blue-600 to-blue-500 text-white px-3 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-md border border-blue-400">
                 <BookOpen size={14} /> WACANA TERIKAT PADA {bundleCount} SOAL
               </div>
-              <div
-                className="font-medium text-slate-700 leading-relaxed text-sm md:text-base whitespace-pre-wrap mt-2"
-                dangerouslySetInnerHTML={{ __html: s.wacana }}
-              />
+              <div className="font-medium text-slate-700 leading-relaxed text-sm md:text-base whitespace-pre-wrap mt-2">
+                <Latex>{s.wacana || ""}</Latex>
+              </div>
             </div>
             <div className="w-1.5 h-8 bg-blue-200 ml-12 absolute -bottom-8 rounded-full z-0"></div>
           </div>,
@@ -4218,27 +4187,21 @@ const GuruDashboard = () => {
                   <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                     Teks Soal Asli
                   </label>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept=".docx,.txt"
-                      onChange={handleFileUpload}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      disabled={isReadingFile || isSaving}
-                      title="Upload file Ms. Word"
-                    />
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-[10px] md:text-xs font-bold hover:bg-blue-100 transition-colors shadow-sm"
-                    >
-                      {isReadingFile ? (
-                        <RefreshCw className="animate-spin" size={14} />
-                      ) : (
-                        <FileText size={14} />
-                      )}
-                      {isReadingFile ? "Membaca..." : "Upload Word (.docx)"}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRapikanDenganAI}
+                    disabled={isProcessingAI || isSaving}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[10px] md:text-xs font-bold hover:bg-purple-100 transition-colors shadow-sm"
+                  >
+                    {isProcessingAI ? (
+                      <RefreshCw className="animate-spin" size={14} />
+                    ) : (
+                      <Bot size={14} />
+                    )}
+                    {isProcessingAI
+                      ? "AI Sedang Bekerja..."
+                      : "Rapikan Eksakta (AI)"}
+                  </button>
                 </div>
                 <textarea
                   className="w-full p-4 md:p-5 bg-slate-50 border border-slate-200 rounded-xl md:rounded-[1.5rem] font-mono text-[11px] md:text-[13px] outline-none focus:bg-white focus:border-emerald-500 transition-all resize-y h-48 md:h-64 text-slate-700 shadow-inner leading-relaxed"
@@ -4285,46 +4248,48 @@ const GuruDashboard = () => {
                               </span>
                             </div>
                           )}
-                          <div
-                            className="text-xs md:text-sm font-semibold text-slate-800 whitespace-pre-wrap mb-3 md:mb-4 pr-8 md:pr-10 leading-relaxed"
-                            dangerouslySetInnerHTML={{
-                              __html: item.pertanyaan,
-                            }}
-                          />
+                          <div className="text-xs md:text-sm font-semibold text-slate-800 whitespace-pre-wrap mb-3 md:mb-4 pr-8 md:pr-10 leading-relaxed">
+                            <Latex>{item.pertanyaan || ""}</Latex>
+                          </div>
                           <div className="flex flex-col gap-1 md:gap-1.5 text-[10px] md:text-xs text-slate-600 font-medium">
                             {item.opsi_a && (
                               <div
                                 className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "A" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                               >
-                                <strong>A.</strong> {item.opsi_a}
+                                <strong>A.</strong>{" "}
+                                <Latex>{item.opsi_a || ""}</Latex>
                               </div>
                             )}
                             {item.opsi_b && (
                               <div
                                 className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "B" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                               >
-                                <strong>B.</strong> {item.opsi_b}
+                                <strong>B.</strong>{" "}
+                                <Latex>{item.opsi_b || ""}</Latex>
                               </div>
                             )}
                             {item.opsi_c && (
                               <div
                                 className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "C" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                               >
-                                <strong>C.</strong> {item.opsi_c}
+                                <strong>C.</strong>{" "}
+                                <Latex>{item.opsi_c || ""}</Latex>
                               </div>
                             )}
                             {item.opsi_d && (
                               <div
                                 className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "D" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                               >
-                                <strong>D.</strong> {item.opsi_d}
+                                <strong>D.</strong>{" "}
+                                <Latex>{item.opsi_d || ""}</Latex>
                               </div>
                             )}
                             {item.opsi_e && (
                               <div
                                 className={`p-2 md:p-2.5 rounded-lg whitespace-pre-wrap ${item.jawaban_benar === "E" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-100" : "bg-slate-50 border border-transparent"}`}
                               >
-                                <strong>E.</strong> {item.opsi_e}
+                                <strong>E.</strong>{" "}
+                                <Latex>{item.opsi_e || ""}</Latex>
                               </div>
                             )}
                           </div>
@@ -4372,8 +4337,7 @@ const GuruDashboard = () => {
                 {customAlert.message}
               </p>
               <div className="flex flex-col sm:flex-row gap-3 w-full">
-                {customAlert.type === "confirm" ||
-                customAlert.type === "danger" ? (
+                {customAlert.type === "confirm" ? (
                   <>
                     <button
                       onClick={closeAlert}
@@ -4395,7 +4359,7 @@ const GuruDashboard = () => {
                 ) : (
                   <button
                     onClick={closeAlert}
-                    className="w-full py-3 px-4 rounded-lg md:rounded-xl font-bold text-white shadow-lg bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30 text-sm transition-all"
+                    className={`w-full py-3 px-4 rounded-lg md:rounded-xl font-bold text-white shadow-lg text-sm transition-all ${customAlert.type === "danger" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"}`}
                   >
                     Mengerti
                   </button>

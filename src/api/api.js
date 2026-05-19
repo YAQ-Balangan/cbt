@@ -3,9 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 
 export const APP_NAME = "CBT-MASDA-2026";
 
-// Kredensial Supabase
-const supabaseUrl = 'https://mmtgtcjwedpfkivdakup.supabase.co';
-const supabaseKey = 'sb_publishable_5WrYJLYicZV_dmRLFXkfsw_fHnRF8sj';
+// Kredensial Supabase diambil dari file .env agar aman dari kebocoran
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
