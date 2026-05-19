@@ -4200,7 +4200,7 @@ const GuruDashboard = () => {
                     )}
                     {isProcessingAI
                       ? "AI Sedang Bekerja..."
-                      : "Klik untuk soal yang ada rumus (AI Gemini)"}
+                      : "Bantu Perbaiki Rumus (AI Gemini)"}
                   </button>
                 </div>
                 <textarea
