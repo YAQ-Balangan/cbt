@@ -717,6 +717,9 @@ const GuruDashboard = () => {
   const [soalViewMode, setSoalViewMode] = useState("folder");
   const [indikatorTotalSoal, setIndikatorTotalSoal] = useState(0);
 
+  const [folderSearch, setFolderSearch] = useState("");
+  const [groupBy, setGroupBy] = useState("mapel");
+
   // 1. STATE CACHE GLOBAL (Sama seperti Admin Dashboard)
   const [allData, setAllData] = useState({
     soal: [],
@@ -1796,6 +1799,7 @@ Patuhi aturan berikut secara ketat:
    - JANGAN menambahkan kalimat pembuka atau penutup ("Berikut adalah hasilnya...", dll). Berikan HANYA teks soal yang sudah dirapikan.
    - JIKA ADA angka yang pakai ")" contoh: 1) maka jadikan (1) saja
    - UNTUK NOMOR SOAL, perlihatkan saja.
+   - JIKA ADA TABEL, tandai dengan sesuatu yang bisa dideteksi latex untuk di render jadi tabel yang bagus, rapi dan tepat.
       Teks Asli: ${bulkText}`;
 
       // URL ini sekarang menggunakan model yang 100% tepat sesuai daftar di API Anda
@@ -1888,18 +1892,43 @@ Patuhi aturan berikut secara ketat:
     data.forEach((item) => {
       if (!item.mapel || !item.kelas) return;
       const kls = String(item.kelas).trim();
-      const key = `${item.mapel}___${kls}`;
+
+      // Kunci pengelompokan dinamis (Berdasarkan Mapel ATAU Kelas)
+      const key =
+        groupBy === "mapel"
+          ? `${item.mapel}___${kls}`
+          : `${kls}___${item.mapel}`;
+
       if (!groups[key]) {
         groups[key] = { mapel: item.mapel, kelas: kls, count: 0 };
       }
       groups[key].count += 1;
     });
-    return Object.values(groups).sort((a, b) => {
-      const mapelCmp = a.mapel.localeCompare(b.mapel);
-      if (mapelCmp !== 0) return mapelCmp;
-      return a.kelas.localeCompare(b.kelas);
+
+    // Filter hasil berdasarkan search bar
+    let result = Object.values(groups);
+    if (folderSearch) {
+      const s = folderSearch.toLowerCase();
+      result = result.filter(
+        (f) =>
+          f.mapel.toLowerCase().includes(s) ||
+          f.kelas.toLowerCase().includes(s),
+      );
+    }
+
+    // Sorting otomatis sesuai pengelompokan
+    return result.sort((a, b) => {
+      if (groupBy === "mapel") {
+        const mapelCmp = a.mapel.localeCompare(b.mapel);
+        if (mapelCmp !== 0) return mapelCmp;
+        return a.kelas.localeCompare(b.kelas);
+      } else {
+        const kelasCmp = a.kelas.localeCompare(b.kelas);
+        if (kelasCmp !== 0) return kelasCmp;
+        return a.mapel.localeCompare(b.mapel);
+      }
     });
-  }, [data, tab]);
+  }, [data, tab, folderSearch, groupBy]);
 
   const handleOpenFolder = (mapel, kelas) => {
     setFilters({ ...filters, mapel: mapel, kelas: kelas });
@@ -3159,6 +3188,29 @@ Patuhi aturan berikut secara ketat:
                      {" "}
                   </button>
                                  {" "}
+                </div>
+                <div className="flex flex-col md:flex-row gap-3 px-2 mb-4">
+                  <div className="flex-1 relative">
+                    <Search
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      size={18}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Ketik nama mapel atau kelas di sini..."
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 outline-none transition-all shadow-sm font-medium"
+                      value={folderSearch}
+                      onChange={(e) => setFolderSearch(e.target.value)}
+                    />
+                  </div>
+                  <select
+                    className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value)}
+                  >
+                    <option value="mapel">Grup: Mata Pelajaran</option>
+                    <option value="kelas">Grup: Kelas</option>
+                  </select>
                 </div>
                                {" "}
                 {folderSoal.length === 0 ? (
