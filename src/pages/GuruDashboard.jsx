@@ -49,7 +49,7 @@ import { Card, Badge } from "../components/ui/Ui";
 import { AuthContext } from "../context/AuthContext";
 import SSmode from "../components/modals/SSmode";
 import "katex/dist/katex.min.css";
-import Latex from "react-latex-next";
+import renderMathInElement from "katex/contrib/auto-render";
 
 // IMPORT LIBRARY EXPORT
 import * as XLSX from "xlsx";
@@ -66,6 +66,35 @@ import {
   VerticalAlign,
 } from "docx";
 import { saveAs } from "file-saver";
+
+// ==========================================
+// KOMPONEN RENDERER LATEX CUSTOM (REACT 19 SAFE)
+// ==========================================
+const Latex = ({ children }) => {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      renderMathInElement(containerRef.current, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\(", right: "\\)", display: false },
+          { left: "\\[", right: "\\]", display: true },
+        ],
+        throwOnError: false, // ANTI CRASH: Abaikan error jika rumus salah ketik
+        errorColor: "#ef4444",
+      });
+    }
+  }, [children]);
+
+  return (
+    <span
+      ref={containerRef}
+      dangerouslySetInnerHTML={{ __html: children || "" }}
+    />
+  );
+};
 
 // ==========================================
 // HELPER: FORMAT POIN

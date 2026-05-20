@@ -34,7 +34,36 @@ import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import "katex/dist/katex.min.css";
-import Latex from "react-latex-next";
+import renderMathInElement from "katex/contrib/auto-render";
+
+// ==========================================
+// KOMPONEN RENDERER LATEX CUSTOM (REACT 19 SAFE)
+// ==========================================
+const Latex = ({ children }) => {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      renderMathInElement(containerRef.current, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\(", right: "\\)", display: false },
+          { left: "\\[", right: "\\]", display: true },
+        ],
+        throwOnError: false,
+        errorColor: "#ef4444",
+      });
+    }
+  }, [children]);
+
+  return (
+    <span
+      ref={containerRef}
+      dangerouslySetInnerHTML={{ __html: children || "" }}
+    />
+  );
+};
 
 const staggerContainer = {
   hidden: { opacity: 0 },
