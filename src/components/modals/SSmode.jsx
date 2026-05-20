@@ -28,22 +28,36 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
 
 const IMGBB_API_KEY = "db28c000ce57b260d7d09cb4c18790e0";
 
-// --- KOMPONEN DROPDOWN PREMIUM (RESPONSIF & NYAMAN) ---
 const ModalSelect = ({ value, onChange, options, placeholder, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter((opt) =>
+    opt.label.toLowerCase().includes(search.toLowerCase()),
+  );
   const selectedOption = options.find(
     (opt) => String(opt.value) === String(value),
   );
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full" ref={dropdownRef}>
       <button
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-3.5 text-sm font-semibold bg-slate-800 border transition-all rounded-2xl outline-none
-          ${disabled ? "opacity-50 cursor-not-allowed border-slate-700" : "border-slate-600 hover:border-emerald-500 active:scale-[0.98]"}
-        `}
+        className={`w-full flex items-center justify-between p-3.5 text-sm font-semibold bg-slate-800 border transition-all rounded-2xl outline-none ${disabled ? "opacity-50 cursor-not-allowed border-slate-700" : "border-slate-600 hover:border-emerald-500 active:scale-[0.98]"}`}
       >
         <span
           className={`truncate ${!selectedOption ? "text-slate-400" : "text-emerald-400 font-bold"}`}
@@ -56,20 +70,40 @@ const ModalSelect = ({ value, onChange, options, placeholder, disabled }) => {
         />
       </button>
       {isOpen && (
-        <div className="absolute z-[1001] w-full mt-2 bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
-          {options.map((opt, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => {
-                onChange(opt.value);
-                setIsOpen(false);
-              }}
-              className="w-full px-5 py-4 text-sm text-left hover:bg-emerald-500/20 text-slate-200 hover:text-emerald-400 border-b border-slate-700/50 last:border-0"
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="absolute z-[1001] w-full mt-2 bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl max-h-60 flex flex-col overflow-hidden">
+          <div className="p-2 border-b border-slate-700">
+            <input
+              type="text"
+              autoFocus
+              placeholder="Cari..."
+              className="w-full px-3 py-2 text-sm bg-slate-900 text-white rounded-xl border border-slate-700 outline-none focus:border-emerald-500"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="overflow-y-auto py-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
+                  className="w-full px-5 py-4 text-sm text-left hover:bg-emerald-500/20 text-slate-200 hover:text-emerald-400 border-b border-slate-700/50 last:border-0"
+                >
+                  {opt.label}
+                </button>
+              ))
+            ) : (
+              <div className="px-5 py-4 text-sm text-slate-500 italic">
+                Tidak ditemukan
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -84,6 +118,23 @@ const ModalMultiSelect = ({
   disabled,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter((opt) =>
+    opt.label.toLowerCase().includes(search.toLowerCase()),
+  );
   const selectedArray = value
     ? String(value)
         .split(",")
@@ -99,50 +150,74 @@ const ModalMultiSelect = ({
   };
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full" ref={dropdownRef}>
       <button
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-3.5 text-sm font-semibold bg-slate-800 border transition-all rounded-2xl outline-none
-          ${disabled ? "opacity-50 cursor-not-allowed border-slate-700" : "border-slate-600 hover:border-emerald-500 active:scale-[0.98]"}
-        `}
+        className={`w-full flex items-center justify-between p-3.5 text-sm font-semibold bg-slate-800 border transition-all rounded-2xl outline-none ${disabled ? "opacity-50 cursor-not-allowed border-slate-700" : "border-slate-600 hover:border-emerald-500 active:scale-[0.98]"}`}
       >
         <span
           className={`truncate ${selectedArray.length === 0 ? "text-slate-400" : "text-emerald-400 font-bold"}`}
         >
-          {selectedArray.length === 0 ? placeholder : selectedArray.join(", ")}
+          {selectedArray.length === 0
+            ? placeholder
+            : selectedArray.length > 2
+              ? `${selectedArray.length} Kelas Dipilih`
+              : selectedArray.join(", ")}
         </span>
-        <ChevronDown size={18} className="text-slate-400" />
+        <ChevronDown
+          size={18}
+          className={`text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
       </button>
       {isOpen && (
-        <div className="absolute z-[1001] w-full mt-2 bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl max-h-60 overflow-y-auto p-2">
-          {options.map((opt, i) => {
-            if (opt.isLabel)
-              return (
-                <div
-                  key={i}
-                  className="px-3 py-2 text-xs font-black text-slate-500 uppercase tracking-widest"
-                >
-                  {opt.label}
-                </div>
-              );
-            const isSelected = selectedArray.includes(opt.value);
-            return (
-              <div
-                key={i}
-                onClick={() => toggleOption(opt.value)}
-                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white/10 transition-all text-slate-200"
-              >
-                {isSelected ? (
-                  <CheckSquare size={20} className="text-emerald-500" />
-                ) : (
-                  <Square size={20} className="text-slate-500" />
-                )}
-                <span className="text-sm font-semibold">{opt.label}</span>
+        <div className="absolute z-[1001] w-full mt-2 bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl max-h-72 flex flex-col overflow-hidden p-2">
+          <div className="p-2 border-b border-slate-700 mb-2">
+            <input
+              type="text"
+              autoFocus
+              placeholder="Cari..."
+              className="w-full px-3 py-2 text-sm bg-slate-900 text-white rounded-xl border border-slate-700 outline-none focus:border-emerald-500"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, i) => {
+                if (opt.isLabel)
+                  return (
+                    <div
+                      key={i}
+                      className="px-3 py-2 text-xs font-black text-slate-500 uppercase tracking-widest"
+                    >
+                      {opt.label}
+                    </div>
+                  );
+                const isSelected = selectedArray.includes(opt.value);
+                return (
+                  <div
+                    key={i}
+                    onClick={() => toggleOption(opt.value)}
+                    className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white/10 transition-all text-slate-200"
+                  >
+                    {isSelected ? (
+                      <CheckSquare size={20} className="text-emerald-500" />
+                    ) : (
+                      <Square size={20} className="text-slate-500" />
+                    )}
+                    <span className="text-sm font-semibold">{opt.label}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-4 text-sm text-slate-500 italic">
+                Tidak ditemukan
               </div>
-            );
-          })}
+            )}
+          </div>
         </div>
       )}
     </div>

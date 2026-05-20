@@ -1,5 +1,12 @@
 // src/pages/GuruDashboard.jsx
-import React, { useState, useEffect, useMemo, useRef, useContext } from "react";
+import React, {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useContext,
+} from "react";
 import {
   Folder,
   ArrowLeft,
@@ -67,26 +74,22 @@ import {
 } from "docx";
 import { saveAs } from "file-saver";
 
-// ==========================================
-// KOMPONEN RENDERER LATEX CUSTOM (REACT 19 SAFE)
-// ==========================================
-const Latex = ({ children }) => {
+// Tambahan: Menggunakan React.memo agar performa lebih ringan
+const Latex = React.memo(({ children }) => {
   const containerRef = useRef(null);
 
-  useEffect(() => {
+  // Perubahan Utama: useLayoutEffect
+  useLayoutEffect(() => {
     if (containerRef.current) {
       renderMathInElement(containerRef.current, {
         delimiters: [
           { left: "$$", right: "$$", display: true },
           { left: "$", right: "$", display: false },
-          { left: "\\(", right: "\\)", display: false },
-          { left: "\\[", right: "\\]", display: true },
         ],
-        throwOnError: false, // ANTI CRASH: Abaikan error jika rumus salah ketik
-        errorColor: "#ef4444",
+        throwOnError: false,
       });
     }
-  }, [children]);
+  }, [children]); // Hanya satu dependency untuk mount & update
 
   return (
     <span
@@ -94,7 +97,7 @@ const Latex = ({ children }) => {
       dangerouslySetInnerHTML={{ __html: children || "" }}
     />
   );
-};
+});
 
 // ==========================================
 // HELPER: FORMAT POIN
@@ -120,17 +123,23 @@ const PremiumSelect = ({
   icon,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const dropdownRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target))
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
+        setSearch("");
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const filteredOptions = options.filter((opt) =>
+    opt.label.toLowerCase().includes(search.toLowerCase()),
+  );
   const selectedOption = options.find(
     (opt) => String(opt.value) === String(value),
   );
@@ -141,9 +150,7 @@ const PremiumSelect = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-2.5 md:p-3.5 text-sm bg-white border transition-all rounded-lg md:rounded-xl outline-none shadow-sm min-h-[40px] md:min-h-[48px]
-          ${disabled ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "border-slate-200 text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 hover:border-emerald-400 cursor-pointer"}
-        `}
+        className={`w-full flex items-center justify-between p-2.5 md:p-3.5 text-sm bg-white border transition-all rounded-lg md:rounded-xl outline-none shadow-sm min-h-[40px] md:min-h-[48px] ${disabled ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "border-slate-200 text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 hover:border-emerald-400 cursor-pointer"}`}
       >
         <span
           className={`flex items-center gap-2 line-clamp-2 text-left break-words ${!selectedOption ? "text-slate-400 font-medium" : "font-bold"}`}
@@ -158,30 +165,51 @@ const PremiumSelect = ({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-md max-h-52 md:max-h-60 overflow-y-auto py-1">
-          {options.map((opt, index) => {
-            const isSelected = String(opt.value) === String(value);
-            return (
-              <button
-                key={index}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-3 md:px-4 py-2.5 md:py-3 text-sm transition-colors text-left
-                  ${isSelected ? "bg-emerald-50 text-emerald-800 font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-emerald-700 font-medium"}
-                `}
-              >
-                <span className="whitespace-normal break-words pr-2">
-                  {opt.label}
-                </span>
-                {isSelected && (
-                  <Check size={16} className="text-emerald-600 shrink-0 ml-2" />
-                )}
-              </button>
-            );
-          })}
+        <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-slate-100">
+            <input
+              type="text"
+              autoFocus
+              placeholder="Cari..."
+              className="w-full px-3 py-2 text-sm bg-slate-50 rounded-lg outline-none border border-slate-200 focus:border-emerald-500"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="overflow-y-auto max-h-48 py-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, index) => {
+                const isSelected = String(opt.value) === String(value);
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => {
+                      onChange(opt.value);
+                      setIsOpen(false);
+                      setSearch("");
+                    }}
+                    className={`w-full flex items-center justify-between px-3 md:px-4 py-2.5 text-sm transition-colors text-left ${isSelected ? "bg-emerald-50 text-emerald-800 font-bold" : "text-slate-600 hover:bg-slate-50 hover:text-emerald-700 font-medium"}`}
+                  >
+                    <span className="whitespace-normal break-words pr-2">
+                      {opt.label}
+                    </span>
+                    {isSelected && (
+                      <Check
+                        size={16}
+                        className="text-emerald-600 shrink-0 ml-2"
+                      />
+                    )}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-4 py-3 text-sm text-slate-400 italic">
+                Opsi tidak ditemukan
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -199,17 +227,23 @@ const PremiumMultiSelect = ({
   disabled,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const dropdownRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target))
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
+        setSearch("");
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const filteredOptions = options.filter((opt) =>
+    opt.label.toLowerCase().includes(search.toLowerCase()),
+  );
   const selectedArray = value
     ? String(value)
         .split(",")
@@ -233,9 +267,7 @@ const PremiumMultiSelect = ({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-2.5 md:p-3.5 text-sm bg-white border transition-all rounded-lg md:rounded-xl outline-none shadow-sm min-h-[40px] md:min-h-[48px]
-          ${disabled ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "border-slate-200 text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 hover:border-emerald-400 cursor-pointer"}
-        `}
+        className={`w-full flex items-center justify-between p-2.5 md:p-3.5 text-sm bg-white border transition-all rounded-lg md:rounded-xl outline-none shadow-sm min-h-[40px] md:min-h-[48px] ${disabled ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed" : "border-slate-200 text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 hover:border-emerald-400 cursor-pointer"}`}
       >
         <span
           className={`line-clamp-2 text-left break-words pr-2 ${selectedArray.length === 0 ? "text-slate-400 font-medium" : "font-bold"}`}
@@ -253,54 +285,71 @@ const PremiumMultiSelect = ({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full md:w-80 mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl flex flex-col max-h-64 md:max-h-72 overflow-hidden max-w-[90vw]">
-          <div className="p-2 border-b border-slate-100 bg-slate-50 sticky top-0 flex justify-between items-center z-10">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2">
-              Pilih Sasaran Kelas
-            </span>
-            {selectedArray.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onChange("")}
-                className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
-              >
-                Reset
-              </button>
-            )}
+        <div className="absolute z-50 w-full md:w-80 mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl flex flex-col max-h-72 overflow-hidden max-w-[90vw]">
+          <div className="p-2 border-b border-slate-100 bg-slate-50 sticky top-0 flex flex-col gap-2 z-10">
+            <div className="flex justify-between items-center px-1">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Pilih Sasaran
+              </span>
+              {selectedArray.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onChange("")}
+                  className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-0.5 rounded-lg"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              autoFocus
+              placeholder="Cari kelas..."
+              className="w-full px-3 py-1.5 text-xs bg-white rounded-lg outline-none border border-slate-200"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
+
           <div className="overflow-y-auto p-2 scrollbar-thin flex flex-col gap-1">
-            {options.map((opt, index) => {
-              if (opt.isLabel) {
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, index) => {
+                if (opt.isLabel)
+                  return (
+                    <div
+                      key={index}
+                      className="px-3 pt-2 pb-1 text-[10px] font-black text-emerald-700 uppercase tracking-widest sticky top-0 bg-white"
+                    >
+                      {opt.label}
+                    </div>
+                  );
+                const isSelected = selectedArray.includes(opt.value);
                 return (
                   <div
                     key={index}
-                    className="px-3 pt-4 pb-1 text-[10px] font-black text-emerald-700 uppercase tracking-widest bg-white sticky top-0 z-10"
+                    onClick={() => toggleOption(opt.value)}
+                    className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all ${isSelected ? "bg-emerald-50 text-emerald-700 font-bold" : "hover:bg-slate-50 text-slate-600 font-medium"}`}
                   >
-                    {opt.label}
+                    {isSelected ? (
+                      <CheckSquare
+                        size={16}
+                        className="text-emerald-500 shrink-0"
+                      />
+                    ) : (
+                      <Square size={16} className="text-slate-300 shrink-0" />
+                    )}
+                    <span className="text-xs md:text-sm whitespace-normal break-words leading-tight">
+                      {opt.label}
+                    </span>
                   </div>
                 );
-              }
-              const isSelected = selectedArray.includes(opt.value);
-              return (
-                <div
-                  key={index}
-                  onClick={() => toggleOption(opt.value)}
-                  className={`flex items-center gap-3 p-2 md:p-2.5 rounded-lg cursor-pointer transition-all ${isSelected ? "bg-emerald-50 text-emerald-700 font-bold" : "hover:bg-slate-50 text-slate-600 font-medium"}`}
-                >
-                  {isSelected ? (
-                    <CheckSquare
-                      size={16}
-                      className="text-emerald-500 shrink-0"
-                    />
-                  ) : (
-                    <Square size={16} className="text-slate-300 shrink-0" />
-                  )}
-                  <span className="text-xs md:text-sm whitespace-normal break-words leading-tight">
-                    {opt.label}
-                  </span>
-                </div>
-              );
-            })}
+              })
+            ) : (
+              <div className="p-4 text-xs text-slate-400 italic">
+                Kelas tidak ditemukan
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1720,9 +1769,10 @@ const GuruDashboard = () => {
 
       const promptAI = `Kamu adalah asisten pembuat soal CBT. Berikut adalah teks hasil copy-paste berantakan dari Microsoft Word. 
       Tugasmu:
-      1. Rapikan susunan teksnya agar mudah dibaca.
+      1. Rapikan susunan teksnya agar mudah dibaca. (formatnya adalah baris pertama soal, kalau ada wacana atau teks yang biasanya untuk soal nomor berapa sampai berapa itu berarti diatas soal, lalu baris baru kemudian pilihan ganda secara menurun A, B, C, D, E nya, kemudian baris baru lagi ada Kunci: (huruf jawaban) misal Kunci: A, kemudian baris baru lagi kosong sebagai jarak antar soal dengan soal lainnya, dan seterusnya)
       2. DETEKSI semua rumus matematika/fisika/kimia, ubah menjadi format LaTeX ($...$ atau $$...$$).
       3. JANGAN mengubah redaksi kalimat soal atau opsi A/B/C/D/E.
+      4. KALAU ADA tanda "*" itu hapus saja, misal **jawaban** maka menjadi jawaban.
       Teks Asli: ${bulkText}`;
 
       // URL ini sekarang menggunakan model yang 100% tepat sesuai daftar di API Anda

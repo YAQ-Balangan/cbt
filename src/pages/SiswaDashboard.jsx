@@ -2,6 +2,8 @@
 import React, {
   useState,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useContext,
   useCallback,
   useRef,
@@ -39,23 +41,22 @@ import renderMathInElement from "katex/contrib/auto-render";
 // ==========================================
 // KOMPONEN RENDERER LATEX CUSTOM (REACT 19 SAFE)
 // ==========================================
-const Latex = ({ children }) => {
+// Tambahan: Menggunakan React.memo agar performa lebih ringan
+const Latex = React.memo(({ children }) => {
   const containerRef = useRef(null);
 
-  useEffect(() => {
+  // Perubahan Utama: useLayoutEffect
+  useLayoutEffect(() => {
     if (containerRef.current) {
       renderMathInElement(containerRef.current, {
         delimiters: [
           { left: "$$", right: "$$", display: true },
           { left: "$", right: "$", display: false },
-          { left: "\\(", right: "\\)", display: false },
-          { left: "\\[", right: "\\]", display: true },
         ],
         throwOnError: false,
-        errorColor: "#ef4444",
       });
     }
-  }, [children]);
+  }, [children]); // Hanya satu dependency untuk mount & update
 
   return (
     <span
@@ -63,7 +64,7 @@ const Latex = ({ children }) => {
       dangerouslySetInnerHTML={{ __html: children || "" }}
     />
   );
-};
+});
 
 const staggerContainer = {
   hidden: { opacity: 0 },
