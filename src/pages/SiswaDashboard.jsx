@@ -265,6 +265,7 @@ const SiswaDashboard = () => {
   const isLockedRef = useRef(isLocked);
   const pelanggaranRef = useRef(pelanggaran);
   const timeLeftRef = useRef(timeLeft);
+  const saveTimeoutRef = useRef(null);
 
   useEffect(() => {
     activeExamRef.current = activeExam;
@@ -284,10 +285,20 @@ const SiswaDashboard = () => {
   useEffect(() => {
     pelanggaranRef.current = pelanggaran;
   }, [pelanggaran]);
-
   useEffect(() => {
     if (timeLeft > 0) timeLeftRef.current = timeLeft;
   }, [timeLeft]);
+  useEffect(() => {
+    if (soalData && soalData.length > 0) {
+      soalData.forEach((soal) => {
+        const urlGambar = getVal(soal, "Link_Gambar");
+        if (urlGambar) {
+          const img = new Image();
+          img.src = urlGambar;
+        }
+      });
+    }
+  }, [soalData]);
 
   const userKelasFull = String(getVal(user, "Kelas") || "")
     .toUpperCase()
@@ -1077,7 +1088,10 @@ const SiswaDashboard = () => {
                         >
                           <img
                             src={getVal(currentSoal, "Link_Gambar")}
+                            key={getVal(currentSoal, "id")}
                             alt="Gambar Pendukung"
+                            loading="lazy"
+                            decoding="async"
                             className="max-w-full h-auto max-h-[35vh] lg:max-h-[45vh] object-contain rounded-xl"
                           />
                           <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
@@ -1106,19 +1120,29 @@ const SiswaDashboard = () => {
                           <button
                             key={opt}
                             onClick={() => {
+                              // 1. Catat jawaban di memori lokal agar layar instan berubah
                               const newAnswers = {
                                 ...answers,
                                 [currentSoalId]: opt,
                               };
                               setAnswers(newAnswers);
-                              api.saveSesi(
-                                getVal(user, "Username"),
-                                getVal(activeExam, "ID"),
-                                newAnswers,
-                                timeLeftRef.current,
-                                pelanggaranRef.current,
-                                isLockedRef.current ? "LOCKED" : "ACTIVE",
-                              );
+
+                              // 2. Hapus hitung mundur yang lama jika siswa klik ganti opsi dengan cepat
+                              if (saveTimeoutRef.current) {
+                                clearTimeout(saveTimeoutRef.current);
+                              }
+
+                              // 3. Pasang timer: Tunggu 2 detik, kalau siswa tidak ganti jawaban lagi, baru kirim ke server
+                              saveTimeoutRef.current = setTimeout(() => {
+                                api.saveSesi(
+                                  getVal(user, "Username"),
+                                  getVal(activeExam, "ID"),
+                                  newAnswers,
+                                  timeLeftRef.current,
+                                  pelanggaranRef.current,
+                                  isLockedRef.current ? "LOCKED" : "ACTIVE",
+                                );
+                              }, 2000);
                             }}
                             className={`w-full text-left px-5 py-4 md:px-6 md:py-5 rounded-[1.5rem] border-2 transition-all flex items-start gap-4 md:gap-5 group relative overflow-hidden outline-none ${
                               isSelected
