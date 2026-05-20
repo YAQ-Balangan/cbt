@@ -242,6 +242,7 @@ const SiswaDashboard = () => {
   // KODE BARU BERAKHIR DI SINI
 
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [customAlert, setCustomAlert] = useState({
     isOpen: false,
     type: "info",
@@ -299,6 +300,18 @@ const SiswaDashboard = () => {
       });
     }
   }, [soalData]);
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   const userKelasFull = String(getVal(user, "Kelas") || "")
     .toUpperCase()
@@ -835,6 +848,14 @@ const SiswaDashboard = () => {
 
   const handleEndExamClick = (isForced = false) => {
     if (isSubmittingRef.current) return;
+    if (isOffline && !isForced) {
+      showAlert(
+        "danger",
+        "Koneksi Terputus",
+        "Tidak dapat mengumpulkan ujian. Pastikan data seluler atau WiFi terhubung kembali, lalu coba lagi. Jangan keluar dari aplikasi!",
+      );
+      return;
+    }
     if (!isForced) {
       showAlert(
         "confirm",
@@ -1033,6 +1054,26 @@ const SiswaDashboard = () => {
             />
           </div>
         </header>
+
+        <AnimatePresence>
+          {isOffline && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-red-500 text-white text-xs md:text-sm font-bold text-center py-2 px-4 shadow-md z-40 flex items-center justify-center gap-2"
+            >
+              <ShieldAlert size={16} className="animate-pulse" />
+              <br />
+              KONEKSI TERPUTUS!
+              <br />
+              Jangan tutup aplikasi. Jangan panik!, Jawaban tetap tersimpan.
+              <br />
+              Anda TETAP BISA melanjutkan ujian sambil menunggu internet stabil
+              kembali!.
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <main className="flex-1 w-full max-w-7xl mx-auto p-2 md:p-5 flex flex-col justify-center z-10 relative pb-24 lg:pb-5">
           {loadingSoal ? (
