@@ -3345,7 +3345,7 @@ Patuhi aturan berikut secara ketat:
             {soalViewMode === "list" && (
               <div className="flex flex-col gap-0 max-w-5xl mx-auto relative">
                                {" "}
-                <div className="sticky top-[70px] md:top-[90px] z-30 bg-slate-50/90 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex justify-between items-center">
+                <div className="sticky -top-[16px] md:-top-[25px] z-30 bg-slate-50/90 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex justify-between items-center">
                                    {" "}
                   <div className="flex items-center gap-3">
                                        {" "}
