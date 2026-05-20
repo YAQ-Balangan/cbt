@@ -1767,12 +1767,35 @@ const GuruDashboard = () => {
         throw new Error("API Key tidak terbaca! Cek file .env Anda.");
       }
 
-      const promptAI = `Kamu adalah asisten pembuat soal CBT. Berikut adalah teks hasil copy-paste berantakan dari Microsoft Word. 
-      Tugasmu:
-      1. Rapikan susunan teksnya agar mudah dibaca. (formatnya adalah baris pertama soal, kalau ada wacana atau teks yang biasanya untuk soal nomor berapa sampai berapa itu berarti diatas soal, lalu baris baru kemudian pilihan ganda secara menurun A, B, C, D, E nya, kemudian baris baru lagi ada Kunci: (huruf jawaban) misal Kunci: A, kemudian baris baru lagi kosong sebagai jarak antar soal dengan soal lainnya, dan seterusnya)
-      2. DETEKSI semua rumus matematika/fisika/kimia, ubah menjadi format LaTeX ($...$ atau $$...$$).
-      3. JANGAN mengubah redaksi kalimat soal atau opsi A/B/C/D/E.
-      4. KALAU ADA tanda "*" itu hapus saja, misal **jawaban** maka menjadi jawaban.
+      const promptAI = `Kamu adalah asisten ahli pengolah data soal CBT. Tugasmu adalah merapikan teks mentah hasil copy-paste dari MS Word menjadi format standar yang ketat untuk sistem parsing kami.
+
+Patuhi aturan berikut secara ketat:
+
+1. STANDARISASI KALIMAT INSTRUKSI:
+   - Jika ada instruksi seperti "Informasi untuk soal 1-3", "Perhatikan soal nomor 2 sampai 4", atau variasi lainnya, WAJIB ubah/seragamkan kalimat tersebut menjadi: 
+     "Wacana untuk soal nomor X sampai Y:"
+   - Letakkan kalimat tersebut di paling atas, diikuti dengan isi wacana/teks/gambar.
+   - Jangan memotong kalimat instruksi ini dengan enter (newline). Pastikan itu menjadi satu kesatuan kalimat yang utuh.
+
+2. STRUKTUR TEKS:
+   - Baris pertama: Wacana (jika ada) yang diawali dengan format: "Wacana untuk soal nomor X sampai Y:"
+   - Baris berikutnya: Isi Pertanyaan/Soal.
+   - Di bawah pertanyaan, tuliskan opsi jawaban dalam format menurun:
+     A. [Teks opsi A]
+     B. [Teks opsi B]
+     C. [Teks opsi C]
+     D. [Teks opsi D]
+     E. [Teks opsi E]
+   - Baris berikutnya: "Kunci: [Huruf]"
+   - Berikan satu baris kosong (enter dua kali) sebagai pemisah antar soal.
+
+3. ATURAN LAINNYA:
+   - JANGAN mengubah redaksi kalimat soal atau pilihan jawaban.
+   - Hapus semua tanda bintang (*) pada pilihan jawaban.
+   - DETEKSI rumus matematika/fisika/kimia dan ubah ke dalam format LaTeX yang benar ($...$ atau $$...$$).
+   - JANGAN menambahkan kalimat pembuka atau penutup ("Berikut adalah hasilnya...", dll). Berikan HANYA teks soal yang sudah dirapikan.
+   - JIKA ADA angka yang pakai ")" contoh: 1) maka jadikan (1) saja
+   - UNTUK NOMOR SOAL, perlihatkan saja.
       Teks Asli: ${bulkText}`;
 
       // URL ini sekarang menggunakan model yang 100% tepat sesuai daftar di API Anda
@@ -1949,6 +1972,7 @@ const GuruDashboard = () => {
         i > 0 && processedData[i - 1].wacana === s.wacana && s.wacana !== "";
       const isAwalWacana = s.wacana && !isWacanaSama;
 
+      // Temukan bagian ini di dalam fungsi renderBankSoal
       if (isAwalWacana) {
         let bundleCount = 1;
         for (let j = i + 1; j < processedData.length; j++) {
@@ -1964,6 +1988,7 @@ const GuruDashboard = () => {
               <div className="absolute -top-3.5 left-6 bg-linear-to-r from-blue-600 to-blue-500 text-white px-3 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-md border border-blue-400">
                 <BookOpen size={14} /> WACANA TERIKAT PADA {bundleCount} SOAL
               </div>
+              {/* PERBAIKAN: Bungkus dengan <Latex> */}
               <div className="font-medium text-slate-700 leading-relaxed text-sm md:text-base whitespace-pre-wrap mt-2">
                 <Latex>{s.wacana || ""}</Latex>
               </div>
@@ -4322,9 +4347,9 @@ const GuruDashboard = () => {
                               <strong className="text-amber-600 block mb-1">
                                 Teks Wacana Terikat:
                               </strong>
-                              <span className="whitespace-pre-wrap leading-relaxed">
-                                {item.wacana}
-                              </span>
+                              <div className="whitespace-pre-wrap leading-relaxed">
+                                <Latex>{item.wacana || ""}</Latex>
+                              </div>
                             </div>
                           )}
                           <div className="text-xs md:text-sm font-semibold text-slate-800 whitespace-pre-wrap mb-3 md:mb-4 pr-8 md:pr-10 leading-relaxed">
