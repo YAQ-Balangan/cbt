@@ -1066,13 +1066,6 @@ const SiswaDashboard = () => {
                       </div>
                     )}
 
-                    <div
-                      className={`font-bold text-slate-800 leading-relaxed mb-6 md:mb-8 transition-all ${fontClasses.soal[fontLevel]}`}
-                      style={{ whiteSpace: "pre-wrap" }}
-                    >
-                      <Latex>{getVal(currentSoal, "Pertanyaan") || ""}</Latex>
-                    </div>
-
                     {getVal(currentSoal, "Link_Gambar") && (
                       <div className="mb-8 w-full flex justify-start">
                         <div
@@ -1095,6 +1088,13 @@ const SiswaDashboard = () => {
                         </div>
                       </div>
                     )}
+
+                    <div
+                      className={`font-regular text-slate-800 leading-relaxed mb-6 md:mb-8 transition-all ${fontClasses.soal[fontLevel]}`}
+                      style={{ whiteSpace: "pre-wrap" }}
+                    >
+                      <Latex>{getVal(currentSoal, "Pertanyaan") || ""}</Latex>
+                    </div>
 
                     <div className="flex flex-col gap-3 md:gap-4">
                       {["A", "B", "C", "D", "E"].map((opt) => {

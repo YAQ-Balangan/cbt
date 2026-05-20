@@ -628,10 +628,6 @@ const MemoizedSoalCard = React.memo(
           )}
         </div>
 
-        <div className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap">
-          <Latex>{s.pertanyaan || ""}</Latex>
-        </div>
-
         {s.link_gambar && (
           <div className="mb-6 max-w-lg rounded-xl border border-slate-200 shadow-sm p-2 bg-slate-50 relative group/img w-max">
             <button
@@ -665,6 +661,10 @@ const MemoizedSoalCard = React.memo(
             </span>
           </div>
         )}
+
+        <div className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap">
+          <Latex>{s.pertanyaan || ""}</Latex>
+        </div>
 
         <div className="flex flex-col gap-2.5">
           {["A", "B", "C", "D", "E"].map((opt) => {
@@ -4128,15 +4128,13 @@ Patuhi aturan berikut secara ketat:
                     <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
                       Wacana / Teks Cerita (Opsional)
                     </label>
-                    <textarea
-                      disabled={isSaving}
-                      placeholder="Tuliskan paragraf wacana di sini..."
-                      rows="3"
-                      className="w-full p-3 md:p-4 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-xl md:rounded-[1.5rem] font-medium outline-none focus:border-emerald-500 focus:bg-white transition-all resize-y whitespace-pre-wrap text-slate-700"
+                    <GoogleFormEditor
                       value={formData.wacana || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, wacana: e.target.value })
+                      onChange={(val) =>
+                        setFormData({ ...formData, wacana: val })
                       }
+                      placeholder="Tuliskan paragraf wacana di sini, block teks untuk Bold/Italic..."
+                      disabled={isSaving}
                     />
                     <p className="text-[9px] md:text-[10px] font-medium text-amber-600 ml-1 mt-1 flex items-start md:items-center gap-1">
                       <AlertTriangle
