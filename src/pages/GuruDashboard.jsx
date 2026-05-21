@@ -1764,10 +1764,17 @@ const GuruDashboard = () => {
 
     setIsProcessingAI(true);
     try {
-      const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+      // 1. Kumpulkan 5 API Key + 1 Key utama sebagai cadangan
+      const apiKeys = [
+        import.meta.env.VITE_GEMINI_API_KEY_1,
+        import.meta.env.VITE_GEMINI_API_KEY_2,
+        import.meta.env.VITE_GEMINI_API_KEY_3,
+        import.meta.env.VITE_GEMINI_API_KEY_4,
+        import.meta.env.VITE_GEMINI_API_KEY,
+      ].filter(Boolean);
 
-      if (!API_KEY) {
-        throw new Error("API Key tidak terbaca! Cek file .env Anda.");
+      if (apiKeys.length === 0) {
+        throw new Error("Tidak ada API Key yang terbaca! Cek file .env Anda.");
       }
 
       const promptAI = `Kamu adalah asisten ahli pengolah data soal CBT. Tugasmu adalah merapikan teks mentah hasil copy-paste dari MS Word menjadi format standar yang ketat untuk sistem parsing kami.
@@ -1802,41 +1809,83 @@ Patuhi aturan berikut secara ketat:
    - JIKA ADA TABEL, tandai dengan sesuatu yang bisa dideteksi latex untuk di render jadi tabel yang bagus, rapi dan tepat.
       Teks Asli: ${bulkText}`;
 
-      // URL ini sekarang menggunakan model yang 100% tepat sesuai daftar di API Anda
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+      let isSuccess = false;
+      let finalData = null;
+      let lastErrorMessage = "";
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptAI }] }],
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          ],
-        }),
-      });
+      // 2. Sistem Rotasi: Coba dari API ke-1 sampai ke-5 (dan cadangan)
+      for (let i = 0; i < apiKeys.length; i++) {
+        const currentApiKey = apiKeys[i];
+        try {
+          console.log(`[AI Fallback] Mengetuk pintu API Key ke-${i + 1}...`);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentApiKey}`;
+
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptAI }] }],
+              safetySettings: [
+                {
+                  category: "HARM_CATEGORY_HARASSMENT",
+                  threshold: "BLOCK_NONE",
+                },
+                {
+                  category: "HARM_CATEGORY_HATE_SPEECH",
+                  threshold: "BLOCK_NONE",
+                },
+              ],
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+              errorData.error?.message ||
+                `Koneksi ditolak (Status: ${response.status})`,
+            );
+          }
+
+          const data = await response.json();
+
+          if (!data.candidates || data.candidates.length === 0) {
+            throw new Error(
+              "AI membalas tapi tidak memberikan jawaban (Terblokir filter).",
+            );
+          }
+
+          // Jika sampai di baris ini, berarti API tersebut SUKSES!
+          finalData = data;
+          isSuccess = true;
+          console.log(
+            `[AI Fallback] Hore! Berhasil menggunakan API Key ke-${i + 1}`,
+          );
+          break; // Stop mencari kunci lain
+        } catch (loopError) {
+          console.warn(
+            `[AI Fallback] API Key ke-${i + 1} Limit/Gagal:`,
+            loopError.message,
+          );
+          lastErrorMessage = loopError.message;
+          // Otomatis pindah ke putaran (API Key) berikutnya
+        }
+      }
+
+      // 3. Evaluasi Hasil Akhir (Jika ke-5 + 1 kunci gagal semua)
+      if (!isSuccess || !finalData) {
         throw new Error(
-          errorData.error?.message ||
-            `Koneksi gagal (Status: ${response.status})`,
+          `Seluruh API Key sedang penuh/limit. Silakan tunggu beberapa menit lalu coba klik lagi. Error sistem: ${lastErrorMessage}`,
         );
       }
 
-      const data = await response.json();
-
-      if (!data.candidates || data.candidates.length === 0) {
-        throw new Error("AI tidak merespon/terblokir filter.");
-      }
-
-      const teksRapi = data.candidates[0].content.parts[0].text;
+      // 4. Sukses: Terapkan hasil ke textbox
+      const teksRapi = finalData.candidates[0].content.parts[0].text;
       setBulkText(teksRapi);
-      showAlert("success", "Sihir Berhasil!", "Soal telah dirapikan!");
+      showAlert("success", "Sihir Berhasil!", "Soal telah dirapikan oleh AI!");
     } catch (error) {
-      console.error("AI Error:", error);
-      showAlert("danger", "AI Gagal Memproses", error.message);
+      console.error("AI Error Global:", error);
+      showAlert("danger", "Sistem Sedang Sibuk", error.message);
     } finally {
       setIsProcessingAI(false);
     }
