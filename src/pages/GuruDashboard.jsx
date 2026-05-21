@@ -541,6 +541,7 @@ const KKM_SCORE = 75;
 const MemoizedSoalCard = React.memo(
   ({
     s,
+    nomorSoal,
     isSelected,
     isUploadingImg,
     onToggleSelect,
@@ -606,9 +607,9 @@ const MemoizedSoalCard = React.memo(
 
         <div className="flex flex-wrap gap-2 items-center mb-6 pl-10 pr-24 md:pl-12 md:pr-40">
           <span
-            className={`font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border ${isSelected ? "bg-red-50 border-red-200 text-red-600" : "bg-slate-100 border-slate-200 text-slate-500"}`}
+            className={`font-black px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[10px] md:text-[11px] uppercase border shadow-sm ${isSelected ? "bg-red-500 border-red-600 text-white" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}
           >
-            #{s.id}
+            SOAL NO. {nomorSoal}
           </span>
           <span className="bg-amber-50 text-amber-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-amber-200 flex items-center gap-1">
             <Target size={12} /> {formatPoinDisplay(s.poin)} POIN
@@ -817,7 +818,9 @@ const GuruDashboard = () => {
     setIsDoingHistory(true);
     try {
       if (action.type === "DELETE") {
-        await api.create(currentConfig.sheet, action.item);
+        const itemToRestore = { ...action.item };
+        delete itemToRestore.id;
+        await api.create(currentConfig.sheet, itemToRestore);
       } else if (action.type === "CREATE") {
         await api.delete(currentConfig.sheet, action.item.id);
       } else if (action.type === "UPDATE") {
@@ -1363,10 +1366,7 @@ const GuruDashboard = () => {
 
   const openAddModal = () => {
     setIsEdit(false);
-    let nextId = 1;
-    if (data.length > 0)
-      nextId = Math.max(...data.map((item) => parseInt(item.id) || 0)) + 1;
-    setFormData({ id: nextId, ...currentConfig.defaultValues });
+    setFormData({ ...currentConfig.defaultValues });
     setIsModalOpen(true);
   };
 
@@ -1378,10 +1378,10 @@ const GuruDashboard = () => {
   };
 
   const handleDuplicate = (item) => {
-    const maxId =
-      data.length > 0 ? Math.max(...data.map((d) => parseInt(d.id) || 0)) : 0;
     setIsEdit(false);
-    setFormData({ ...item, id: maxId + 1, poin: formatPoinDisplay(item.poin) });
+    const newItem = { ...item, poin: formatPoinDisplay(item.poin) };
+    delete newItem.id;
+    setFormData(newItem);
     setIsModalOpen(true);
   };
 
@@ -2038,6 +2038,7 @@ Patuhi aturan berikut secara ketat:
         <MemoizedSoalCard
           key={`soal-${s.id}`}
           s={s}
+          nomorSoal={i + 1}
           isSelected={isSelected}
           isUploadingImg={uploadingImgId === s.id}
           onToggleSelect={toggleSelect}
@@ -4061,15 +4062,10 @@ Patuhi aturan berikut secara ketat:
                         ID Sistem
                       </label>
                       <input
-                        type="number"
-                        step="any"
-                        className={`w-full p-2.5 md:p-3.5 text-xs md:text-sm rounded-lg md:rounded-xl font-bold outline-none transition-all shadow-sm ${isSaving ? "bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed" : "bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-800"}`}
-                        value={formData.id}
-                        onChange={(e) =>
-                          setFormData({ ...formData, id: e.target.value })
-                        }
-                        disabled={isSaving}
-                        required
+                        type="text"
+                        className="w-full p-2.5 md:p-3.5 text-xs md:text-sm rounded-lg md:rounded-xl font-bold outline-none transition-all shadow-sm bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed"
+                        value={isEdit ? formData.id : "Otomatis"}
+                        disabled={true}
                       />
                     </div>
                     <div className="space-y-1.5 md:col-span-1">
