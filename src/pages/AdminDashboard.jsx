@@ -1095,8 +1095,7 @@ const AdminDashboard = () => {
               onClick={() => (window.location.href = "/ujian-dashboard")}
               className="w-full py-2 bg-indigo-600 text-white rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-indigo-500/30 hover:bg-indigo-700 active:scale-95 transition-all"
             >
-              <MonitorSmartphone size={16} className="animate-pulse" /> Live
-              Ujian
+              <MonitorSmartphone size={16} /> Live Ujian
             </button>
             <button
               onClick={handleAddNewRow}

@@ -25,6 +25,7 @@ import {
   Maximize,
   Info,
   ArrowLeft,
+  Users, // <-- Icon baru untuk Auto-Assign
 } from "lucide-react";
 import Dashboard from "../components/layout/Dashboard";
 import { api, supabase } from "../api/api";
@@ -135,6 +136,35 @@ const CustomAvatar = ({ gender, isDisqualified }) => {
   );
 };
 
+// HELPER: Menghitung total soal AKURAT
+const getExactTotalSoal = (mapelJadwal, userKelasRaw, allSoal) => {
+  const mapelUpper = String(mapelJadwal).toUpperCase();
+  const userKelasFull = String(userKelasRaw || "")
+    .toUpperCase()
+    .trim();
+  const userParts = userKelasFull.split(" ");
+  const userTingkat = userParts[0] || "";
+  const userJurusan = userParts[1] || "";
+  const userTingkatJurusan = `${userTingkat} ${userJurusan}`.trim();
+
+  return allSoal.filter((s) => {
+    const soalMapel = String(s.mapel || s.Mapel || "").toUpperCase();
+    if (soalMapel !== mapelUpper) return false;
+
+    const soalKelasRaw = String(s.kelas || s.Kelas || "").toUpperCase();
+    if (soalKelasRaw === "" || soalKelasRaw.includes("SEMUA")) return true;
+
+    const targetArray = soalKelasRaw.split(",").map((t) => t.trim());
+    return targetArray.some(
+      (target) =>
+        target === userKelasFull ||
+        target === userTingkatJurusan ||
+        target === userJurusan ||
+        target === userTingkat,
+    );
+  }).length;
+};
+
 // ==========================================
 // KOMPONEN UTAMA DASHBOARD
 // ==========================================
@@ -164,6 +194,9 @@ const UjianDashboard = () => {
 
   const [studentsData, setStudentsData] = useState([]);
   const [dbUsers, setDbUsers] = useState([]);
+
+  // REF: Mengamankan Data Statis (Anti Jebol Server)
+  const baseDataRef = useRef({ users: [], soal: [], jadwalMap: {} });
 
   const [layoutConfig, setLayoutConfig] = useState({});
   const [configId, setConfigId] = useState(null);
@@ -215,25 +248,12 @@ const UjianDashboard = () => {
   const boardWidth = cols * 130 + (cols - 1) * 24;
   const boardHeight = rows * 140 + (rows - 1) * 24 + 160;
 
-  // 1. FETCH DATA API (DENGAN PERBAIKAN CCTV & EXACT TOTAL SOAL)
-  const fetchAllData = async () => {
-    setIsSyncing(true);
+  // =================================================================================
+  // FASE 1: FETCH DATA STATIS (Hanya 1 Kali)
+  // =================================================================================
+  const fetchBaseData = async () => {
     try {
-      const fetchSesi = supabase
-        .from("sesi_ujian")
-        .select("*")
-        .then(({ data }) => data || [])
-        .catch(() => []);
-      const [
-        resNilai,
-        resSesiUjian,
-        resSettings,
-        resUsers,
-        resJadwal,
-        resSoal,
-      ] = await Promise.all([
-        api.read("Nilai").catch(() => []),
-        fetchSesi,
+      const [resSettings, resUsers, resJadwal, resSoal] = await Promise.all([
         api.read("Settings").catch(() => []),
         api.read("Users").catch(() => []),
         api.read("Jadwal").catch(() => []),
@@ -262,19 +282,6 @@ const UjianDashboard = () => {
       if (siswaOnly.length === 0 && safeUsers.length > 0) siswaOnly = safeUsers;
       setDbUsers(siswaOnly);
 
-      const denahSetting = (resSettings || []).find(
-        (s) => String(s.kunci || "").toLowerCase() === "denah_kelas",
-      );
-      if (denahSetting && denahSetting.nilai && isInitialLoad) {
-        setConfigId(denahSetting.id);
-        try {
-          const parsed = JSON.parse(denahSetting.nilai);
-          setLayoutConfig(parsed);
-          if (Object.keys(parsed).length > 0 && !activeRoom)
-            setActiveRoom(Object.keys(parsed)[0]);
-        } catch (e) {}
-      }
-
       const jadwalMap = {};
       if (resJadwal) {
         resJadwal.forEach((jadwal) => {
@@ -284,36 +291,73 @@ const UjianDashboard = () => {
         });
       }
 
-      // HELPER: Menghitung total soal AKURAT sesuai kelas
-      const getExactTotalSoal = (mapelJadwal, userKelasRaw, allSoal) => {
-        const mapelUpper = String(mapelJadwal).toUpperCase();
-        const userKelasFull = String(userKelasRaw || "")
-          .toUpperCase()
-          .trim();
-        const userParts = userKelasFull.split(" ");
-        const userTingkat = userParts[0] || "";
-        const userJurusan = userParts[1] || "";
-        const userTingkatJurusan = `${userTingkat} ${userJurusan}`.trim();
-
-        return allSoal.filter((s) => {
-          const soalMapel = String(s.mapel || s.Mapel || "").toUpperCase();
-          if (soalMapel !== mapelUpper) return false;
-
-          const soalKelasRaw = String(s.kelas || s.Kelas || "").toUpperCase();
-          if (soalKelasRaw === "" || soalKelasRaw.includes("SEMUA"))
-            return true;
-
-          const targetArray = soalKelasRaw.split(",").map((t) => t.trim());
-          return targetArray.some(
-            (target) =>
-              target === userKelasFull ||
-              target === userTingkatJurusan ||
-              target === userJurusan ||
-              target === userTingkat,
-          );
-        }).length;
+      baseDataRef.current = {
+        users: siswaOnly,
+        soal: resSoal || [],
+        jadwalMap,
       };
 
+      const denahSetting = (resSettings || []).find(
+        (s) => String(s.kunci || "").toLowerCase() === "denah_kelas",
+      );
+      if (denahSetting && denahSetting.nilai) {
+        setConfigId(denahSetting.id);
+        try {
+          const parsed = JSON.parse(denahSetting.nilai);
+          setLayoutConfig(parsed);
+          setActiveRoom((currentRoom) => {
+            if (!currentRoom && Object.keys(parsed).length > 0)
+              return Object.keys(parsed)[0];
+            return currentRoom;
+          });
+        } catch (e) {}
+      }
+    } catch (error) {
+      console.error("Gagal menarik Base Data", error);
+    } finally {
+      setIsInitialLoad(false);
+    }
+  };
+
+  // =================================================================================
+  // FASE 2: FETCH LIVE DATA (Ringan, Realtime CCTV)
+  // =================================================================================
+  const fetchLiveStatus = async () => {
+    setIsSyncing(true);
+    try {
+      const fetchSesi = supabase
+        .from("sesi_ujian")
+        .select(
+          "id_sesi, id_ujian, username_siswa, jawaban_sementara, status, updated_at",
+        )
+        .gte(
+          "updated_at",
+          new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+        )
+        .then(({ data }) => data || [])
+        .catch(() => []);
+
+      const fetchNilai = supabase
+        .from("Nilai")
+        .select(
+          "id, id_ujian, username, nama_siswa, mapel, total_soal, status, created_at",
+        )
+        .gte(
+          "created_at",
+          new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+        )
+        .then(({ data }) => data || [])
+        .catch(() => []);
+
+      const [resNilai, resSesiUjian] = await Promise.all([
+        fetchNilai,
+        fetchSesi,
+      ]);
+      const {
+        users: siswaOnly,
+        soal: resSoal,
+        jadwalMap,
+      } = baseDataRef.current;
       const allEvents = [];
       const currentTime = Date.now();
 
@@ -333,7 +377,6 @@ const UjianDashboard = () => {
 
       const finishedExamsSet = new Set();
 
-      // 1A. Kumpulkan Nilai DULUAN (Selesai Ujian / Diskualifikasi)
       (resNilai || []).forEach((nilai) => {
         const nNama = String(nilai.nama_siswa || nilai.Nama_Siswa || "")
           .toLowerCase()
@@ -396,14 +439,11 @@ const UjianDashboard = () => {
         });
       });
 
-      // 1B. Kumpulkan Sesi Ujian (Sedang Berjalan / Terkunci)
       (resSesiUjian || []).forEach((sesi) => {
         const usernameSesiNormal = normalizeText(sesi.username_siswa);
         const idUjian = String(sesi.id_ujian);
 
-        if (finishedExamsSet.has(`${usernameSesiNormal}_${idUjian}`)) {
-          return;
-        }
+        if (finishedExamsSet.has(`${usernameSesiNormal}_${idUjian}`)) return;
 
         const userObj = siswaOnly.find(
           (u) => normalizeText(u.username) === usernameSesiNormal,
@@ -428,7 +468,6 @@ const UjianDashboard = () => {
           totalSoal > 0
             ? Math.min(100, Math.round((dijawab / totalSoal) * 100))
             : 0;
-
         const parsedTime = safeGetTime(sesi.updated_at || sesi.created_at);
         const eventTime = parsedTime > 0 ? parsedTime : currentTime;
 
@@ -452,25 +491,20 @@ const UjianDashboard = () => {
         });
       });
 
-      // 2. Urutkan semua event
       allEvents.sort((a, b) => {
-        if (a.timestamp > 0 && b.timestamp > 0 && a.timestamp !== b.timestamp) {
+        if (a.timestamp > 0 && b.timestamp > 0 && a.timestamp !== b.timestamp)
           return b.timestamp - a.timestamp;
-        }
         if (a.type !== b.type) return a.type === "LIVE" ? -1 : 1;
         return b.sortId - a.sortId;
       });
 
-      // 3. Filter Event: Real-time CCTV Logic (Menjadi Offline sesuai waktu)
-      const DONE_TIMEOUT_MS = 15 * 60 * 1000; // 15 Menit setelah kumpul -> OFFLINE
-      const LIVE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 Jam jika nyangkut di LIVE -> OFFLINE
+      const DONE_TIMEOUT_MS = 15 * 60 * 1000;
+      const LIVE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
       const latestEventsMap = {};
 
       allEvents.forEach((evt) => {
         if (!latestEventsMap[evt.userKey]) {
           const age = Math.abs(currentTime - evt.timestamp);
-
-          // Mengecek apakah sudah lewat masa tayang
           const isExpiredDone =
             evt.type === "DONE" && evt.timestamp > 0 && age > DONE_TIMEOUT_MS;
           const isExpiredLive =
@@ -479,7 +513,7 @@ const UjianDashboard = () => {
           if (!isExpiredDone && !isExpiredLive) {
             latestEventsMap[evt.userKey] = evt.data;
           } else {
-            latestEventsMap[evt.userKey] = "EXPIRED"; // Disapu menjadi Offline
+            latestEventsMap[evt.userKey] = "EXPIRED";
           }
         }
       });
@@ -487,40 +521,40 @@ const UjianDashboard = () => {
       const liveStudentsList = Object.values(latestEventsMap).filter(
         (data) => data !== "EXPIRED",
       );
-
       setStudentsData(liveStudentsList);
     } catch (error) {
       console.error(error);
     } finally {
       setTimeout(() => setIsSyncing(false), 500);
-      if (isInitialLoad) setIsInitialLoad(false);
     }
   };
 
-  // Anti-DDoS: Rantai setTimeout
+  useEffect(() => {
+    fetchBaseData();
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     let timeoutId = null;
 
     const loopFetch = async () => {
-      if (activeTab === "live" && isMounted) {
-        await fetchAllData();
+      if (activeTab === "live" && isMounted && !isInitialLoad) {
+        await fetchLiveStatus();
       }
-
       if (isMounted) {
-        timeoutId = setTimeout(loopFetch, 5000);
+        timeoutId = setTimeout(loopFetch, 15000); // 15 DETIK AMAN
       }
     };
-
     loopFetch();
-
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [activeTab]);
+  }, [activeTab, isInitialLoad]);
 
-  // 2. AUTO-SAVE BACKGROUND
+  // =================================================================================
+  // AUTO-SAVE BACKGROUND & FULL SCALE
+  // =================================================================================
   useEffect(() => {
     if (isInitialLoad || Object.keys(layoutConfig).length === 0) return;
 
@@ -555,12 +589,12 @@ const UjianDashboard = () => {
           }
         }
 
-        if (currentConfigId)
+        if (currentConfigId) {
           await api.update("Settings", currentConfigId, {
             kunci: "Denah_Kelas",
             nilai: payloadString,
           });
-
+        }
         setAutoSaveStatus("SAVED");
         setTimeout(() => setAutoSaveStatus("IDLE"), 2000);
       } catch (e) {
@@ -570,7 +604,6 @@ const UjianDashboard = () => {
     return () => clearTimeout(timeoutId);
   }, [layoutConfig, isInitialLoad, configId]);
 
-  // 3. FULL AUTO-PILOT SCREEN SCALING
   useEffect(() => {
     const calculateScale = () => {
       const desktopMode = window.innerWidth > 768;
@@ -603,12 +636,14 @@ const UjianDashboard = () => {
         }
       }
     };
-
     calculateScale();
     window.addEventListener("resize", calculateScale);
     return () => window.removeEventListener("resize", calculateScale);
   }, [boardWidth, boardHeight, activeRoom]);
 
+  // =================================================================================
+  // HANDLER APLIKASI
+  // =================================================================================
   const handleAddRoom = () => {
     showAlert(
       "prompt",
@@ -669,6 +704,7 @@ const UjianDashboard = () => {
     setLayoutConfig((prev) => {
       const newConfig = JSON.parse(JSON.stringify(prev));
 
+      // Hapus siswa ini dari kursi lain (mencegah duplikasi)
       Object.keys(newConfig).forEach((roomKey) => {
         const assignments = newConfig[roomKey].assignments;
         Object.keys(assignments).forEach((deskKey) => {
@@ -690,6 +726,90 @@ const UjianDashboard = () => {
     });
 
     setIsModalSiswaOpen(false);
+  };
+
+  // FITUR BARU: AUTO ASSIGN BY CLASS
+  const handleAutoAssignByClass = (targetKelas) => {
+    if (!targetKelas || !activeRoom) return;
+
+    const kelasNormalized = targetKelas.trim().toLowerCase();
+
+    // Cari semua siswa yang memiliki kata kunci kelas tersebut
+    const targetStudents = dbUsers.filter((u) =>
+      String(u.kelas || "")
+        .toLowerCase()
+        .includes(kelasNormalized),
+    );
+
+    if (targetStudents.length === 0) {
+      showAlert(
+        "warning",
+        "Tidak Ditemukan",
+        `Sistem tidak menemukan satupun siswa di kelas "${targetKelas}". Pastikan penulisan sudah benar.`,
+      );
+      return;
+    }
+
+    setLayoutConfig((prev) => {
+      const newConfig = JSON.parse(JSON.stringify(prev));
+      const roomConf = newConfig[activeRoom];
+      if (!roomConf.assignments) roomConf.assignments = {};
+
+      const currentCols = parseInt(roomConf.cols) || 5;
+      const currentRows = parseInt(roomConf.rows) || 5;
+      const totalDesks = currentCols * currentRows;
+
+      let currentDesk = 1;
+      let assignedCount = 0;
+
+      targetStudents.forEach((siswa) => {
+        // Hapus siswa ini dari ruangan manapun untuk dipindah ke sini
+        Object.keys(newConfig).forEach((rKey) => {
+          const assignMap = newConfig[rKey].assignments;
+          Object.keys(assignMap).forEach((dKey) => {
+            if (assignMap[dKey].username === siswa.username) {
+              delete assignMap[dKey];
+            }
+          });
+        });
+
+        // Cari bangku kosong di ruangan aktif
+        while (currentDesk <= totalDesks && roomConf.assignments[currentDesk]) {
+          currentDesk++;
+        }
+
+        // Jika bangku kosong tersedia, duduk-kan siswa
+        if (currentDesk <= totalDesks) {
+          roomConf.assignments[currentDesk] = {
+            nama: siswa.nama,
+            username: siswa.username,
+            gender: siswa.gender || "L",
+          };
+          assignedCount++;
+        }
+      });
+
+      // Tampilkan notifikasi hasil menggunakan trik setTimeout agar tidak bentrok dengan state
+      setTimeout(() => {
+        if (assignedCount < targetStudents.length) {
+          showAlert(
+            "warning",
+            "Meja Tidak Cukup",
+            `Berhasil memasukkan ${assignedCount} siswa, tapi ${targetStudents.length - assignedCount} siswa tidak kebagian bangku. Silakan tambah baris/kolom pada denah ini atau buat lokal baru.`,
+          );
+        } else {
+          showAlert(
+            "success",
+            "Berhasil Tersusun!",
+            `Sebanyak ${assignedCount} siswa kelas ${targetKelas} berhasil dimasukkan otomatis ke denah ini.`,
+          );
+        }
+      }, 300);
+
+      return newConfig;
+    });
+
+    closeAlert();
   };
 
   const handleRemoveStudent = (deskIndex) => {
@@ -727,7 +847,9 @@ const UjianDashboard = () => {
 
   const lockedStudents = studentsData.filter((s) => s.status === "LOCKED");
 
-  // RENDER CLASSROOM
+  // =================================================================================
+  // RENDER UI DENAH / KELAS
+  // =================================================================================
   const renderClassroom = () => {
     if (!activeRoom || !layoutConfig[activeRoom]) {
       return (
@@ -749,7 +871,6 @@ const UjianDashboard = () => {
 
     return (
       <div className="flex-1 relative rounded-[2rem] overflow-hidden border-4 border-slate-200 bg-slate-100 shadow-inner min-h-0">
-        {/* KONTROL ZOOM DESKTOP */}
         {isDesktop && (
           <div className="absolute top-6 right-6 z-[200] flex flex-col gap-2 bg-white/90 backdrop-blur-md p-2 rounded-[1.2rem] shadow-xl border border-slate-200">
             <button
@@ -776,7 +897,6 @@ const UjianDashboard = () => {
           </div>
         )}
 
-        {/* AREA WADAH KELAS */}
         <div
           ref={containerRef}
           className="w-full h-full flex bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] overflow-auto custom-scrollbar items-start justify-center relative"
@@ -796,7 +916,6 @@ const UjianDashboard = () => {
                 transform: `scale(${boardScale})`,
               }}
             >
-              {/* AREA DEPAN KELAS */}
               <div
                 className={`w-full flex items-start mb-12 relative z-10 ${doorPos === "Kanan" ? "justify-end" : "justify-start"}`}
               >
@@ -816,7 +935,6 @@ const UjianDashboard = () => {
                 </div>
               </div>
 
-              {/* GRID BANGKU MATRIKS */}
               <div
                 className="relative z-10 grid gap-6 mx-auto"
                 style={{
@@ -1246,9 +1364,25 @@ const UjianDashboard = () => {
                     </select>
                   </div>
 
+                  {/* TOMBOL BARU: AUTO ISI KELAS */}
+                  <button
+                    onClick={() => {
+                      showAlert(
+                        "prompt",
+                        "Auto Isi Siswa Berdasarkan Kelas",
+                        "Ketikkan nama kelas (contoh: X IPA atau 12 Agama). Sistem akan mencari siswa dan otomatis memasukkannya ke denah ini.",
+                        (val) => handleAutoAssignByClass(val),
+                      );
+                    }}
+                    className="h-10 px-5 flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 rounded-xl font-bold text-xs whitespace-nowrap transition-colors"
+                  >
+                    <Users size={16} />{" "}
+                    <span className="hidden sm:inline">Auto Isi Kelas</span>
+                  </button>
+
                   <button
                     onClick={() => handleDeleteRoom(activeRoom)}
-                    className="h-10 px-5 flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-xl font-bold text-xs whitespace-nowrap ml-auto transition-colors"
+                    className="h-10 px-5 flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-xl font-bold text-xs whitespace-nowrap transition-colors"
                   >
                     <Trash2 size={16} />{" "}
                     <span className="hidden sm:inline">Hapus Denah Ini</span>
@@ -1302,7 +1436,7 @@ const UjianDashboard = () => {
         </AnimatePresence>
       </div>
 
-      {/* MODAL PILIH SISWA UNTUK KURSI */}
+      {/* MODAL PILIH SISWA UNTUK KURSI (Manual) */}
       <AnimatePresence>
         {isModalSiswaOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -1358,7 +1492,6 @@ const UjianDashboard = () => {
                       .startsWith("P")
                       ? "P"
                       : "L";
-
                     return (
                       <button
                         key={i}
@@ -1395,7 +1528,6 @@ const UjianDashboard = () => {
         )}
       </AnimatePresence>
 
-      {/* MODAL CUSTOM ALERT PREMIUM */}
       <AnimatePresence>
         {customAlert.isOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -1425,7 +1557,6 @@ const UjianDashboard = () => {
               <p className="text-sm text-slate-500 mb-6 font-medium px-2 leading-relaxed">
                 {customAlert.message}
               </p>
-
               {customAlert.type === "prompt" && (
                 <input
                   type="text"
@@ -1448,7 +1579,6 @@ const UjianDashboard = () => {
                   }}
                 />
               )}
-
               <div className="flex flex-col sm:flex-row gap-3 w-full">
                 {customAlert.type === "confirm" ||
                 customAlert.type === "prompt" ? (

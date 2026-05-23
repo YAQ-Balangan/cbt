@@ -3002,8 +3002,7 @@ Patuhi aturan berikut secara ketat:
                 onClick={() => (window.location.href = "/ujian-dashboard")}
                 className="w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black transition-all bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 shadow-indigo-500/30 md:ml-2 mt-2 md:mt-0"
               >
-                <MonitorSmartphone size={16} className="animate-pulse" /> Live
-                Ujian{" "}
+                <MonitorSmartphone size={16} /> Live Ujian{" "}
               </button>
             </div>
 
