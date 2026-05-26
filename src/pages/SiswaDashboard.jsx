@@ -661,21 +661,24 @@ const SiswaDashboard = () => {
             target === userTingkat,
         );
       });
-      // Logika Acak Soal Dinamis (Mengikuti Konfigurasi Admin)
+      // Logika Susunan Soal Berdasarkan Jadwal Ujian yang Dipilih
       let finalSoal = [...filterSoal];
+      const modeSoalTerpilih = String(
+        getVal(exam, "acak_soal") || "",
+      ).toUpperCase();
 
-      if (isAcakSoalActive) {
-        // Menggunakan Fisher-Yates Shuffle untuk acakan 100% murni tanpa pola
-        for (let i = finalSoal.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [finalSoal[i], finalSoal[j]] = [finalSoal[j], finalSoal[i]];
-        }
-      } else {
-        // Jika acak dimatikan, urutkan berdasarkan ID asli secara berurutan
+      if (modeSoalTerpilih === "BERURUTAN") {
+        // Jika Admin/Guru menyetting "BERURUTAN", urutkan berdasarkan ID asli soal
         finalSoal.sort(
           (a, b) =>
             (parseInt(getVal(a, "id")) || 0) - (parseInt(getVal(b, "id")) || 0),
         );
+      } else {
+        // Default / Jika memilih "ACAK", jalankan Fisher-Yates Shuffle murni
+        for (let i = finalSoal.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [finalSoal[i], finalSoal[j]] = [finalSoal[j], finalSoal[i]];
+        }
       }
 
       setSoalData(finalSoal);

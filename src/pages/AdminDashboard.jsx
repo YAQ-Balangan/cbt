@@ -436,6 +436,14 @@ const TAB_CONFIG = {
       { key: "durasi_menit", label: "Durasi (Menit)", isNumber: true },
       { key: "token", label: "Token", sortable: true },
       {
+        key: "acak_soal",
+        label: "Mode Soal",
+        isSelect: true,
+        options: ["ACAK", "BERURUTAN"],
+        sortable: true,
+        filterable: true,
+      },
+      {
         key: "status",
         label: "Status",
         isSelect: true,
@@ -557,10 +565,9 @@ const EditableCell = ({ item, column, onSave }) => {
         >
           <option value="">Pilih...</option>
           {column.options.map((opt, i) => {
-            // Jika opsi berupa Objek (Seperti daftar Kelas yang baru)
+            // Jika opsi berupa Objek (Seperti daftar Kelas yang memiliki pembatas)
             if (typeof opt === "object" && opt !== null) {
               if (opt.isLabel) {
-                // Opsi disabled berfungsi sebagai pembatas kategori yang tidak bisa di-klik
                 return (
                   <option
                     key={`label-${i}`}
@@ -578,7 +585,7 @@ const EditableCell = ({ item, column, onSave }) => {
               );
             }
 
-            // Jika opsi berupa teks biasa (Seperti Role & Jenis Kelamin)
+            // Jika opsi berupa teks biasa (Seperti Role, Status, DAN MODE SOAL)
             return (
               <option key={`str-${i}`} value={opt}>
                 {opt}
@@ -769,7 +776,8 @@ const AdminDashboard = () => {
     if (tab === "siswa") newRow.role = "siswa";
     if (tab === "jadwal") {
       newRow.status = "Draft";
-      newRow.durasi_menit = 60; // Default durasi agar tidak kosong
+      newRow.acak_soal = "ACAK"; // Bawaan otomatis tersetting acak saat baris baru dibuat
+      newRow.durasi_menit = 90; // Default durasi agar tidak kosong
       newRow.tanggal = new Date().toISOString().split("T")[0]; // Default tanggal hari ini
     }
 
@@ -1058,46 +1066,6 @@ const AdminDashboard = () => {
     );
   };
 
-  // FITUR: Toggle Acak Soal
-  const shuffleSetting = allData.settings.find(
-    (item) => item.kunci === "Acak_Soal",
-  );
-  const isShuffleOn = shuffleSetting ? shuffleSetting.nilai !== "OFF" : true;
-  const handleToggleShuffle = async () => {
-    showAlert(
-      "confirm",
-      "Ubah Mode Acak Soal?",
-      `Yakin ingin ${isShuffleOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Acak Soal untuk siswa?`,
-      async () => {
-        closeAlert();
-        setIsSyncing(true);
-        try {
-          if (shuffleSetting)
-            await api.update("Settings", shuffleSetting.id, {
-              ...shuffleSetting,
-              nilai: isShuffleOn ? "OFF" : "ON",
-            });
-          else
-            await api.create("Settings", {
-              id: (Math.max(...allData.settings.map((s) => s.id)) || 0) + 1,
-              kunci: "Acak_Soal",
-              nilai: "OFF",
-            });
-          await refreshCurrentTab(false);
-          showAlert(
-            "success",
-            "Berhasil!",
-            `Soal Siswa kini ${isShuffleOn ? "BERURUTAN" : "ACAK"}.`,
-          );
-        } catch (e) {
-          showAlert("danger", "Gagal", e.message);
-        } finally {
-          setIsSyncing(false);
-        }
-      },
-    );
-  };
-
   return (
     <Dashboard menu={MENU_ITEMS} active={tab} setActive={setTab}>
       <style>{`
@@ -1365,7 +1333,7 @@ const AdminDashboard = () => {
           </div>
           <div className="w-full md:w-auto flex flex-col md:flex-row gap-3 z-10">
             {tab === "settings" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 w-full">
                 <button
                   onClick={handleToggleAntiCheat}
                   className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-blue-600 text-white border-blue-400"}`}
@@ -1386,13 +1354,6 @@ const AdminDashboard = () => {
                 >
                   <Trash2 size={18} />{" "}
                   {isDeleteAllOn ? "Kunci Tombol Hapus" : "Buka Tombol Hapus"}
-                </button>
-                <button
-                  onClick={handleToggleShuffle}
-                  className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${!isShuffleOn ? "bg-slate-100 text-slate-500 border-slate-300" : "bg-indigo-50 text-indigo-600 border-indigo-200"}`}
-                >
-                  <RefreshCw size={18} />{" "}
-                  {isShuffleOn ? "Matikan Acak Soal" : "Hidupkan Acak Soal"}
                 </button>
               </div>
             )}
