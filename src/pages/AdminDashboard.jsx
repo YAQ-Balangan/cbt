@@ -1016,6 +1016,87 @@ const AdminDashboard = () => {
       },
     );
   };
+  // FITUR: Toggle Hapus Semua Soal
+  const deleteAllSetting = allData.settings.find(
+    (item) => item.kunci === "Hapus_Semua_Soal",
+  );
+  const isDeleteAllOn = deleteAllSetting
+    ? deleteAllSetting.nilai !== "OFF"
+    : true;
+  const handleToggleDeleteAll = async () => {
+    showAlert(
+      "confirm",
+      "Ubah Izin Hapus Soal?",
+      `Yakin ingin ${isDeleteAllOn ? "MEMATIKAN" : "MENGHIDUPKAN"} izin guru untuk menghapus semua soal sekaligus?`,
+      async () => {
+        closeAlert();
+        setIsSyncing(true);
+        try {
+          if (deleteAllSetting)
+            await api.update("Settings", deleteAllSetting.id, {
+              ...deleteAllSetting,
+              nilai: isDeleteAllOn ? "OFF" : "ON",
+            });
+          else
+            await api.create("Settings", {
+              id: (Math.max(...allData.settings.map((s) => s.id)) || 0) + 1,
+              kunci: "Hapus_Semua_Soal",
+              nilai: "OFF",
+            });
+          await refreshCurrentTab(false);
+          showAlert(
+            "success",
+            "Berhasil!",
+            `Fitur Hapus Semua Soal ${isDeleteAllOn ? "NONAKTIF" : "AKTIF"}.`,
+          );
+        } catch (e) {
+          showAlert("danger", "Gagal", e.message);
+        } finally {
+          setIsSyncing(false);
+        }
+      },
+    );
+  };
+
+  // FITUR: Toggle Acak Soal
+  const shuffleSetting = allData.settings.find(
+    (item) => item.kunci === "Acak_Soal",
+  );
+  const isShuffleOn = shuffleSetting ? shuffleSetting.nilai !== "OFF" : true;
+  const handleToggleShuffle = async () => {
+    showAlert(
+      "confirm",
+      "Ubah Mode Acak Soal?",
+      `Yakin ingin ${isShuffleOn ? "MEMATIKAN" : "MENGHIDUPKAN"} fitur Acak Soal untuk siswa?`,
+      async () => {
+        closeAlert();
+        setIsSyncing(true);
+        try {
+          if (shuffleSetting)
+            await api.update("Settings", shuffleSetting.id, {
+              ...shuffleSetting,
+              nilai: isShuffleOn ? "OFF" : "ON",
+            });
+          else
+            await api.create("Settings", {
+              id: (Math.max(...allData.settings.map((s) => s.id)) || 0) + 1,
+              kunci: "Acak_Soal",
+              nilai: "OFF",
+            });
+          await refreshCurrentTab(false);
+          showAlert(
+            "success",
+            "Berhasil!",
+            `Soal Siswa kini ${isShuffleOn ? "BERURUTAN" : "ACAK"}.`,
+          );
+        } catch (e) {
+          showAlert("danger", "Gagal", e.message);
+        } finally {
+          setIsSyncing(false);
+        }
+      },
+    );
+  };
 
   return (
     <Dashboard menu={MENU_ITEMS} active={tab} setActive={setTab}>
@@ -1284,22 +1365,34 @@ const AdminDashboard = () => {
           </div>
           <div className="w-full md:w-auto flex flex-col md:flex-row gap-3 z-10">
             {tab === "settings" && (
-              <div className="flex flex-col md:flex-row gap-2 w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 w-full">
                 <button
                   onClick={handleToggleAntiCheat}
-                  className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-blue-600 text-white border-blue-400"}`}
+                  className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-blue-600 text-white border-blue-400"}`}
                 >
-                  <ShieldCheck size={20} />{" "}
-                  {isAntiCheatOn ? "Matikan Mode Ujian" : "Hidupkan Mode Ujian"}
+                  <ShieldCheck size={18} />{" "}
+                  {isAntiCheatOn ? "Matikan Anti-Cheat" : "Hidupkan Anti-Cheat"}
                 </button>
                 <button
                   onClick={handleToggleAppOnly}
-                  className={`w-full md:w-auto px-5 py-3.5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 transition-all text-sm border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-slate-800 text-white border-slate-700"}`}
+                  className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-slate-800 text-white border-slate-700"}`}
                 >
-                  {isAppOnlyOn ? <Unlock size={20} /> : <Lock size={20} />}{" "}
-                  {isAppOnlyOn
-                    ? "Buka Akses Browser"
-                    : "Kunci (Mode Aplikasi HP)"}
+                  {isAppOnlyOn ? <Unlock size={18} /> : <Lock size={18} />}{" "}
+                  {isAppOnlyOn ? "Buka Akses Browser" : "Kunci Aplikasi"}
+                </button>
+                <button
+                  onClick={handleToggleDeleteAll}
+                  className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${!isDeleteAllOn ? "bg-slate-100 text-slate-500 border-slate-300" : "bg-rose-50 text-rose-600 border-rose-200"}`}
+                >
+                  <Trash2 size={18} />{" "}
+                  {isDeleteAllOn ? "Kunci Tombol Hapus" : "Buka Tombol Hapus"}
+                </button>
+                <button
+                  onClick={handleToggleShuffle}
+                  className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${!isShuffleOn ? "bg-slate-100 text-slate-500 border-slate-300" : "bg-indigo-50 text-indigo-600 border-indigo-200"}`}
+                >
+                  <RefreshCw size={18} />{" "}
+                  {isShuffleOn ? "Matikan Acak Soal" : "Hidupkan Acak Soal"}
                 </button>
               </div>
             )}

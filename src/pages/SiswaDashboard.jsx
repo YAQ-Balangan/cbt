@@ -221,6 +221,7 @@ const SiswaDashboard = () => {
     desc: "Online Based Test 2026",
   });
 
+  const [isAcakSoalActive, setIsAcakSoalActive] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const [pelanggaran, setPelanggaran] = useState(0);
   const [isAntiCheatActive, setIsAntiCheatActive] = useState(true);
@@ -362,6 +363,15 @@ const SiswaDashboard = () => {
                 desc: descConf ? descConf.nilai : "Online Based Test 2026",
               });
             }
+
+            const acakSetting = settingsRes.find(
+              (s) => String(s.kunci).toUpperCase() === "ACAK_SOAL",
+            );
+            setIsAcakSoalActive(
+              acakSetting
+                ? String(acakSetting.nilai).toUpperCase() !== "OFF"
+                : true,
+            );
           }
         } catch (setErr) {
           console.warn("Gagal menarik konfigurasi pengaturan admin:", setErr);
@@ -651,13 +661,24 @@ const SiswaDashboard = () => {
             target === userTingkat,
         );
       });
-      // Menggunakan Fisher-Yates Shuffle untuk acakan 100% murni tanpa pola
-      const shuffledSoal = [...filterSoal];
-      for (let i = shuffledSoal.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledSoal[i], shuffledSoal[j]] = [shuffledSoal[j], shuffledSoal[i]];
+      // Logika Acak Soal Dinamis (Mengikuti Konfigurasi Admin)
+      let finalSoal = [...filterSoal];
+
+      if (isAcakSoalActive) {
+        // Menggunakan Fisher-Yates Shuffle untuk acakan 100% murni tanpa pola
+        for (let i = finalSoal.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [finalSoal[i], finalSoal[j]] = [finalSoal[j], finalSoal[i]];
+        }
+      } else {
+        // Jika acak dimatikan, urutkan berdasarkan ID asli secara berurutan
+        finalSoal.sort(
+          (a, b) =>
+            (parseInt(getVal(a, "id")) || 0) - (parseInt(getVal(b, "id")) || 0),
+        );
       }
-      setSoalData(shuffledSoal);
+
+      setSoalData(finalSoal);
 
       const usernameSiswa = getVal(user, "Username");
       let serverSession = null;

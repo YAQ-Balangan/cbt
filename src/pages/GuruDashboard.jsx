@@ -725,6 +725,7 @@ const GuruDashboard = () => {
   const [allData, setAllData] = useState({
     soal: [],
     nilai: [],
+    settings: [],
   });
 
   const currentConfig = TAB_CONFIG[tab];
@@ -993,16 +994,18 @@ const GuruDashboard = () => {
     if (isBackground) setIsSyncing(true);
 
     try {
-      const [resSoal, resNilai, lockedRes] = await Promise.all([
+      const [resSoal, resNilai, lockedRes, resSettings] = await Promise.all([
         api.read(TAB_CONFIG.soal.sheet),
         api.read(TAB_CONFIG.nilai.sheet),
-        api.getSesiTerkunci().catch(() => []), // Tangkap error diam-diam
+        api.getSesiTerkunci().catch(() => []),
+        api.read("Settings").catch(() => []),
       ]);
 
       setAllData((prev) => {
         const newData = {
           soal: resSoal || [],
           nilai: resNilai || [],
+          settings: resSettings || [],
         };
         return JSON.stringify(prev) !== JSON.stringify(newData)
           ? newData
@@ -2499,6 +2502,10 @@ Patuhi aturan berikut secara ketat:
     }
   };
 
+  const isDeleteAllAllowed =
+    allData.settings?.find((s) => s.kunci === "Hapus_Semua_Soal")?.nilai !==
+    "OFF";
+
   return (
     <Dashboard menu={MENU_ITEMS} active={tab} setActive={setTab}>
       <div className="space-y-6 max-w-7xl mx-auto pb-24 relative">
@@ -2838,10 +2845,18 @@ Patuhi aturan berikut secara ketat:
                     </button>
                     <button
                       onClick={handleDeleteAll}
-                      disabled={isDeletingBulk}
-                      className="flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider border bg-red-50 border-red-100 text-red-600 disabled:opacity-50 hover:bg-red-500 hover:text-white transition-colors"
+                      disabled={isDeletingBulk || !isDeleteAllAllowed}
+                      className={`flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border ${!isDeleteAllAllowed ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed" : "bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-50"}`}
+                      title={
+                        !isDeleteAllAllowed
+                          ? "Fitur dinonaktifkan oleh Admin"
+                          : "Hapus seluruh data yang tampil di tabel ini"
+                      }
                     >
-                      <Trash2 size={14} /> Bersihkan
+                      <Trash2 size={16} />{" "}
+                      {isDeleteAllAllowed
+                        ? "Hapus Semua Soal"
+                        : "Hapus Terkunci"}
                     </button>
                   </div>
                 )}
@@ -3088,11 +3103,18 @@ Patuhi aturan berikut secara ketat:
                     </button>
                     <button
                       onClick={handleDeleteAll}
-                      disabled={isDeletingBulk}
-                      className="flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-50"
-                      title="Hapus seluruh data yang tampil di tabel ini"
+                      disabled={isDeletingBulk || !isDeleteAllAllowed}
+                      className={`flex-1 md:flex-none flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all border ${!isDeleteAllAllowed ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed" : "bg-red-50 border-red-200 text-red-600 hover:bg-red-500 hover:text-white disabled:opacity-50"}`}
+                      title={
+                        !isDeleteAllAllowed
+                          ? "Fitur dinonaktifkan oleh Admin"
+                          : "Hapus seluruh data yang tampil di tabel ini"
+                      }
                     >
-                      <Trash2 size={16} /> Hapus Semua Soal
+                      <Trash2 size={16} />{" "}
+                      {isDeleteAllAllowed
+                        ? "Hapus Semua Soal"
+                        : "Hapus Terkunci"}
                     </button>
                   </div>
                 )}
