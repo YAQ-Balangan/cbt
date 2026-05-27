@@ -377,7 +377,7 @@ const SSmode = ({
       canvas.height = sHeight;
       ctx.drawImage(pageCanvas, sX, sY, sWidth, sHeight, 0, 0, sWidth, sHeight);
 
-      const base64Image = canvas.toDataURL("image/webp", 0.8).split(",")[1];
+      const base64Image = canvas.toDataURL("image/webp", 0.9).split(",")[1];
       const formData = new FormData();
       formData.append("image", base64Image);
 
@@ -388,7 +388,7 @@ const SSmode = ({
       const imgData = await imgbbRes.json();
       if (!imgData.success) throw new Error("Gagal upload.");
 
-      const finalUrl = `https://wsrv.nl/?url=${imgData.data.url}&output=webp`;
+      const finalUrl = `https://wsrv.nl/?url=${imgData.data.url}&output=webp&q=90`;
       const maxId = currentDbSoal?.length
         ? Math.max(...currentDbSoal.map((i) => parseInt(i.id) || 0))
         : 0;
@@ -527,6 +527,7 @@ const SSmode = ({
                         <Page
                           pageNumber={pageNumber}
                           width={pdfWidth}
+                          scale={2}
                           renderTextLayer={false}
                           renderAnnotationLayer={false}
                         />
