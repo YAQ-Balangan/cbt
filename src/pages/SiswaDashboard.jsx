@@ -232,15 +232,38 @@ const SiswaDashboard = () => {
   }, [isAntiCheatActive]);
 
   const [fontLevel, setFontLevel] = useState(0);
-
+  const [pageZoom, setPageZoom] = useState(1);
   const [zoomedImg, setZoomedImg] = useState(null);
-
-  // KODE BARU DIMULAI DARI SINI
   const zoomedImgRef = useRef(zoomedImg);
   useEffect(() => {
     zoomedImgRef.current = zoomedImg;
   }, [zoomedImg]);
-  // KODE BARU BERAKHIR DI SINI
+  useEffect(() => {
+    const handleZoomKeyboard = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "=" || e.key === "+") {
+          e.preventDefault();
+          setPageZoom((prev) => Math.min(2.0, prev + 0.1));
+        } else if (e.key === "-") {
+          e.preventDefault();
+          setPageZoom((prev) => Math.max(0.5, prev - 0.1));
+        } else if (e.key === "0") {
+          e.preventDefault();
+          setPageZoom(1);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleZoomKeyboard, { passive: false });
+    return () => window.removeEventListener("keydown", handleZoomKeyboard);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${pageZoom * 100}%`;
+    return () => {
+      document.documentElement.style.fontSize = "100%";
+    };
+  }, [pageZoom]);
 
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -1017,7 +1040,7 @@ const SiswaDashboard = () => {
     const isCurrentRagu = !!raguRagu[currentSoalId];
 
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none relative overflow-hidden">
+      <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none relative overflow-hidden transition-all duration-300">
         <div className="absolute inset-0 bg-slate-50 z-0 pointer-events-none"></div>
 
         <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm px-4 py-3 flex justify-between items-center relative">
@@ -1050,6 +1073,37 @@ const SiswaDashboard = () => {
                 </span>
               )}
             </button>
+
+            {/* Tombol Kontrol Zoom Tampilan */}
+            <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl overflow-hidden shadow-sm h-full">
+              <button
+                onClick={() => setPageZoom((prev) => Math.max(0.5, prev - 0.1))}
+                className="px-4 py-2 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors font-black text-base"
+                title="Perkecil Tampilan (Ctrl -)"
+              >
+                -
+              </button>
+
+              {pageZoom !== 1 ? (
+                <button
+                  onClick={() => setPageZoom(1)}
+                  className="px-3 py-2 min-w-[54px] flex items-center justify-center text-[11px] font-black text-emerald-600 hover:text-emerald-700 bg-slate-200/50"
+                  title="Reset Zoom (Ctrl 0)"
+                >
+                  {Math.round(pageZoom * 100)}%
+                </button>
+              ) : (
+                <div className="px-4 w-px h-4 bg-slate-300 flex items-center justify-center mx-2"></div>
+              )}
+
+              <button
+                onClick={() => setPageZoom((prev) => Math.min(2.0, prev + 0.1))}
+                className="px-4 py-2 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors font-black text-base"
+                title="Perbesar Tampilan (Ctrl +)"
+              >
+                +
+              </button>
+            </div>
 
             {!isAntiCheatActive && (
               <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 md:px-3 py-2 rounded-xl border border-amber-200 text-[9px] font-black uppercase tracking-widest animate-pulse shadow-sm">
