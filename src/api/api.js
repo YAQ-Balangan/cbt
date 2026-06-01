@@ -114,12 +114,13 @@ export const api = {
             return 0;
         }
     },
-    // 7. GET SOAL SPESIFIK MAPEL (Backend Filtering Anti-Lag)
+    // 7. GET SOAL SPESIFIK MAPEL (Aman dari Inspect Element)
     getSoalUjian: async (mapel) => {
         const { data, error } = await supabase
             .from('soal')
-            .select('*')
-            .ilike('mapel', mapel); // ilike = mencari teks walau huruf besar/kecil beda
+            // HANYA pilih kolom yang dibutuhkan siswa. JANGAN masukan 'Jawaban_Benar'
+            .select('id, mapel, kelas, pertanyaan, wacana, link_gambar, opsi_a, opsi_b, opsi_c, opsi_d, opsi_e, poin')
+            .ilike('mapel', mapel);
 
         if (error) throw new Error(error.message);
         return data || [];
@@ -134,6 +135,65 @@ export const api = {
 
         if (error) throw new Error(error.message);
         return data || [];
+    },
+
+    // FUNGSI BARU: Koreksi Aman (Jawaban diambil hanya saat tombol kumpul ditekan)
+    koreksiDanSimpanNilai: async (payload) => {
+        // 1. Tarik HANYA kunci jawaban untuk SOAL SPESIFIK yang dikerjakan siswa
+        const { data: soalData, error: errSoal } = await supabase
+            .from('soal')
+            .select('id, jawaban_benar, poin, pertanyaan')
+            .in('id', payload.soal_ids); // Murni menarik 40 soal milik siswa ini saja
+
+        if (errSoal) throw new Error("Gagal mengambil kunci jawaban: " + errSoal.message);
+
+        let skorSiswa = 0;
+        let benarCount = 0;
+        let detailJawabanArray = [];
+        const totalSoal = soalData.length;
+
+        // 2. Lakukan pencocokan jawaban
+        soalData.forEach((soal) => {
+            const poin = parseFloat(soal.poin) || 2;
+            const idSoal = String(soal.id).trim();
+            const jawabanSiswa = payload.jawaban_siswa[idSoal] || "";
+            const jawabanBenar = String(soal.jawaban_benar).toUpperCase().trim();
+
+            if (jawabanSiswa && String(jawabanSiswa).toUpperCase().trim() === jawabanBenar) {
+                skorSiswa += poin;
+                benarCount++;
+            }
+
+            detailJawabanArray.push({
+                tanya: soal.pertanyaan,
+                jawab_siswa: jawabanSiswa,
+                kunci: jawabanBenar,
+            });
+        });
+
+        // 3. Buat ID unik dan format data nilai (pakai huruf kecil untuk database)
+        const amanId = Number(Date.now().toString() + Math.floor(Math.random() * 1000).toString().padStart(3, "0"));
+        const dataNilai = {
+            id: amanId,
+            nama_siswa: payload.nama_siswa,
+            kelas: payload.kelas,
+            mapel: payload.mapel,
+            skor: Number(skorSiswa.toFixed(2)),
+            benar: benarCount,
+            salah: totalSoal - benarCount,
+            total_soal: totalSoal,
+            status: payload.status,
+            detail_jawaban: JSON.stringify(detailJawabanArray),
+        };
+
+        // 4. Simpan nilai ke tabel
+        const { error: errInsert } = await supabase
+            .from('nilai')
+            .insert([dataNilai]);
+
+        if (errInsert) throw new Error("Gagal menyimpan nilai: " + errInsert.message);
+
+        return true;
     },
 
     // ========================================================

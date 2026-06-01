@@ -484,19 +484,6 @@ const SiswaDashboard = () => {
       }
     };
 
-    // KODE BARU: Pelacak Zoom & Resize Layar
-    let resizeTimeout;
-    let isZoomingOrResizing = false;
-
-    const handleResize = () => {
-      isZoomingOrResizing = true;
-      clearTimeout(resizeTimeout);
-      // Berikan masa toleransi 1 detik saat sedang nge-zoom agar tidak kena kunci
-      resizeTimeout = setTimeout(() => {
-        isZoomingOrResizing = false;
-      }, 1000);
-    };
-
     const handleVisibilityChange = () => {
       if (zoomedImgRef.current) return;
       if (document.hidden) triggerLock("Tab Disembunyikan / Pindah Tab");
@@ -504,8 +491,7 @@ const SiswaDashboard = () => {
 
     const handleBlur = () => {
       if (zoomedImgRef.current) return;
-      if (isZoomingOrResizing) return; // KODE BARU: Abaikan hilang fokus jika sedang nge-zoom
-      triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
+      triggerLock("Layar Hilang Fokus / Membuka Notifikasi");
     };
 
     const handleFullscreenChange = () => {
@@ -525,7 +511,6 @@ const SiswaDashboard = () => {
       }
     };
 
-    window.addEventListener("resize", handleResize); // KODE BARU
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleBlur);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -534,8 +519,6 @@ const SiswaDashboard = () => {
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      window.removeEventListener("resize", handleResize); // KODE BARU
-      clearTimeout(resizeTimeout); // KODE BARU
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
@@ -740,81 +723,36 @@ const SiswaDashboard = () => {
     }
   };
 
-  // 5. KALKULASI SKOR & SUBMIT (FINAL FIX)
+  // 5. KALKULASI SKOR & SUBMIT (DIKIRIM KE SERVER)
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
     setIsSubmitting(true);
-    let skorSiswa = 0;
-    let benarCount = 0;
-    let detailJawabanArray = [];
-
     const currentAnswers = answersRef.current;
-    const originalSoalData = [...soalDataRef.current].sort(
-      (a, b) => parseInt(getVal(a, "id")) - parseInt(getVal(b, "id")),
-    );
-    const totalSoal = originalSoalData.length;
-
-    originalSoalData.forEach((soal) => {
-      const poin = parseFloat(getVal(soal, "Poin")) || 2;
-      const idSoal = String(getVal(soal, "id")).trim();
-      const jawabanSiswa = currentAnswers[idSoal] || "";
-      const jawabanBenar = String(getVal(soal, "Jawaban_Benar"))
-        .toUpperCase()
-        .trim();
-
-      if (
-        jawabanSiswa &&
-        String(jawabanSiswa).toUpperCase().trim() === jawabanBenar
-      ) {
-        skorSiswa += poin;
-        benarCount++;
-      }
-
-      detailJawabanArray.push({
-        tanya: getVal(soal, "Pertanyaan"),
-        jawab_siswa: jawabanSiswa,
-        kunci: jawabanBenar,
-      });
-    });
-
-    let finalScore = Number(skorSiswa.toFixed(2));
-    let salahCount = totalSoal - benarCount;
 
     try {
-      // BIKIN ID SUPER AMAN UNTUK INT8 SUPABASE (Kombinasi Tanggal/Jam + Angka Acak)
-      // Menghasilkan angka unik yang PASTI muat di kolom int8 dan bebas dari bentrokan
-      const amanId = Number(
-        Date.now().toString() +
-          Math.floor(Math.random() * 1000)
-            .toString()
-            .padStart(3, "0"),
-      );
-
-      const dataNilai = {
-        id: amanId, // ID Unik Mandiri tanpa pusing setting Auto Increment Supabase
+      // 1. KITA HANYA MENGUMPULKAN JAWABAN SISWA
+      const payloadUjian = {
         nama_siswa: getVal(user, "Nama"),
         kelas: getVal(user, "Kelas"),
         mapel: getVal(activeExamRef.current, "Mapel"),
-        skor: finalScore,
-        benar: benarCount,
-        salah: salahCount,
-        total_soal: totalSoal,
         status: forcedStatus,
-        detail_jawaban: JSON.stringify(detailJawabanArray),
+        jawaban_siswa: currentAnswers,
+        soal_ids: soalDataRef.current.map((soal) => soal.id),
       };
 
-      // 1. Simpan nilai ke Supabase
-      await api.create("Nilai", dataNilai);
+      // 2. KIRIM KE ENDPOINT KOREKSI DI api.js
+      await api.koreksiDanSimpanNilai(payloadUjian);
 
-      // 2. Hapus sesi (Dibungkus try-catch pisah, agar jika gagal, nilai TETAP TERSIMPAN)
+      // 3. Hapus Sesi Ujian Lokal (Dibungkus try-catch agar nilai tetap aman walau gagal)
       try {
         await api.deleteSesi(
           getVal(user, "Username"),
           getVal(activeExamRef.current, "ID"),
         );
       } catch (errSesi) {
-        console.warn("Sesi gagal dihapus, tapi nilai sudah aman:", errSesi);
+        console.warn("Sesi gagal dihapus:", errSesi);
       }
 
+      // 4. Reset Layar Ujian & Kembali ke Beranda Nilai
       setIsSubmitting(false);
       setActiveExam(null);
       setAnswers({});
@@ -823,29 +761,29 @@ const SiswaDashboard = () => {
       setIsMobileDrawerOpen(false);
       setActiveTab("nilai");
 
+      // 5. Keluar dari Fullscreen
       try {
         if (
           document.fullscreenElement ||
           document.webkitFullscreenElement ||
           document.msFullscreenElement
         ) {
-          if (document.exitFullscreen) {
-            document.exitFullscreen().catch((err) => console.log(err));
-          } else if (document.webkitExitFullscreen) {
+          if (document.exitFullscreen)
+            document.exitFullscreen().catch((e) => console.log(e));
+          else if (document.webkitExitFullscreen)
             document.webkitExitFullscreen();
-          } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-          }
+          else if (document.msExitFullscreen) document.msExitFullscreen();
         }
       } catch (error) {
         console.warn("Gagal keluar dari fullscreen.");
       }
 
+      // 6. Tampilkan Notifikasi
       if (forcedStatus === "Diskualifikasi") {
         showAlert(
           "danger",
           "Diskualifikasi!",
-          "Ujian Anda dihentikan paksa karena telah keluar dari halaman ujian berulang kali.",
+          "Ujian dihentikan paksa karena telah keluar dari halaman ujian berulang kali.",
         );
       } else if (isForced) {
         showAlert(
@@ -1017,7 +955,13 @@ const SiswaDashboard = () => {
     const isCurrentRagu = !!raguRagu[currentSoalId];
 
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none relative overflow-hidden">
+      <div
+        className="min-h-screen bg-slate-100 flex flex-col font-sans select-none relative overflow-hidden"
+        onContextMenu={(e) => e.preventDefault()} // Mencegah klik kanan / tahan layar lama
+        onCopy={(e) => e.preventDefault()} // Mencegah proses salin (copy) teks
+        onPaste={(e) => e.preventDefault()} // Mencegah proses tempel (paste)
+        onDragStart={(e) => e.preventDefault()} // Mencegah siswa menyeret gambar/teks ke luar browser
+      >
         <div className="absolute inset-0 bg-slate-50 z-0 pointer-events-none"></div>
 
         <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm px-4 py-3 flex justify-between items-center relative">
