@@ -859,8 +859,6 @@ const SiswaDashboard = () => {
     let salahCount = totalSoal - benarCount;
 
     try {
-      // BIKIN ID SUPER AMAN UNTUK INT8 SUPABASE (Kombinasi Tanggal/Jam + Angka Acak)
-      // Menghasilkan angka unik yang PASTI muat di kolom int8 dan bebas dari bentrokan
       const amanId = Number(
         Date.now().toString() +
           Math.floor(Math.random() * 1000)
@@ -869,7 +867,7 @@ const SiswaDashboard = () => {
       );
 
       const dataNilai = {
-        id: amanId, // ID Unik Mandiri tanpa pusing setting Auto Increment Supabase
+        id: amanId,
         nama_siswa: getVal(user, "Nama"),
         kelas: getVal(user, "Kelas"),
         mapel: getVal(activeExamRef.current, "Mapel"),
@@ -884,15 +882,7 @@ const SiswaDashboard = () => {
       // 1. Simpan nilai ke Supabase
       await api.create("Nilai", dataNilai);
 
-      // TAMBAHAN 2: Tarik ulang data nilai terbaru secara instan agar langsung muncul di halaman Hasil Ujian
-      try {
-        const finalNilai = await api.getNilaiSiswa(getVal(user, "Username"));
-        setMyResults(finalNilai);
-      } catch (e) {
-        console.warn("Gagal tarik nilai instan", e);
-      }
-
-      // 2. Hapus sesi (Dibungkus try-catch pisah, agar jika gagal, nilai TETAP TERSIMPAN)
+      // 2. Hapus sesi (Dibungkus try-catch pisah)
       try {
         await api.deleteSesi(
           getVal(user, "Username"),
@@ -902,14 +892,10 @@ const SiswaDashboard = () => {
         console.warn("Sesi gagal dihapus, tapi nilai sudah aman:", errSesi);
       }
 
+      // 3. Matikan state loading
       setIsSubmitting(false);
-      setActiveExam(null);
-      setAnswers({});
-      setRaguRagu({});
-      setCurrentSoalIndex(0);
-      setIsMobileDrawerOpen(false);
-      setActiveTab("nilai");
 
+      // 4. Keluar dari Mode Fullscreen
       try {
         if (
           document.fullscreenElement ||
@@ -928,25 +914,32 @@ const SiswaDashboard = () => {
         console.warn("Gagal keluar dari fullscreen.");
       }
 
+      // 5. Tampilkan Notifikasi dengan Info Auto-Refresh
       if (forcedStatus === "Diskualifikasi") {
         showAlert(
           "danger",
           "Diskualifikasi!",
-          "Ujian Anda dihentikan paksa karena telah keluar dari halaman ujian berulang kali.",
+          "Ujian dihentikan paksa. Memuat ulang sistem...",
         );
       } else if (isForced) {
         showAlert(
           "info",
           "Waktu Habis!",
-          "Waktu ujian Anda telah habis dan jawaban berhasil disimpan.",
+          "Waktu habis dan jawaban disimpan. Memuat ulang sistem...",
         );
       } else {
         showAlert(
           "success",
           "Ujian Selesai",
-          "Berhasil disubmit! Silakan periksa nilai Anda.",
+          "Nilai berhasil disimpan! Layar akan dimuat ulang untuk menampilkan hasil...",
         );
       }
+
+      // 6. KUNCI JAWABANNYA DI SINI: Auto-Refresh Paksa Setelah 2 Detik
+      // Ini akan membersihkan semua state ujian yang nyangkut dan memunculkan tab nilai dengan segar!
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } catch (err) {
       showAlert(
         "danger",
@@ -955,7 +948,7 @@ const SiswaDashboard = () => {
       );
       setIsSubmitting(false);
     }
-  };
+  }; // <-- Akhir dari fungsi executeEndExam
 
   const handleEndExamClick = (isForced = false) => {
     if (isSubmittingRef.current) return;
