@@ -859,6 +859,8 @@ const SiswaDashboard = () => {
     let salahCount = totalSoal - benarCount;
 
     try {
+      // BIKIN ID SUPER AMAN UNTUK INT8 SUPABASE (Kombinasi Tanggal/Jam + Angka Acak)
+      // Menghasilkan angka unik yang PASTI muat di kolom int8 dan bebas dari bentrokan
       const amanId = Number(
         Date.now().toString() +
           Math.floor(Math.random() * 1000)
@@ -867,7 +869,7 @@ const SiswaDashboard = () => {
       );
 
       const dataNilai = {
-        id: amanId,
+        id: amanId, // ID Unik Mandiri tanpa pusing setting Auto Increment Supabase
         nama_siswa: getVal(user, "Nama"),
         kelas: getVal(user, "Kelas"),
         mapel: getVal(activeExamRef.current, "Mapel"),
@@ -879,11 +881,27 @@ const SiswaDashboard = () => {
         detail_jawaban: JSON.stringify(detailJawabanArray),
       };
 
-      // STEP 1: Kirim nilai ke Supabase (Ini yang paling wajib sukses)
+      // 1. Simpan nilai ke Supabase
       await api.create("Nilai", dataNilai);
 
-      // STEP 2: LANGSUNG AMANKAN UI SISWA (Jangan tunggu API lain selesai!)
-      // Pindahkan siswa ke halaman nilai secara instan agar tidak hang/beku
+      // TAMBAHAN 2: Tarik ulang data nilai terbaru secara instan agar langsung muncul di halaman Hasil Ujian
+      try {
+        const finalNilai = await api.getNilaiSiswa(getVal(user, "Username"));
+        setMyResults(finalNilai);
+      } catch (e) {
+        console.warn("Gagal tarik nilai instan", e);
+      }
+
+      // 2. Hapus sesi (Dibungkus try-catch pisah, agar jika gagal, nilai TETAP TERSIMPAN)
+      try {
+        await api.deleteSesi(
+          getVal(user, "Username"),
+          getVal(activeExamRef.current, "ID"),
+        );
+      } catch (errSesi) {
+        console.warn("Sesi gagal dihapus, tapi nilai sudah aman:", errSesi);
+      }
+
       setIsSubmitting(false);
       setActiveExam(null);
       setAnswers({});
@@ -892,43 +910,41 @@ const SiswaDashboard = () => {
       setIsMobileDrawerOpen(false);
       setActiveTab("nilai");
 
-      // Masukkan nilai yang baru dihitung secara lokal ke state hasil ujian siswa
-      // Jadi browser TIDAK PERLU request tarik data (GET) lagi ke server Supabase! Sangat hemat kuota!
-      setMyResults((prevResults) => [dataNilai, ...(prevResults || [])]);
-
-      // STEP 3: Hapus sesi di latar belakang (TANPA KATA 'AWAIT')
-      // Biarkan browser memproses ini di background agar siswa tidak perlu menunggu jalannya jaringan ini
-      api
-        .deleteSesi(
-          getVal(user, "Username"),
-          getVal(activeExamRef.current, "ID"),
-        )
-        .catch((errSesi) =>
-          console.warn("Sesi dihapus di background dengan catatan:", errSesi),
-        );
-
-      // STEP 4: Keluar dari Fullscreen
       try {
-        if (document.fullscreenElement || document.webkitFullscreenElement) {
-          if (document.exitFullscreen)
-            document.exitFullscreen().catch(() => {});
+        if (
+          document.fullscreenElement ||
+          document.webkitFullscreenElement ||
+          document.msFullscreenElement
+        ) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch((err) => console.log(err));
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
         }
-      } catch (e) {}
+      } catch (error) {
+        console.warn("Gagal keluar dari fullscreen.");
+      }
 
-      // STEP 5: Tampilkan alert sukses biasa (Tanpa reload halaman)
       if (forcedStatus === "Diskualifikasi") {
-        showAlert("danger", "Diskualifikasi!", "Ujian Anda dihentikan paksa.");
+        showAlert(
+          "danger",
+          "Diskualifikasi!",
+          "Ujian Anda dihentikan paksa karena telah keluar dari halaman ujian berulang kali.",
+        );
       } else if (isForced) {
         showAlert(
           "info",
           "Waktu Habis!",
-          "Waktu ujian habis, nilai Anda telah aman disimpan.",
+          "Waktu ujian Anda telah habis dan jawaban berhasil disimpan.",
         );
       } else {
         showAlert(
           "success",
           "Ujian Selesai",
-          "Berhasil dikumpulkan! Nilai Anda sudah keluar di bawah.",
+          "Berhasil disubmit! Silakan periksa nilai Anda.",
         );
       }
     } catch (err) {
@@ -939,7 +955,7 @@ const SiswaDashboard = () => {
       );
       setIsSubmitting(false);
     }
-  }; // Akhir fungsi
+  };
 
   const handleEndExamClick = (isForced = false) => {
     if (isSubmittingRef.current) return;
