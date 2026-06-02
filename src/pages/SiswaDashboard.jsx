@@ -482,8 +482,8 @@ const SiswaDashboard = () => {
         // Memunculkan Pop-up Notif tanpa mengunci layar
         showAlert(
           "warning",
-          "Peringatan (1/3)",
-          "Sistem mendeteksi aktivitas di luar ujian (Panggilan, Notifikasi, Usap Layar, atau Pindah Tab).\n\nMohon berhati-hati, ini adalah PERINGATAN PERTAMA. Jika terulang, layar ujian akan dikunci!",
+          "Peringatan",
+          `Sistem mendeteksi aktivitas di luar ujian (Panggilan, Notifikasi, atau Keluar Aplikasi). \n\nSolusi yang bisa dicoba, tarik bilah notifikasi & AKTIFKAN fitur "JANGAN GANGGU" di HP kalian untuk mencegah gangguan dari luar. \n\nMohon berhati-hati, ini adalah PERINGATAN PERTAMA. Jika terulang, layar ujian akan dikunci!`,
         );
 
         // Simpan status tetap ACTIVE ke database tapi poin pelanggaran naik 1
@@ -1160,13 +1160,21 @@ const SiswaDashboard = () => {
               onClick={() => {
                 try {
                   const docElm = document.documentElement;
-                  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                    if (docElm.requestFullscreen) docElm.requestFullscreen().catch(() => {});
-                    else if (docElm.webkitRequestFullscreen) docElm.webkitRequestFullscreen();
-                    else if (docElm.msRequestFullscreen) docElm.msRequestFullscreen();
+                  if (
+                    !document.fullscreenElement &&
+                    !document.webkitFullscreenElement
+                  ) {
+                    if (docElm.requestFullscreen)
+                      docElm.requestFullscreen().catch(() => {});
+                    else if (docElm.webkitRequestFullscreen)
+                      docElm.webkitRequestFullscreen();
+                    else if (docElm.msRequestFullscreen)
+                      docElm.msRequestFullscreen();
                   } else {
-                    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                    if (document.exitFullscreen)
+                      document.exitFullscreen().catch(() => {});
+                    else if (document.webkitExitFullscreen)
+                      document.webkitExitFullscreen();
                   }
                 } catch (e) {}
               }}
