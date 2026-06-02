@@ -816,6 +816,12 @@ const SiswaDashboard = () => {
   // 5. KALKULASI SKOR & SUBMIT (FINAL FIX)
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
     setIsSubmitting(true);
+
+    // TAMBAHAN 1: Hapus timer save yang masih nyangkut di background agar tidak jadi sesi hantu
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
     let skorSiswa = 0;
     let benarCount = 0;
     let detailJawabanArray = [];
@@ -877,6 +883,14 @@ const SiswaDashboard = () => {
 
       // 1. Simpan nilai ke Supabase
       await api.create("Nilai", dataNilai);
+
+      // TAMBAHAN 2: Tarik ulang data nilai terbaru secara instan agar langsung muncul di halaman Hasil Ujian
+      try {
+        const finalNilai = await api.getNilaiSiswa(getVal(user, "Username"));
+        setMyResults(finalNilai);
+      } catch (e) {
+        console.warn("Gagal tarik nilai instan", e);
+      }
 
       // 2. Hapus sesi (Dibungkus try-catch pisah, agar jika gagal, nilai TETAP TERSIMPAN)
       try {
@@ -1197,7 +1211,8 @@ const SiswaDashboard = () => {
               initialTime={timeLeft}
               timeRef={timeLeftRef}
               onTick={(newTime) => {
-                if (activeExamRef.current) {
+                // TAMBAHAN: Cek !isSubmittingRef.current agar timer berhenti nge-save saat dikumpulkan
+                if (activeExamRef.current && !isSubmittingRef.current) {
                   api.saveSesi(
                     getVal(user, "Username"),
                     getVal(activeExamRef.current, "ID"),
@@ -1334,6 +1349,9 @@ const SiswaDashboard = () => {
                               // 3. Jeda diubah menjadi 5 detik. Perubahan di layar tetap instan,
                               // tapi pengiriman ke server ditunda agar bisa ditimpa jika siswa berubah pikiran.
                               saveTimeoutRef.current = setTimeout(() => {
+                                // TAMBAHKAN BARIS INI: Jangan nge-save kalau siswa sedang proses submit
+                                if (isSubmittingRef.current) return;
+
                                 api.saveSesi(
                                   getVal(user, "Username"),
                                   getVal(activeExam, "ID"),
