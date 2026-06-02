@@ -471,41 +471,68 @@ const SiswaDashboard = () => {
       console.warn("TERDETEKSI KECURANGAN:", jenisPelanggaran);
 
       let currentPelanggaran = pelanggaranRef.current;
-      const username = getVal(user, "Username"); // <-- MURNI PAKAI USERNAME
+      const username = getVal(user, "Username");
       const examId = getVal(activeExamRef.current, "ID");
 
       if (currentPelanggaran === 0) {
+        // TAHAP 1: PERINGATAN SAJA (Toleransi 1x)
         pelanggaranRef.current = 1;
-        isLockedRef.current = true;
-
         setPelanggaran(1);
-        setTimeLeft(timeLeftRef.current);
-        setIsLocked(true);
 
-        // FORMAT LAMA YANG AMAN
+        // Memunculkan Pop-up Notif tanpa mengunci layar
+        showAlert(
+          "warning",
+          "Peringatan (1/3)",
+          "Sistem mendeteksi aktivitas di luar ujian (Panggilan, Notifikasi, Usap Layar, atau Pindah Tab).\n\nMohon berhati-hati, ini adalah PERINGATAN PERTAMA. Jika terulang, layar ujian akan dikunci!",
+        );
+
+        // Simpan status tetap ACTIVE ke database tapi poin pelanggaran naik 1
         await api.saveSesi(
           username,
           examId,
           answersRef.current,
           timeLeftRef.current,
           1,
-          "LOCKED",
+          "ACTIVE",
         );
 
         setTimeout(() => {
           isProcessing = false;
-        }, 2000);
-      } else if (currentPelanggaran >= 1) {
+        }, 3000);
+      } else if (currentPelanggaran === 1) {
+        // TAHAP 2: TERKUNCI (Harus dibuka oleh Guru)
         pelanggaranRef.current = 2;
         isLockedRef.current = true;
 
         setPelanggaran(2);
+        setTimeLeft(timeLeftRef.current);
+        setIsLocked(true);
+
         await api.saveSesi(
           username,
           examId,
           answersRef.current,
           timeLeftRef.current,
           2,
+          "LOCKED",
+        );
+
+        setTimeout(() => {
+          isProcessing = false;
+        }, 2000);
+      } else if (currentPelanggaran >= 2) {
+        // TAHAP 3: DISKUALIFIKASI (Ngeyel setelah dibuka kuncinya)
+        pelanggaranRef.current = 3;
+        isLockedRef.current = true;
+
+        setPelanggaran(3);
+
+        await api.saveSesi(
+          username,
+          examId,
+          answersRef.current,
+          timeLeftRef.current,
+          3,
           "DISQUALIFIED",
         );
         executeEndExam(true, "Diskualifikasi");
@@ -542,7 +569,7 @@ const SiswaDashboard = () => {
         !document.webkitFullscreenElement &&
         !document.msFullscreenElement
       ) {
-        triggerLock("Menekan ESC / Keluar Fullscreen");
+        console.log("Siswa keluar dari mode Fullscreen");
       }
     };
 
@@ -553,17 +580,29 @@ const SiswaDashboard = () => {
       }
     };
 
-    window.addEventListener("resize", handleResize); // KODE BARU
+    // FUNGSI BARU: Menangkap Swipe/Back HP
+    const handlePopState = (e) => {
+      if (activeExamRef.current && !isSubmittingRef.current) {
+        // 1. Jebak browser agar tetap di halaman ujian (tidak benar-benar back)
+        window.history.pushState({ page: "ujian" }, "", window.location.href);
+
+        // 2. Ubah fungsi swipe/tombol back menjadi mundur ke soal sebelumnya
+        setCurrentSoalIndex((prev) => Math.max(0, prev - 1));
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleBlur);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
     document.addEventListener("msfullscreenchange", handleFullscreenChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState); // <-- Listener Swipe Aktif
 
     return () => {
-      window.removeEventListener("resize", handleResize); // KODE BARU
-      clearTimeout(resizeTimeout); // KODE BARU
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(resizeTimeout);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
@@ -576,6 +615,7 @@ const SiswaDashboard = () => {
         handleFullscreenChange,
       );
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState); // <-- Listener Swipe Dimatikan
     };
   }, [user]);
 
@@ -659,6 +699,10 @@ const SiswaDashboard = () => {
     setLoadingSoal(true);
     setIsMobileDrawerOpen(false);
     setRaguRagu({});
+
+    // === MENGAKTIFKAN JEBAKAN HISTORY AGAR SWIPE HP BERFUNGSI ===
+    window.history.pushState({ page: "ujian" }, "", window.location.href);
+    // ==============================================================
 
     try {
       const docElm = document.documentElement;
@@ -1110,6 +1154,28 @@ const SiswaDashboard = () => {
                 +
               </button>
             </div>
+
+            {/* === KODE BARU: TOMBOL FULLSCREEN MANUAL === */}
+            <button
+              onClick={() => {
+                try {
+                  const docElm = document.documentElement;
+                  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    if (docElm.requestFullscreen) docElm.requestFullscreen().catch(() => {});
+                    else if (docElm.webkitRequestFullscreen) docElm.webkitRequestFullscreen();
+                    else if (docElm.msRequestFullscreen) docElm.msRequestFullscreen();
+                  } else {
+                    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                  }
+                } catch (e) {}
+              }}
+              className="flex items-center justify-center p-2 md:p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors border border-slate-200 active:scale-95"
+              title="Mode Layar Penuh"
+            >
+              <Maximize size={16} className="md:w-[18px] md:h-[18px]" />
+            </button>
+            {/* =========================================== */}
 
             {!isAntiCheatActive && (
               <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 md:px-3 py-2 rounded-xl border border-amber-200 text-[9px] font-black uppercase tracking-widest animate-pulse shadow-sm">
