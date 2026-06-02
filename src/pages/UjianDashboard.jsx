@@ -542,7 +542,8 @@ const UjianDashboard = () => {
         await fetchLiveStatus();
       }
       if (isMounted) {
-        timeoutId = setTimeout(loopFetch, 15000); // 15 DETIK AMAN
+        // Diubah menjadi 60 detik (1 menit) untuk meringankan query riwayat ujian
+        timeoutId = setTimeout(loopFetch, 60000);
       }
     };
     loopFetch();

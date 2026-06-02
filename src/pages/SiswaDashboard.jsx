@@ -146,15 +146,19 @@ const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp, timeRef }) => {
 
     // Timer HANYA boleh bereaksi JIKA sudah pernah berjalan normal
     if (hasStarted.current) {
-      // Bisikkan waktu ke server setiap 15 detik (menghindari spam server)
-      if (timeLeft > 0 && timeLeft % 15 === 0 && timeLeft !== initialTime) {
+      // Auto-save waktu ke server setiap 60 detik (menghemat 75% request)
+      if (timeLeft > 0 && timeLeft % 60 === 0 && timeLeft !== initialTime) {
         onTick(timeLeft);
       }
 
       // Jika waktu benar-benar habis dari hitungan mundur normal
       if (timeLeft <= 0) {
-        hasStarted.current = false; // Kunci agar tidak terpanggil berkali-kali
-        onTimeUp();
+        hasStarted.current = false; // Kunci agar timer berhenti
+        const randomDelay = Math.floor(Math.random() * 7000);
+
+        setTimeout(() => {
+          onTimeUp();
+        }, randomDelay);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -442,7 +446,8 @@ const SiswaDashboard = () => {
     };
 
     fetchData(false);
-    const intervalId = setInterval(() => fetchData(true), 30000);
+    // Diubah menjadi 5 menit (300000 ms) agar hemat kuota request
+    const intervalId = setInterval(() => fetchData(true), 300000);
     return () => clearInterval(intervalId);
   }, [user, userKelasFull, userTingkat, userJurusan, userTingkatJurusan]);
 
@@ -577,8 +582,9 @@ const SiswaDashboard = () => {
   // 3. POLLING BUKA KUNCI DARI GURU
   useEffect(() => {
     if (!activeExam || !isLocked) return;
+    // Diubah menjadi 15 detik untuk siswa yang sedang terkunci
     const interval = setInterval(async () => {
-      const username = getVal(user, "Username"); // <-- MURNI PAKAI USERNAME
+      const username = getVal(user, "Username");
       const examId = getVal(activeExam, "ID");
       try {
         const sesi = await api.getSesi(username, examId);
@@ -1251,7 +1257,8 @@ const SiswaDashboard = () => {
                                 clearTimeout(saveTimeoutRef.current);
                               }
 
-                              // 3. Pasang timer: Tunggu 2 detik, kalau siswa tidak ganti jawaban lagi, baru kirim ke server
+                              // 3. Jeda diubah menjadi 5 detik. Perubahan di layar tetap instan,
+                              // tapi pengiriman ke server ditunda agar bisa ditimpa jika siswa berubah pikiran.
                               saveTimeoutRef.current = setTimeout(() => {
                                 api.saveSesi(
                                   getVal(user, "Username"),
@@ -1261,7 +1268,7 @@ const SiswaDashboard = () => {
                                   pelanggaranRef.current,
                                   isLockedRef.current ? "LOCKED" : "ACTIVE",
                                 );
-                              }, 2000);
+                              }, 5000);
                             }}
                             className={`w-full text-left px-5 py-4 md:px-6 md:py-5 rounded-[1.5rem] border-2 transition-all flex items-start gap-4 md:gap-5 group relative overflow-hidden outline-none ${
                               isSelected
