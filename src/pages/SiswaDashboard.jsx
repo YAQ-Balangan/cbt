@@ -915,7 +915,7 @@ const SiswaDashboard = () => {
       // ==========================================
       setTimeout(() => {
         window.location.reload();
-      }, 3000); // 3000 milidetik = 3 detik
+      }, 5000); // 5000 milidetik = 5 detik
       // ==========================================
 
       try {
