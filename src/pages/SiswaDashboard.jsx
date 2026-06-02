@@ -879,67 +879,58 @@ const SiswaDashboard = () => {
         detail_jawaban: JSON.stringify(detailJawabanArray),
       };
 
-      // 1. Simpan nilai ke Supabase
+      // STEP 1: Kirim nilai ke Supabase (Ini yang paling wajib sukses)
       await api.create("Nilai", dataNilai);
 
-      // 2. Hapus sesi (Dibungkus try-catch pisah)
-      try {
-        await api.deleteSesi(
+      // STEP 2: LANGSUNG AMANKAN UI SISWA (Jangan tunggu API lain selesai!)
+      // Pindahkan siswa ke halaman nilai secara instan agar tidak hang/beku
+      setIsSubmitting(false);
+      setActiveExam(null);
+      setAnswers({});
+      setRaguRagu({});
+      setCurrentSoalIndex(0);
+      setIsMobileDrawerOpen(false);
+      setActiveTab("nilai");
+
+      // Masukkan nilai yang baru dihitung secara lokal ke state hasil ujian siswa
+      // Jadi browser TIDAK PERLU request tarik data (GET) lagi ke server Supabase! Sangat hemat kuota!
+      setMyResults((prevResults) => [dataNilai, ...(prevResults || [])]);
+
+      // STEP 3: Hapus sesi di latar belakang (TANPA KATA 'AWAIT')
+      // Biarkan browser memproses ini di background agar siswa tidak perlu menunggu jalannya jaringan ini
+      api
+        .deleteSesi(
           getVal(user, "Username"),
           getVal(activeExamRef.current, "ID"),
+        )
+        .catch((errSesi) =>
+          console.warn("Sesi dihapus di background dengan catatan:", errSesi),
         );
-      } catch (errSesi) {
-        console.warn("Sesi gagal dihapus, tapi nilai sudah aman:", errSesi);
-      }
 
-      // 3. Matikan state loading
-      setIsSubmitting(false);
-
-      // 4. Keluar dari Mode Fullscreen
+      // STEP 4: Keluar dari Fullscreen
       try {
-        if (
-          document.fullscreenElement ||
-          document.webkitFullscreenElement ||
-          document.msFullscreenElement
-        ) {
-          if (document.exitFullscreen) {
-            document.exitFullscreen().catch((err) => console.log(err));
-          } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-          } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-          }
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          if (document.exitFullscreen)
+            document.exitFullscreen().catch(() => {});
         }
-      } catch (error) {
-        console.warn("Gagal keluar dari fullscreen.");
-      }
+      } catch (e) {}
 
-      // 5. Tampilkan Notifikasi dengan Info Auto-Refresh
+      // STEP 5: Tampilkan alert sukses biasa (Tanpa reload halaman)
       if (forcedStatus === "Diskualifikasi") {
-        showAlert(
-          "danger",
-          "Diskualifikasi!",
-          "Ujian dihentikan paksa. Memuat ulang sistem...",
-        );
+        showAlert("danger", "Diskualifikasi!", "Ujian Anda dihentikan paksa.");
       } else if (isForced) {
         showAlert(
           "info",
           "Waktu Habis!",
-          "Waktu habis dan jawaban disimpan. Memuat ulang sistem...",
+          "Waktu ujian habis, nilai Anda telah aman disimpan.",
         );
       } else {
         showAlert(
           "success",
           "Ujian Selesai",
-          "Nilai berhasil disimpan! Layar akan dimuat ulang untuk menampilkan hasil...",
+          "Berhasil dikumpulkan! Nilai Anda sudah keluar di bawah.",
         );
       }
-
-      // 6. KUNCI JAWABANNYA DI SINI: Auto-Refresh Paksa Setelah 2 Detik
-      // Ini akan membersihkan semua state ujian yang nyangkut dan memunculkan tab nilai dengan segar!
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
     } catch (err) {
       showAlert(
         "danger",
@@ -948,7 +939,7 @@ const SiswaDashboard = () => {
       );
       setIsSubmitting(false);
     }
-  }; // <-- Akhir dari fungsi executeEndExam
+  }; // Akhir fungsi
 
   const handleEndExamClick = (isForced = false) => {
     if (isSubmittingRef.current) return;
