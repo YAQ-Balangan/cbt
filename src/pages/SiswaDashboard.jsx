@@ -910,6 +910,14 @@ const SiswaDashboard = () => {
       setIsMobileDrawerOpen(false);
       setActiveTab("nilai");
 
+      // ==========================================
+      // [KODE BARU] AUTO REFRESH SETELAH 3 DETIK
+      // ==========================================
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000); // 3000 milidetik = 3 detik
+      // ==========================================
+
       try {
         if (
           document.fullscreenElement ||
@@ -932,19 +940,19 @@ const SiswaDashboard = () => {
         showAlert(
           "danger",
           "Diskualifikasi!",
-          "Ujian Anda dihentikan paksa karena telah keluar dari halaman ujian berulang kali.",
+          "Ujian Anda dihentikan paksa karena telah keluar dari halaman ujian berulang kali. Halaman akan dimuat ulang...",
         );
       } else if (isForced) {
         showAlert(
           "info",
           "Waktu Habis!",
-          "Waktu ujian Anda telah habis dan jawaban berhasil disimpan.",
+          "Waktu ujian Anda telah habis dan jawaban berhasil disimpan. Halaman akan dimuat ulang dalam 3 detik...",
         );
       } else {
         showAlert(
           "success",
           "Ujian Selesai",
-          "Berhasil disubmit! Silakan periksa nilai Anda.",
+          "Berhasil disubmit! Silahkan periksa halaman nilai Anda.",
         );
       }
     } catch (err) {
