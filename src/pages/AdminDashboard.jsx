@@ -1024,7 +1024,7 @@ const AdminDashboard = () => {
       },
     );
   };
-  // FITUR: Toggle Hapus Semua Soal
+  // Satu izin untuk menghapus semua soal maupun nilai.
   const deleteAllSetting = allData.settings.find(
     (item) => item.kunci === "Hapus_Semua_Soal",
   );
@@ -1034,8 +1034,8 @@ const AdminDashboard = () => {
   const handleToggleDeleteAll = async () => {
     showAlert(
       "confirm",
-      "Ubah Izin Hapus Soal?",
-      `Yakin ingin ${isDeleteAllOn ? "MEMATIKAN" : "MENGHIDUPKAN"} izin guru untuk menghapus semua soal sekaligus?`,
+      "Ubah Izin Hapus Semua?",
+      `Yakin ingin ${isDeleteAllOn ? "MEMATIKAN" : "MENGHIDUPKAN"} izin guru untuk menghapus semua soal dan nilai sekaligus?`,
       async () => {
         closeAlert();
         setIsSyncing(true);
@@ -1055,7 +1055,7 @@ const AdminDashboard = () => {
           showAlert(
             "success",
             "Berhasil!",
-            `Fitur Hapus Semua Soal ${isDeleteAllOn ? "NONAKTIF" : "AKTIF"}.`,
+            `Fitur Hapus Semua Soal dan Nilai ${isDeleteAllOn ? "NONAKTIF" : "AKTIF"}.`,
           );
         } catch (e) {
           showAlert("danger", "Gagal", e.message);
@@ -1351,9 +1351,12 @@ const AdminDashboard = () => {
                 <button
                   onClick={handleToggleDeleteAll}
                   className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${!isDeleteAllOn ? "bg-slate-100 text-slate-500 border-slate-300" : "bg-rose-50 text-rose-600 border-rose-200"}`}
+                  title="Mengatur izin Hapus Semua Soal dan Nilai"
                 >
                   <Trash2 size={18} />{" "}
-                  {isDeleteAllOn ? "Kunci Tombol Hapus" : "Buka Tombol Hapus"}
+                  {isDeleteAllOn
+                    ? "Kunci Hapus Semua Soal & Nilai"
+                    : "Buka Hapus Semua Soal & Nilai"}
                 </button>
               </div>
             )}

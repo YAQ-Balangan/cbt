@@ -757,10 +757,22 @@ const GuruDashboard = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [nilaiEditItem, setNilaiEditItem] = useState(null);
+  const [nilaiEditForm, setNilaiEditForm] = useState({});
+  const [isSavingNilai, setIsSavingNilai] = useState(false);
+  const nilaiLoadedRef = useRef(false);
+  const nilaiMarkerRef = useRef(null);
+  const nilaiMarkerInitializedRef = useRef(false);
+  const activeTabRef = useRef(tab);
+  const isMonitoringRefreshRef = useRef(false);
+  const isNilaiRefreshRef = useRef(false);
+  const refreshNilaiDataRef = useRef(null);
+  const nilaiRealtimeTimeoutRef = useRef(null);
 
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({});
   const [selectedIds, setSelectedIds] = useState([]);
+  const [logPage, setLogPage] = useState(1);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({});
@@ -802,6 +814,22 @@ const GuruDashboard = () => {
 
   // VIEW MODE: "rekap" | "log" | "pelanggaran"
   const [nilaiViewMode, setNilaiViewMode] = useState("rekap");
+
+  const changeTab = (nextTab) => {
+    setSearch("");
+    setFilters({});
+    setSelectedIds([]);
+    setLogPage(1);
+    setTab(nextTab);
+  };
+  const changeNilaiViewMode = (nextMode) => {
+    setSelectedIds([]);
+    setLogPage(1);
+    if (nextMode === "log") {
+      setFilters((prev) => ({ ...prev, mapel: "" }));
+    }
+    setNilaiViewMode(nextMode);
+  };
 
   const showAlert = (type, title, message, onConfirm = null) => {
     setCustomAlert({ isOpen: true, type, title, message, onConfirm });
@@ -988,30 +1016,39 @@ const GuruDashboard = () => {
     }
   };
 
-  // 2. TARIK SEMUA TAB SEKALIGUS SAAT LOGIN
+  // 2. Muat bank soal dan status ujian saat dashboard dibuka.
   const fetchAllData = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
     if (isBackground) setIsSyncing(true);
 
     try {
-      const [resSoal, resNilai, lockedRes, resSettings] = await Promise.all([
+      const [resSoal, lockedRes, resSettings] = await Promise.all([
         api.read(TAB_CONFIG.soal.sheet),
-        api.read(TAB_CONFIG.nilai.sheet),
-        api.getSesiTerkunci().catch(() => []),
-        api.read("Settings").catch(() => []),
+        api.getSesiTerkunci().catch((error) => {
+          console.error("Gagal menarik status siswa terkunci:", error);
+          return null;
+        }),
+        api.read("Settings").catch((error) => {
+          console.error("Gagal menarik pengaturan dashboard:", error);
+          return [];
+        }),
       ]);
 
       setAllData((prev) => {
         const newData = {
+          ...prev,
           soal: resSoal || [],
-          nilai: resNilai || [],
           settings: resSettings || [],
         };
-        return JSON.stringify(prev) !== JSON.stringify(newData)
-          ? newData
-          : prev;
+        return newData;
       });
-      setSesiUjianData(lockedRes || []);
+      if (lockedRes) {
+        setSesiUjianData((prev) =>
+          JSON.stringify(prev) === JSON.stringify(lockedRes)
+            ? prev
+            : lockedRes,
+        );
+      }
     } catch (error) {
       console.error("Gagal menarik semua data:", error);
     } finally {
@@ -1028,11 +1065,28 @@ const GuruDashboard = () => {
     if (isBackground) setIsSyncing(true);
 
     try {
-      const result = await api.read(currentConfig.sheet);
-      setAllData((prev) => ({ ...prev, [tab]: result || [] }));
-
-      const lockedRes = await api.getSesiTerkunci().catch(() => []);
-      setSesiUjianData(lockedRes || []);
+      const targetTab = tab;
+      const [result, lockedRes, marker] = await Promise.all([
+        api.read(currentConfig.sheet),
+        api.getSesiTerkunci().catch((error) => {
+          console.error("Gagal menarik status siswa terkunci:", error);
+          return null;
+        }),
+        targetTab === "nilai" ? api.getNilaiChangeMarker() : null,
+      ]);
+      setAllData((prev) => ({ ...prev, [targetTab]: result || [] }));
+      if (lockedRes) {
+        setSesiUjianData((prev) =>
+          JSON.stringify(prev) === JSON.stringify(lockedRes)
+            ? prev
+            : lockedRes,
+        );
+      }
+      if (targetTab === "nilai") {
+        nilaiLoadedRef.current = true;
+        nilaiMarkerRef.current = marker;
+        nilaiMarkerInitializedRef.current = true;
+      }
     } catch (error) {
       console.error(`Gagal merefresh data ${tab}:`, error);
     } finally {
@@ -1041,58 +1095,136 @@ const GuruDashboard = () => {
     }
   };
 
-  // --- FUNGSI BARU: HANYA MENARIK NILAI & SESI (HEMAT KUOTA) ---
-  const fetchLiveMonitoring = async () => {
-    setIsSyncing(true);
-    try {
-      const [resNilai, lockedRes] = await Promise.all([
-        api.read(TAB_CONFIG.nilai.sheet),
-        api.getSesiTerkunci().catch(() => []),
-      ]);
+  const refreshNilaiData = async (isBackground = false) => {
+    if (isNilaiRefreshRef.current) return;
+    isNilaiRefreshRef.current = true;
+    if (isBackground) setIsSyncing(true);
 
-      setAllData((prev) => {
-        const newData = {
-          ...prev, // Pertahankan data soal yang sudah ada di memori
-          nilai: resNilai || [],
-        };
-        return JSON.stringify(prev) !== JSON.stringify(newData)
-          ? newData
-          : prev;
-      });
-      setSesiUjianData(lockedRes || []);
+    try {
+      const [result, marker] = await Promise.all([
+        api.read(TAB_CONFIG.nilai.sheet),
+        api.getNilaiChangeMarker(),
+      ]);
+      setAllData((prev) => ({ ...prev, nilai: result || [] }));
+      nilaiLoadedRef.current = true;
+      nilaiMarkerRef.current = marker;
+      nilaiMarkerInitializedRef.current = true;
     } catch (error) {
-      console.error("Gagal refresh live monitoring:", error);
+      console.error("Gagal memperbarui monitoring nilai:", error);
     } finally {
-      setIsSyncing(false);
+      isNilaiRefreshRef.current = false;
+      if (isBackground) setIsSyncing(false);
+    }
+  };
+  // Poll status terkunci secara ringan; muat ulang seluruh nilai hanya saat berubah.
+  const fetchLiveMonitoring = async () => {
+    if (isMonitoringRefreshRef.current) return;
+    isMonitoringRefreshRef.current = true;
+    try {
+      try {
+        const lockedRes = await api.getSesiTerkunci();
+        setSesiUjianData((prev) =>
+          JSON.stringify(prev) === JSON.stringify(lockedRes)
+            ? prev
+            : lockedRes,
+        );
+      } catch (error) {
+        console.error("Gagal memperbarui status siswa terkunci:", error);
+      }
+
+      try {
+        if (activeTabRef.current !== "nilai" || !nilaiLoadedRef.current) return;
+        const marker = await api.getNilaiChangeMarker();
+        const previousMarker = nilaiMarkerRef.current;
+        if (
+          nilaiMarkerInitializedRef.current &&
+          String(previousMarker) !== String(marker)
+        ) {
+          await refreshNilaiData(true);
+        } else if (!nilaiMarkerInitializedRef.current) {
+          nilaiMarkerRef.current = marker;
+          nilaiMarkerInitializedRef.current = true;
+        }
+      } catch (error) {
+        console.error("Gagal memeriksa perubahan nilai:", error);
+      }
+    } finally {
+      isMonitoringRefreshRef.current = false;
     }
   };
 
   // A. HANYA JALANKAN FETCH ALL SAAT PERTAMA KALI MASUK APLIKASI
   useEffect(() => {
-    fetchAllData(false);
-
     // Ambil angka total soal dari Supabase
     const fetchCount = async () => {
       const total = await api.getTotalSoal();
       setIndikatorTotalSoal(total);
     };
-    fetchCount();
-
-    const intervalId = setInterval(() => {
-      fetchLiveMonitoring();
+    const initialLoadTimeoutId = setTimeout(() => {
+      fetchAllData(false);
       fetchCount();
-    }, 30000);
+    }, 0);
 
-    return () => clearInterval(intervalId);
+    const monitorIntervalId = setInterval(() => {
+      fetchLiveMonitoring();
+    }, 10000);
+    const countIntervalId = setInterval(fetchCount, 60000);
+
+    return () => {
+      clearTimeout(initialLoadTimeoutId);
+      clearInterval(monitorIntervalId);
+      clearInterval(countIntervalId);
+    };
   }, []);
 
-  // B. SAAT PINDAH TAB/MENU: Langsung instan!
-  // Tidak ada proses fetch ulang, cukup reset kolom pencarian saja.
+  // B. Muat data nilai hanya ketika tab monitoring dibuka.
   useEffect(() => {
-    setSearch("");
-    setFilters({});
-    setSelectedIds([]);
-    fetchMapelList();
+    activeTabRef.current = tab;
+    const mapelTimeoutId = setTimeout(fetchMapelList, 0);
+    if (tab === "nilai") {
+      const loadTimeoutId = setTimeout(() => fetchData(false), 0);
+      return () => {
+        clearTimeout(mapelTimeoutId);
+        clearTimeout(loadTimeoutId);
+      };
+    }
+    return () => clearTimeout(mapelTimeoutId);
+  }, [tab]);
+
+  useEffect(() => {
+    refreshNilaiDataRef.current = refreshNilaiData;
+  });
+
+  useEffect(() => {
+    if (tab !== "nilai") return undefined;
+
+    const channel = api.subscribeToChanges(
+      "Nilai",
+      () => {
+        if (nilaiRealtimeTimeoutRef.current) {
+          clearTimeout(nilaiRealtimeTimeoutRef.current);
+        }
+        nilaiRealtimeTimeoutRef.current = setTimeout(() => {
+          refreshNilaiDataRef.current?.(true);
+        }, 400);
+      },
+      (status, error) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error(
+            "Realtime monitoring nilai tidak tersedia:",
+            error || status,
+          );
+        }
+      },
+    );
+
+    return () => {
+      if (nilaiRealtimeTimeoutRef.current) {
+        clearTimeout(nilaiRealtimeTimeoutRef.current);
+        nilaiRealtimeTimeoutRef.current = null;
+      }
+      channel.unsubscribe();
+    };
   }, [tab]);
 
   // ==============================================================
@@ -1196,7 +1328,9 @@ const GuruDashboard = () => {
           if (res && res.error)
             throw new Error(res.error.message || JSON.stringify(res.error));
 
-          if (itemToDelete) pushAction({ type: "DELETE", item: itemToDelete });
+          if (itemToDelete && tab === "soal") {
+            pushAction({ type: "DELETE", item: itemToDelete });
+          }
           await fetchData(false);
           setSelectedIds((prev) =>
             prev.filter((selId) => String(selId) !== String(id)),
@@ -1210,19 +1344,113 @@ const GuruDashboard = () => {
     );
   };
 
+  const openEditNilai = (item) => {
+    setNilaiEditItem(item);
+    setNilaiEditForm({
+      nama_siswa: String(item.nama_siswa ?? ""),
+      kelas: String(item.kelas ?? ""),
+      mapel: String(item.mapel ?? ""),
+      benar: String(item.benar ?? ""),
+      salah: String(item.salah ?? ""),
+      skor: String(item.skor ?? ""),
+      status: String(item.status ?? ""),
+    });
+  };
+
+  const handleSaveNilai = async (e) => {
+    e.preventDefault();
+    if (!nilaiEditItem) return;
+
+    const skor = Number(String(nilaiEditForm.skor).replace(",", "."));
+    const benar = Number(nilaiEditForm.benar);
+    const salah = Number(nilaiEditForm.salah);
+    if (
+      !nilaiEditForm.nama_siswa.trim() ||
+      !nilaiEditForm.kelas.trim() ||
+      !nilaiEditForm.mapel.trim() ||
+      !nilaiEditForm.status.trim() ||
+      !String(nilaiEditForm.skor).trim() ||
+      !String(nilaiEditForm.benar).trim() ||
+      !String(nilaiEditForm.salah).trim() ||
+      !Number.isFinite(skor) ||
+      skor < 0 ||
+      skor > 100 ||
+      !Number.isInteger(benar) ||
+      benar < 0 ||
+      !Number.isInteger(salah) ||
+      salah < 0
+    ) {
+      showAlert(
+        "warning",
+        "Periksa Data Nilai",
+        "Semua kolom wajib diisi. Nilai harus 0-100; jumlah benar dan salah harus bilangan bulat minimal 0.",
+      );
+      return;
+    }
+
+    const payload = {
+      nama_siswa: nilaiEditForm.nama_siswa.trim(),
+      kelas: nilaiEditForm.kelas.trim(),
+      mapel: nilaiEditForm.mapel.trim(),
+      benar,
+      salah,
+      skor,
+      status: nilaiEditForm.status.trim(),
+    };
+
+    setIsSavingNilai(true);
+    try {
+      const updatedRows = await api.update("Nilai", nilaiEditItem.id, payload);
+      if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+        throw new Error(
+          "Data nilai tidak ditemukan atau tidak dapat diperbarui.",
+        );
+      }
+
+      await fetchData(false);
+      setNilaiEditItem(null);
+      showAlert(
+        "success",
+        "Nilai Diperbarui",
+        "Perubahan nilai berhasil disimpan.",
+      );
+    } catch (error) {
+      showAlert("danger", "Gagal Menyimpan Nilai", error.message);
+    } finally {
+      setIsSavingNilai(false);
+    }
+  };
+
   const handleBulkDelete = () => {
+    const itemsToDelete = data.filter((item) =>
+      selectedIds.some((id) => String(id) === String(item.id)),
+    );
+    if (itemsToDelete.length === 0) {
+      setSelectedIds([]);
+      return showAlert(
+        "warning",
+        "Belum Ada Pilihan",
+        "Pilih data yang ingin dihapus terlebih dahulu.",
+      );
+    }
+
+    const label = tab === "nilai" ? "nilai" : "soal";
     showAlert(
       "confirm",
-      "Hapus Banyak Soal?",
-      `Yakin ingin menghapus ${selectedIds.length} soal?`,
+      `Hapus ${label} Terpilih?`,
+      `Yakin ingin menghapus ${itemsToDelete.length} ${label} yang ditandai?`,
       async () => {
         closeAlert();
         setIsDeletingBulk(true);
         setLoading(true);
         try {
-          const itemsToDelete = data.filter((d) => selectedIds.includes(d.id));
-          await api.deleteBulk(currentConfig.sheet, selectedIds);
-          pushAction({ type: "BULK_DELETE", items: itemsToDelete });
+          await api.deleteBulk(
+            currentConfig.sheet,
+            itemsToDelete.map((item) => item.id),
+          );
+          if (tab === "soal") {
+            pushAction({ type: "BULK_DELETE", items: itemsToDelete });
+          }
           await fetchData(false);
           setSelectedIds([]);
         } catch (error) {
@@ -1236,27 +1464,42 @@ const GuruDashboard = () => {
   };
 
   const handleDeleteAll = () => {
-    if (processedData.length === 0)
+    if (!isDeleteAllAllowed) {
+      return showAlert(
+        "warning",
+        "Hapus Semua Dikunci",
+        "Izin Hapus Semua Soal dan Nilai sedang dikunci oleh Admin.",
+      );
+    }
+
+    const itemsToDelete = tab === "nilai" ? data : processedData;
+    if (itemsToDelete.length === 0)
       return showAlert("warning", "Kosong", "Tidak ada data untuk dihapus.");
+    const label = tab === "nilai" ? "nilai" : "soal";
     showAlert(
       "danger",
-      "Hapus Bersih Database?",
-      "Anda akan menghapus SELURUH soal yang tampil di tabel ini secara permanen. Lanjutkan?",
+      `Hapus Semua ${tab === "nilai" ? "Nilai" : "Soal"}?`,
+      tab === "nilai"
+        ? `Tindakan ini menghapus seluruh ${itemsToDelete.length} data nilai, termasuk yang tidak sedang terlihat karena filter. Data ini tidak dapat dipulihkan. Lanjutkan?`
+        : "Anda akan menghapus SELURUH soal yang tampil di tabel ini secara permanen. Lanjutkan?",
       async () => {
         closeAlert();
         setLoading(true);
         setIsDeletingBulk(true);
         try {
-          const itemsToDelete = [...processedData];
-          const allVisibleIds = processedData.map((item) => item.id);
-          await api.deleteBulk(currentConfig.sheet, allVisibleIds);
-          pushAction({ type: "BULK_DELETE", items: itemsToDelete });
+          await api.deleteBulk(
+            currentConfig.sheet,
+            itemsToDelete.map((item) => item.id),
+          );
+          if (tab === "soal") {
+            pushAction({ type: "BULK_DELETE", items: itemsToDelete });
+          }
           await fetchData(false);
           setSelectedIds([]);
           showAlert(
             "info",
             "Berhasil",
-            "Seluruh data yang dipilih telah dihapus.",
+            `Seluruh ${label} berhasil dihapus.`,
           );
         } catch (error) {
           showAlert("danger", "Kesalahan", error.message);
@@ -2019,6 +2262,47 @@ Patuhi aturan berikut secara ketat:
     return result;
   }, [data, search, filters]);
 
+  const logMapelOptions = [
+    ...new Set(data.map((item) => item.mapel).filter(Boolean)),
+  ].sort((a, b) => String(a).localeCompare(String(b), "id"));
+  const logPageCount = logMapelOptions.length;
+  const currentLogPage = Math.min(Math.max(logPage, 1), logPageCount || 1);
+  const currentLogMapel = logMapelOptions[currentLogPage - 1] || "";
+  const logPageData = currentLogMapel
+    ? processedData.filter(
+        (item) =>
+          String(item.mapel).toLowerCase() ===
+          String(currentLogMapel).toLowerCase(),
+      )
+    : [];
+  const isLogPageSelected =
+    logPageData.length > 0 &&
+    logPageData.every((item) =>
+      selectedIds.some((id) => String(id) === String(item.id)),
+    );
+
+  const handleSelectLogPage = () => {
+    if (isLogPageSelected) {
+      setSelectedIds((prev) =>
+        prev.filter(
+          (id) =>
+            !logPageData.some((item) => String(item.id) === String(id)),
+        ),
+      );
+      return;
+    }
+
+    setSelectedIds((prev) => {
+      const selected = [...prev];
+      logPageData.forEach((item) => {
+        if (!selected.some((id) => String(id) === String(item.id))) {
+          selected.push(item.id);
+        }
+      });
+      return selected;
+    });
+  };
+
   // VARIABEL DATA Anti-Curang
   const lockedSessions = sesiUjianData.filter((s) => s.status === "LOCKED");
   const disqualifiedSessions = processedData.filter(
@@ -2027,14 +2311,36 @@ Patuhi aturan berikut secara ketat:
   );
 
   const isAllSelected =
-    processedData.length > 0 && selectedIds.length === processedData.length;
+    processedData.length > 0 &&
+    processedData.every((item) =>
+      selectedIds.some((id) => String(id) === String(item.id)),
+    );
   const handleSelectAll = () => {
-    if (isAllSelected) setSelectedIds([]);
-    else setSelectedIds(processedData.map((item) => item.id));
+    if (isAllSelected) {
+      setSelectedIds((prev) =>
+        prev.filter(
+          (id) =>
+            !processedData.some((item) => String(item.id) === String(id)),
+        ),
+      );
+      return;
+    }
+
+    setSelectedIds((prev) => {
+      const selected = [...prev];
+      processedData.forEach((item) => {
+        if (!selected.some((id) => String(id) === String(item.id))) {
+          selected.push(item.id);
+        }
+      });
+      return selected;
+    });
   };
   const toggleSelect = (id) =>
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+      prev.some((selectedId) => String(selectedId) === String(id))
+        ? prev.filter((selectedId) => String(selectedId) !== String(id))
+        : [...prev, id],
     );
 
   const renderBankSoal = () => {
@@ -2208,8 +2514,9 @@ Patuhi aturan berikut secara ketat:
     const dateStr = `${dateObj.getDate()}-${dateObj.getMonth() + 1}-${dateObj.getFullYear()}`;
 
     // Hilangkan spasi pada nama mapel & kelas untuk nama file yang rapi
-    const mapelStr = filters.mapel
-      ? filters.mapel.replace(/\s+/g, "_")
+    const exportMapel = isLogMode ? currentLogMapel : filters.mapel;
+    const mapelStr = exportMapel
+      ? exportMapel.replace(/\s+/g, "_")
       : "SemuaMapel";
     const kelasStr = filters.kelas
       ? filters.kelas.replace(/\s+/g, "_")
@@ -2224,13 +2531,13 @@ Patuhi aturan berikut secara ketat:
     // ==========================================
     if (tab === "nilai") {
       if (isLogMode) {
-        if (processedData.length === 0)
+        if (logPageData.length === 0)
           return showAlert(
             "warning",
             "Kosong",
-            "Tidak ada log ujian untuk dicetak!",
+            `Tidak ada log ujian untuk mapel ${currentLogMapel || "ini"}.`,
           );
-        dataToExport = processedData;
+        dataToExport = logPageData;
       } else {
         if (pivotNilaiData.data.length === 0)
           return showAlert(
@@ -2302,7 +2609,7 @@ Patuhi aturan berikut secara ketat:
         : "REKAPITULASI BUKU NILAI SISWA";
 
       // Subtitle Print juga dibuat dinamis mengikuti filter!
-      const subtitle = `Mapel: ${filters.mapel || "Semua"} | Kelas: ${filters.kelas || "Semua"} | Total Data: ${dataToExport.length} | Waktu Cetak: ${new Date().toLocaleString("id-ID")}`;
+      const subtitle = `Mapel: ${exportMapel || "Semua"} | Kelas: ${filters.kelas || "Semua"} | Total Data: ${dataToExport.length} | Waktu Cetak: ${new Date().toLocaleString("id-ID")}`;
 
       let tableHtml = `<table border="1" style="width:100%; border-collapse: collapse; text-align: center; margin-top: 15px; font-size: 10pt;">`;
       if (isLogMode) {
@@ -2476,7 +2783,7 @@ Patuhi aturan berikut secara ketat:
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: `Kelas: ${filters.kelas || "Semua"} | Mapel: ${filters.mapel || "Semua"} | Tanggal: ${dateStr}`,
+                      text: `Kelas: ${filters.kelas || "Semua"} | Mapel: ${exportMapel || "Semua"} | Tanggal: ${dateStr}`,
                       size: 20,
                     }),
                   ],
@@ -2507,7 +2814,7 @@ Patuhi aturan berikut secara ketat:
     "OFF";
 
   return (
-    <Dashboard menu={MENU_ITEMS} active={tab} setActive={setTab}>
+    <Dashboard menu={MENU_ITEMS} active={tab} setActive={changeTab}>
       <div className="space-y-6 max-w-7xl mx-auto pb-24 relative">
         {/* CSS animasi background dihapus agar ringan */}
         {/* ============================================================== */}
@@ -2529,8 +2836,8 @@ Patuhi aturan berikut secara ketat:
               </div>
               <button
                 onClick={() => {
-                  setTab("nilai");
-                  setNilaiViewMode("pelanggaran");
+                  changeTab("nilai");
+                  changeNilaiViewMode("pelanggaran");
                   window.scrollTo(0, 0);
                 }}
                 className="shrink-0 bg-white text-red-600 px-3 py-2 md:px-4 md:py-2.5 rounded-xl font-bold text-xs md:text-sm hover:scale-105 active:scale-95 transition-all shadow-sm border border-red-100"
@@ -2615,7 +2922,7 @@ Patuhi aturan berikut secara ketat:
               </button>
               <button
                 onClick={() => {
-                  setTab("soal");
+                  changeTab("soal");
                   openAddModal();
                 }}
                 className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
@@ -2644,7 +2951,7 @@ Patuhi aturan berikut secara ketat:
               </button>
               <button
                 onClick={() => {
-                  setTab("soal");
+                  changeTab("soal");
                   setIsBulkOpen(true);
                 }}
                 className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
@@ -2660,7 +2967,7 @@ Patuhi aturan berikut secara ketat:
               </button>
               <button
                 onClick={() => {
-                  setTab("soal");
+                  changeTab("soal");
                   setTimeout(
                     () => window.scrollTo({ top: 600, behavior: "smooth" }),
                     100,
@@ -2680,8 +2987,8 @@ Patuhi aturan berikut secara ketat:
 
               <button
                 onClick={() => {
-                  setTab("nilai");
-                  setNilaiViewMode("rekap");
+                  changeTab("nilai");
+                  changeNilaiViewMode("rekap");
                   setTimeout(
                     () => window.scrollTo({ top: 600, behavior: "smooth" }),
                     100,
@@ -2701,8 +3008,8 @@ Patuhi aturan berikut secara ketat:
 
               <button
                 onClick={() => {
-                  setTab("nilai");
-                  setNilaiViewMode("log");
+                  changeTab("nilai");
+                  changeNilaiViewMode("log");
                   setTimeout(
                     () => window.scrollTo({ top: 600, behavior: "smooth" }),
                     100,
@@ -2722,8 +3029,8 @@ Patuhi aturan berikut secara ketat:
 
               <button
                 onClick={() => {
-                  setTab("nilai");
-                  setNilaiViewMode("pelanggaran");
+                  changeTab("nilai");
+                  changeNilaiViewMode("pelanggaran");
                   setTimeout(
                     () => window.scrollTo({ top: 600, behavior: "smooth" }),
                     100,
@@ -2793,6 +3100,7 @@ Patuhi aturan berikut secara ketat:
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
+                    setLogPage(1);
                     if (tab === "soal") setSoalViewMode("list");
                   }}
                 />
@@ -2856,7 +3164,7 @@ Patuhi aturan berikut secara ketat:
                       <Trash2 size={16} />{" "}
                       {isDeleteAllAllowed
                         ? "Hapus Semua Soal"
-                        : "Hapus Terkunci"}
+                        : "Hapus Semua Dikunci"}
                     </button>
                   </div>
                 )}
@@ -2990,19 +3298,19 @@ Patuhi aturan berikut secara ketat:
             {/* DI HP DISEMBUNYIKAN KARENA SUDAH ADA DI GRID M-BANKING */}
             <div className="hidden md:flex flex-col md:flex-row items-center w-full md:w-max p-1.5 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm mx-auto md:mx-0 gap-1 md:gap-0">
               <button
-                onClick={() => setNilaiViewMode("rekap")}
+                onClick={() => changeNilaiViewMode("rekap")}
                 className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "rekap" ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100" : "text-slate-500 hover:text-slate-800"}`}
               >
                 <TableProperties size={16} /> Nilai Siswa
               </button>
               <button
-                onClick={() => setNilaiViewMode("log")}
+                onClick={() => changeNilaiViewMode("log")}
                 className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "log" ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
               >
                 <LayoutList size={16} /> Log Riwayat
               </button>
               <button
-                onClick={() => setNilaiViewMode("pelanggaran")}
+                onClick={() => changeNilaiViewMode("pelanggaran")}
                 className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "pelanggaran" ? "bg-red-500 text-white shadow-sm" : "text-red-500 hover:bg-red-50"}`}
               >
                 <ShieldAlert size={16} /> Control Anti-Curang
@@ -3114,7 +3422,7 @@ Patuhi aturan berikut secara ketat:
                       <Trash2 size={16} />{" "}
                       {isDeleteAllAllowed
                         ? "Hapus Semua Soal"
-                        : "Hapus Terkunci"}
+                        : "Hapus Semua Dikunci"}
                     </button>
                   </div>
                 )}
@@ -3127,6 +3435,7 @@ Patuhi aturan berikut secara ketat:
                     value={search}
                     onChange={(e) => {
                       setSearch(e.target.value);
+                      setLogPage(1);
                       if (tab === "soal") setSoalViewMode("list");
                     }}
                   />
@@ -3135,12 +3444,20 @@ Patuhi aturan berikut secara ketat:
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto min-w-0">
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-2 w-full md:w-auto min-w-0">
                     {currentConfig.filterKeys.map((key) => {
+                      if (
+                        tab === "nilai" &&
+                        nilaiViewMode === "log" &&
+                        key === "mapel"
+                      ) {
+                        return null;
+                      }
                       return (
                         <div key={key} className="w-full md:w-40">
                           <PremiumSelect
                             value={filters[key] || ""}
                             onChange={(val) => {
                               setFilters({ ...filters, [key]: val });
+                              setLogPage(1);
                               if (tab === "soal") setSoalViewMode("list");
                             }}
                             options={[
@@ -3156,6 +3473,31 @@ Patuhi aturan berikut secara ketat:
                       );
                     })}
                   </div>
+                  {tab === "nilai" &&
+                    nilaiViewMode === "log" &&
+                    data.length > 0 && (
+                      <button
+                        onClick={handleDeleteAll}
+                        disabled={
+                          isDeletingBulk || loading || !isDeleteAllAllowed
+                        }
+                        className={`w-full md:w-auto flex justify-center items-center gap-2 px-4 py-3 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 ${
+                          isDeleteAllAllowed
+                            ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                            : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+                        }`}
+                        title={
+                          isDeleteAllAllowed
+                            ? "Menghapus semua data nilai, termasuk yang tersembunyi oleh filter"
+                            : "Izin Hapus Semua dikunci oleh Admin"
+                        }
+                      >
+                        <Trash2 size={16} />{" "}
+                        {isDeleteAllAllowed
+                          ? "Hapus Semua Nilai"
+                          : "Hapus Semua Dikunci"}
+                      </button>
+                    )}
                   <button
                     onClick={() => fetchData(false)}
                     className="w-full md:w-auto flex justify-center items-center gap-2 p-3 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shrink-0 shadow-sm"
@@ -3175,7 +3517,8 @@ Patuhi aturan berikut secara ketat:
           </div>
         )}
         {/* PANEL AKSI MELAYANG (FLOATING BULK DELETE) */}
-        {selectedIds.length > 0 && tab === "soal" && (
+        {selectedIds.length > 0 &&
+          (tab === "soal" || (tab === "nilai" && nilaiViewMode === "log")) && (
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[50] w-max max-w-lg shadow-2xl shadow-red-500/20">
             <div className="bg-slate-900 border border-slate-700 rounded-full px-4 py-3 flex items-center gap-4 text-white">
               <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-600">
@@ -3183,7 +3526,7 @@ Patuhi aturan berikut secara ketat:
                   {selectedIds.length}
                 </span>
                 <span className="text-xs font-medium text-slate-300">
-                  Soal Terpilih
+                  {tab === "nilai" ? "Nilai Terpilih" : "Soal Terpilih"}
                 </span>
               </div>
               <div className="w-px h-6 bg-slate-700"></div>
@@ -3637,9 +3980,42 @@ Patuhi aturan berikut secara ketat:
             {/* VIEW LOG RIWAYAT */}
             {nilaiViewMode === "log" && (
               <>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+                  <p className="text-xs font-semibold text-slate-500">
+                    Mapel:{" "}
+                    <span className="text-slate-700">
+                      {currentLogMapel || "Tidak ada mapel"}
+                    </span>
+                    <span className="mx-2 text-slate-300">|</span>
+                    {logPageData.length} log
+                  </p>
+                  {logPageCount > 1 && (
+                    <div className="flex items-center justify-between sm:justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setLogPage(currentLogPage - 1)}
+                        disabled={currentLogPage === 1}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Sebelumnya
+                      </button>
+                      <span className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                        Mapel {currentLogPage} / {logPageCount}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLogPage(currentLogPage + 1)}
+                        disabled={currentLogPage === logPageCount}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Berikutnya
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <Card className="hidden md:block overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
                   <div className="overflow-auto max-h-[65vh] w-full relative scrollbar-thin">
-                    {processedData.length === 0 ? (
+                    {logPageData.length === 0 ? (
                       <div className="py-20 text-center text-slate-400 font-semibold text-lg">
                         Tidak ada log ujian terekam.
                       </div>
@@ -3658,12 +4034,12 @@ Patuhi aturan berikut secara ketat:
                                     position: "sticky",
                                     left: 0,
                                     zIndex: 30,
-                                    minWidth: "80px",
+                                    minWidth: "100px",
                                   }
                                 : isName
                                   ? {
                                       position: "sticky",
-                                      left: "80px",
+                                      left: "100px",
                                       zIndex: 30,
                                       minWidth: "220px",
                                     }
@@ -3674,7 +4050,20 @@ Patuhi aturan berikut secara ketat:
                                   style={stickyStyle}
                                   className={`px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider ${isID || isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}
                                 >
-                                  {col.label}
+                                  {col.key === "id" ? (
+                                    <label className="flex items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={isLogPageSelected}
+                                        onChange={handleSelectLogPage}
+                                        aria-label="Tandai semua log di halaman ini"
+                                        className="accent-emerald-600"
+                                      />
+                                      {col.label}
+                                    </label>
+                                  ) : (
+                                    col.label
+                                  )}
                                 </th>
                               );
                             })}
@@ -3684,7 +4073,7 @@ Patuhi aturan berikut secara ketat:
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {processedData.map((item, i) => (
+                          {logPageData.map((item, i) => (
                             <tr
                               key={item.id || i}
                               className="hover:bg-emerald-50/40 transition-colors group bg-white"
@@ -3697,12 +4086,12 @@ Patuhi aturan berikut secara ketat:
                                       position: "sticky",
                                       left: 0,
                                       zIndex: 10,
-                                      minWidth: "80px",
+                                      minWidth: "100px",
                                     }
                                   : isName
                                     ? {
                                         position: "sticky",
-                                        left: "80px",
+                                        left: "100px",
                                         zIndex: 10,
                                         minWidth: "220px",
                                       }
@@ -3714,9 +4103,21 @@ Patuhi aturan berikut secara ketat:
                                     className={`px-6 py-4 font-semibold text-slate-700 ${isID || isName ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}
                                   >
                                     {col.key === "id" ? (
-                                      <span className="font-bold text-slate-500">
-                                        {i + 1}
-                                      </span>
+                                      <label className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedIds.some(
+                                            (id) =>
+                                              String(id) === String(item.id),
+                                          )}
+                                          onChange={() => toggleSelect(item.id)}
+                                          aria-label={`Tandai nilai ${item.nama_siswa}`}
+                                          className="accent-emerald-600"
+                                        />
+                                        <span className="font-bold text-slate-500">
+                                          {i + 1}
+                                        </span>
+                                      </label>
                                     ) : col.key === "status" ? (
                                       <Badge type={item[col.key]} />
                                     ) : col.key === "skor" ? (
@@ -3733,6 +4134,14 @@ Patuhi aturan berikut secara ketat:
                               })}
                               <td className="px-6 py-4 text-center print-hidden">
                                 <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => openEditNilai(item)}
+                                    className="p-2 bg-white border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                                    title="Edit nilai"
+                                    aria-label={`Edit nilai ${item.nama_siswa}`}
+                                  >
+                                    <Edit size={16} />
+                                  </button>
                                   <button
                                     onClick={() => openReviewModal(item)}
                                     className="p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
@@ -3758,21 +4167,49 @@ Patuhi aturan berikut secara ketat:
                 </Card>
 
                 {/* Tampilan Mobile Log */}
+                {logPageData.length > 0 && (
+                  <div className="md:hidden flex justify-end">
+                    <button
+                      onClick={handleSelectLogPage}
+                      className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600"
+                    >
+                      {isLogPageSelected ? (
+                        <CheckSquare size={15} />
+                      ) : (
+                        <Square size={15} />
+                      )}
+                      {isLogPageSelected
+                        ? "Batal Tandai Halaman"
+                        : "Tandai Semua Log Mapel Ini"}
+                    </button>
+                  </div>
+                )}
                 <div className="md:hidden flex flex-col gap-4">
-                  {processedData.length === 0 ? (
+                  {logPageData.length === 0 ? (
                     <div className="py-20 text-center text-slate-400 font-semibold text-base bg-white rounded-2xl border border-slate-200">
                       Tidak ada log ujian terekam.
                     </div>
                   ) : (
-                    processedData.map((item, i) => (
+                    logPageData.map((item, i) => (
                       <Card
                         key={item.id || i}
                         className="p-4 bg-white border border-slate-200 shadow-sm rounded-2xl"
                       >
                         <div className="flex justify-between items-start gap-3 mb-3 pb-3 border-b border-slate-100">
-                          <span className="font-black text-slate-800 text-[15px] leading-tight line-clamp-2">
-                            {item.nama_siswa}
-                          </span>
+                          <div className="flex items-start gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.some(
+                                (id) => String(id) === String(item.id),
+                              )}
+                              onChange={() => toggleSelect(item.id)}
+                              aria-label={`Tandai nilai ${item.nama_siswa}`}
+                              className="mt-1 accent-emerald-600"
+                            />
+                            <span className="font-black text-slate-800 text-[15px] leading-tight line-clamp-2">
+                              {item.nama_siswa}
+                            </span>
+                          </div>
                           <span className="font-mono font-bold text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 shrink-0">
                             No. {i + 1}
                           </span>
@@ -3808,18 +4245,24 @@ Patuhi aturan berikut secara ketat:
                             );
                           })}
                         </div>
-                        <div className="pt-3 border-t border-slate-100 flex gap-2">
+                        <div className="pt-3 border-t border-slate-100 grid grid-cols-3 gap-2">
                           <button
                             onClick={() => openReviewModal(item)}
-                            className="flex-1 py-2.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-blue-100 transition-colors"
+                            className="py-2.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-blue-100 transition-colors"
                           >
                             <Eye size={16} /> Jawaban
                           </button>
                           <button
-                            onClick={() => handleDelete(item.id)}
-                            className="w-[50px] shrink-0 py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm flex justify-center items-center hover:bg-red-100 transition-colors"
+                            onClick={() => openEditNilai(item)}
+                            className="py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl font-bold text-sm flex justify-center items-center gap-2 hover:bg-emerald-100 transition-colors"
                           >
-                            <Trash2 size={16} />
+                            <Edit size={16} /> Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm flex justify-center items-center hover:bg-red-100 transition-colors"
+                          >
+                            <Trash2 size={16} /> Hapus
                           </button>
                         </div>
                       </Card>
@@ -3975,6 +4418,87 @@ Patuhi aturan berikut secara ketat:
                 </div>
               </div>
             )}
+          </div>
+        )}
+        {nilaiEditItem && tab === "nilai" && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/80 overflow-y-auto">
+            <Card className="w-full max-w-2xl p-5 md:p-8 bg-white shadow-2xl rounded-2xl">
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">
+                    Edit Nilai Siswa
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Perubahan akan tersimpan langsung ke data monitoring.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNilaiEditItem(null)}
+                  disabled={isSavingNilai}
+                  aria-label="Tutup form edit nilai"
+                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleSaveNilai} className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[
+                    { key: "nama_siswa", label: "Nama Siswa", type: "text" },
+                    { key: "kelas", label: "Kelas", type: "text" },
+                    { key: "mapel", label: "Mata Pelajaran", type: "text" },
+                    { key: "benar", label: "Jawaban Benar", type: "number" },
+                    { key: "salah", label: "Jawaban Salah", type: "number" },
+                    { key: "skor", label: "Nilai / Poin", type: "number" },
+                    { key: "status", label: "Status", type: "text" },
+                  ].map((field) => (
+                    <label
+                      key={field.key}
+                      className="block text-xs font-bold text-slate-600 space-y-1.5"
+                    >
+                      <span>{field.label}</span>
+                      <input
+                        type={field.type}
+                        value={nilaiEditForm[field.key] ?? ""}
+                        onChange={(e) =>
+                          setNilaiEditForm((prev) => ({
+                            ...prev,
+                            [field.key]: e.target.value,
+                          }))
+                        }
+                        required
+                        min={field.type === "number" ? 0 : undefined}
+                        max={field.key === "skor" ? 100 : undefined}
+                        step={field.key === "skor" ? "any" : 1}
+                        disabled={isSavingNilai}
+                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:bg-slate-100"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setNilaiEditItem(null)}
+                    disabled={isSavingNilai}
+                    className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingNilai}
+                    className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSavingNilai && (
+                      <RefreshCw size={15} className="animate-spin" />
+                    )}
+                    Simpan Perubahan
+                  </button>
+                </div>
+              </form>
+            </Card>
           </div>
         )}
         {/* MODAL REVIEW JAWABAN SISWA (SMART PARSER) */}
@@ -4673,6 +5197,13 @@ Patuhi aturan berikut secara ketat:
 
               <div className="overflow-y-auto flex-1 scrollbar-thin pb-6 space-y-5">
                 {currentConfig.filterKeys.map((key) => {
+                  if (
+                    tab === "nilai" &&
+                    nilaiViewMode === "log" &&
+                    key === "mapel"
+                  ) {
+                    return null;
+                  }
                   return (
                     <div key={key} className="space-y-2">
                       <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 ml-1">
@@ -4682,6 +5213,7 @@ Patuhi aturan berikut secara ketat:
                         value={filters[key] || ""}
                         onChange={(val) => {
                           setFilters({ ...filters, [key]: val });
+                          setLogPage(1);
                           if (tab === "soal") setSoalViewMode("list");
                         }}
                         options={[
@@ -4702,6 +5234,7 @@ Patuhi aturan berikut secara ketat:
                 <button
                   onClick={() => {
                     setFilters({});
+                    setLogPage(1);
                     setIsMobileFilterOpen(false);
                   }}
                   className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-200"

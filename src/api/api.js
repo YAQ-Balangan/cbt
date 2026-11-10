@@ -39,6 +39,28 @@ export const api = {
         return data || [];
     },
 
+    getNilaiChangeMarker: async () => {
+        const { data, error } = await supabase
+            .from('nilai')
+            .select('id')
+            .order('id', { ascending: false })
+            .limit(1);
+
+        if (error) throw new Error(error.message);
+        return data?.[0]?.id ?? null;
+    },
+
+    subscribeToChanges: (sheet, onChange, onStatus) => {
+        return supabase
+            .channel(`monitoring-${sheet.toLowerCase()}`)
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: sheet.toLowerCase() },
+                onChange,
+            )
+            .subscribe(onStatus);
+    },
+
     // 3. CREATE (Buat Data Baru)
     create: async (sheet, payloadData) => {
         const tableName = sheet.toLowerCase();
@@ -202,7 +224,7 @@ export const api = {
     getSesiTerkunci: async () => {
         const { data, error } = await supabase
             .from('sesi_ujian')
-            .select('*')
+            .select('id_sesi, username_siswa, id_ujian, status')
             .eq('status', 'LOCKED');
 
         if (error) throw new Error(error.message);
