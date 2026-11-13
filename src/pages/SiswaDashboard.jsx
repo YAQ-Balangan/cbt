@@ -83,6 +83,16 @@ const getVal = (obj, keyName) => {
   return foundKey ? obj[foundKey] : "";
 };
 
+const getSubmitDelayRemaining = (durationSeconds, timeRemaining) => {
+  const elapsedSeconds = Math.max(0, durationSeconds - timeRemaining);
+  return Math.max(0, 40 * 60 - elapsedSeconds);
+};
+
+const formatCountdown = (seconds) =>
+  `${Math.floor(seconds / 60)
+    .toString()
+    .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+
 const formatTanggalLokal = (dateString) => {
   if (!dateString) return "Hari ini";
   try {
@@ -190,6 +200,61 @@ const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp, timeRef }) => {
   );
 });
 
+const SubmitExamButton = ({
+  isSubmitting,
+  isRestricted,
+  timeLeftRef,
+  durationSeconds,
+  onClick,
+  className,
+  label,
+}) => {
+  const [waitSeconds, setWaitSeconds] = useState(40 * 60);
+
+  useEffect(() => {
+    const updateWaitTime = () =>
+      setWaitSeconds(
+        getSubmitDelayRemaining(durationSeconds, timeLeftRef.current),
+      );
+    if (!isRestricted) return undefined;
+
+    const initialUpdateId = setTimeout(updateWaitTime, 0);
+    const intervalId = setInterval(updateWaitTime, 1000);
+    return () => {
+      clearTimeout(initialUpdateId);
+      clearInterval(intervalId);
+    };
+  }, [durationSeconds, isRestricted, timeLeftRef]);
+
+  const isWaiting = isRestricted && waitSeconds > 0;
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={isSubmitting || isWaiting}
+      title={
+        isWaiting
+          ? `Pengumpulan tersedia dalam ${formatCountdown(waitSeconds)}`
+          : undefined
+      }
+      className={`${className} disabled:opacity-70`}
+    >
+      {isSubmitting ? (
+        <RefreshCw size={20} className="animate-spin" />
+      ) : isWaiting ? (
+        <Lock size={20} />
+      ) : (
+        <CheckCircle2 size={20} />
+      )}{" "}
+      {isSubmitting
+        ? "Mengirim..."
+        : isWaiting
+          ? `Tersedia dalam ${formatCountdown(waitSeconds)}`
+          : label}
+    </button>
+  );
+};
+
 const SiswaDashboard = () => {
   const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("home");
@@ -230,6 +295,8 @@ const SiswaDashboard = () => {
   const [pelanggaran, setPelanggaran] = useState(0);
   const [isAntiCheatActive, setIsAntiCheatActive] = useState(true);
   const isAntiCheatActiveRef = useRef(true);
+  const [isSubmitDelayActive, setIsSubmitDelayActive] = useState(false);
+  const isSubmitDelayActiveRef = useRef(false);
 
   useEffect(() => {
     isAntiCheatActiveRef.current = isAntiCheatActive;
@@ -365,6 +432,15 @@ const SiswaDashboard = () => {
                 ? String(acSetting.nilai).toUpperCase() !== "OFF"
                 : true,
             );
+
+            const submitDelaySetting = settingsRes.find(
+              (s) =>
+                String(s.kunci).toUpperCase() === "KUNCI_KUMPUL_40_MENIT",
+            );
+            const submitDelayActive =
+              String(submitDelaySetting?.nilai).toUpperCase() === "ON";
+            isSubmitDelayActiveRef.current = submitDelayActive;
+            setIsSubmitDelayActive(submitDelayActive);
 
             const appOnlySetting = settingsRes.find(
               (s) => String(s.kunci).toUpperCase() === "MODE_APLIKASI",
@@ -695,6 +771,7 @@ const SiswaDashboard = () => {
         "Anda sudah menyelesaikan ujian ini. Nilai Anda sudah terekam di sistem.",
       );
 
+    timeLeftRef.current = examDurasi * 60;
     setActiveExam(exam);
     setLoadingSoal(true);
     setIsMobileDrawerOpen(false);
@@ -785,6 +862,7 @@ const SiswaDashboard = () => {
         setPelanggaran(0);
         setIsLocked(false);
       }
+      timeLeftRef.current = finalTimeLeft;
       try {
         await api.saveSesi(
           getVal(user, "Username"),
@@ -813,8 +891,29 @@ const SiswaDashboard = () => {
     }
   };
 
+  const getManualSubmitWait = () => {
+    const exam = activeExamRef.current;
+    const durationSeconds =
+      (parseInt(getVal(exam, "Durasi_Menit")) || 90) * 60;
+    return getSubmitDelayRemaining(durationSeconds, timeLeftRef.current);
+  };
+
+  const blockManualSubmitIfNeeded = () => {
+    if (!isSubmitDelayActiveRef.current) return false;
+    const waitSeconds = getManualSubmitWait();
+    if (waitSeconds <= 0) return false;
+
+    showAlert(
+      "warning",
+      "Belum Bisa Mengumpulkan",
+      `Jawaban baru dapat dikumpulkan setelah 40 menit sejak ujian dimulai. Silakan lanjut mengerjakan selama ${formatCountdown(waitSeconds)} lagi.`,
+    );
+    return true;
+  };
+
   // 5. KALKULASI SKOR & SUBMIT (FINAL FIX)
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
+    if (!isForced && blockManualSubmitIfNeeded()) return;
     setIsSubmitting(true);
 
     // TAMBAHAN 1: Hapus timer save yang masih nyangkut di background agar tidak jadi sesi hantu
@@ -967,6 +1066,7 @@ const SiswaDashboard = () => {
 
   const handleEndExamClick = (isForced = false) => {
     if (isSubmittingRef.current) return;
+    if (!isForced && blockManualSubmitIfNeeded()) return;
     if (isOffline && !isForced) {
       showAlert(
         "danger",
@@ -1507,18 +1607,17 @@ const SiswaDashboard = () => {
                 </div>
 
                 <div className="p-5 border-t border-slate-100 bg-slate-50/50 shrink-0">
-                  <button
+                  <SubmitExamButton
                     onClick={() => handleEndExamClick(false)}
-                    disabled={isSubmitting}
-                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-4 rounded-xl shadow-sm active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 disabled:opacity-70"
-                  >
-                    {isSubmitting ? (
-                      <RefreshCw size={20} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={20} />
-                    )}{" "}
-                    Kumpulkan Ujian
-                  </button>
+                    isSubmitting={isSubmitting}
+                    isRestricted={isSubmitDelayActive}
+                    timeLeftRef={timeLeftRef}
+                    durationSeconds={
+                      (parseInt(getVal(activeExam, "Durasi_Menit")) || 90) * 60
+                    }
+                    label="Kumpulkan Ujian"
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-4 rounded-xl shadow-sm active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2"
+                  />
                 </div>
               </div>
             </div>
@@ -1674,21 +1773,20 @@ const SiswaDashboard = () => {
                   </div>
                 </div>
                 <div className="p-5 border-t border-slate-100 bg-slate-50 rounded-t-3xl shrink-0 pb-6 sm:pb-4 shadow-[0_-5px_15px_-10px_rgba(0,0,0,0.05)]">
-                  <button
+                  <SubmitExamButton
                     onClick={() => {
                       setIsMobileDrawerOpen(false);
                       handleEndExamClick(false);
                     }}
-                    disabled={isSubmitting}
-                    className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-sm active:scale-95 transition-colors uppercase tracking-widest text-sm flex items-center justify-center gap-2 disabled:opacity-70"
-                  >
-                    {isSubmitting ? (
-                      <RefreshCw size={20} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={20} />
-                    )}{" "}
-                    Kumpulkan Ujian Sekarang
-                  </button>
+                    isSubmitting={isSubmitting}
+                    isRestricted={isSubmitDelayActive}
+                    timeLeftRef={timeLeftRef}
+                    durationSeconds={
+                      (parseInt(getVal(activeExam, "Durasi_Menit")) || 90) * 60
+                    }
+                    label="Kumpulkan Ujian Sekarang"
+                    className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-sm active:scale-95 transition-colors uppercase tracking-widest text-sm flex items-center justify-center gap-2"
+                  />
                 </div>
               </motion.div>
             </>

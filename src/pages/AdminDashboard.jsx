@@ -24,6 +24,7 @@ import {
   Unlock,
   ListChecks,
   MonitorSmartphone,
+  Timer,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
@@ -56,6 +57,44 @@ const formatTanggal = (isoString) => {
   }
   return isoString;
 };
+
+const SettingSwitch = ({ icon, label, description, enabled, onClick }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={enabled}
+    onClick={onClick}
+    className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+  >
+    <span className="flex min-w-0 items-center gap-3">
+      <span
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
+      >
+        {React.createElement(icon, { size: 20 })}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-slate-800">{label}</span>
+        <span className="mt-0.5 block text-xs font-medium text-slate-500">
+          {description}
+        </span>
+      </span>
+    </span>
+    <span className="flex shrink-0 items-center gap-2">
+      <span
+        className={`text-[10px] font-black uppercase tracking-wider ${enabled ? "text-emerald-700" : "text-slate-400"}`}
+      >
+        {enabled ? "Aktif" : "Mati"}
+      </span>
+      <span
+        className={`relative h-7 w-12 rounded-full transition-colors ${enabled ? "bg-emerald-500" : "bg-slate-300"}`}
+      >
+        <span
+          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-6" : "translate-x-1"}`}
+        />
+      </span>
+    </span>
+  </button>
+);
 
 // ==========================================
 // 1. KOMPONEN PREMIUM CUSTOM DROPDOWN (SINGLE)
@@ -682,6 +721,7 @@ const AdminDashboard = () => {
 
   const currentConfig = TAB_CONFIG[tab];
   const data = allData[tab] || [];
+  const isSettingsTab = tab === "settings";
 
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -1065,6 +1105,46 @@ const AdminDashboard = () => {
       },
     );
   };
+  const submitDelaySetting = allData.settings.find(
+    (item) => item.kunci === "Kunci_Kumpul_40_Menit",
+  );
+  const isSubmitDelayOn = submitDelaySetting
+    ? String(submitDelaySetting.nilai).toUpperCase() === "ON"
+    : false;
+  const handleToggleSubmitDelay = async () => {
+    showAlert(
+      "confirm",
+      "Ubah Batas Pengumpulan?",
+      `Yakin ingin ${isSubmitDelayOn ? "MEMATIKAN" : "MENGAKTIFKAN"} batas pengumpulan jawaban 40 menit?`,
+      async () => {
+        closeAlert();
+        setIsSyncing(true);
+        try {
+          if (submitDelaySetting)
+            await api.update("Settings", submitDelaySetting.id, {
+              ...submitDelaySetting,
+              nilai: isSubmitDelayOn ? "OFF" : "ON",
+            });
+          else
+            await api.create("Settings", {
+              id: (Math.max(...allData.settings.map((s) => s.id)) || 0) + 1,
+              kunci: "Kunci_Kumpul_40_Menit",
+              nilai: "ON",
+            });
+          await refreshCurrentTab(false);
+          showAlert(
+            "success",
+            "Berhasil!",
+            `Batas pengumpulan 40 menit ${isSubmitDelayOn ? "NONAKTIF" : "AKTIF"}.`,
+          );
+        } catch (e) {
+          showAlert("danger", "Gagal", e.message);
+        } finally {
+          setIsSyncing(false);
+        }
+      },
+    );
+  };
 
   return (
     <Dashboard menu={MENU_ITEMS} active={tab} setActive={setTab}>
@@ -1146,36 +1226,54 @@ const AdminDashboard = () => {
             >
               <MonitorSmartphone size={16} /> Live Ujian
             </button>
-            <button
-              onClick={handleAddNewRow}
-              className="w-full py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
-            >
-              <Plus size={16} /> Tambah Baris Kosong
-            </button>
+            {!isSettingsTab && (
+              <button
+                onClick={handleAddNewRow}
+                className="w-full py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 active:scale-95 transition-all"
+              >
+                <Plus size={16} /> Tambah Baris Kosong
+              </button>
+            )}
 
-            {tab === "settings" && (
-              <div className="flex gap-2">
-                <button
+            {isSettingsTab && (
+              <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="px-1">
+                  <h3 className="text-sm font-black text-slate-800">
+                    Sakelar Konfigurasi
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Ketuk sakelar untuk mengaktifkan atau mematikan fitur.
+                  </p>
+                </div>
+                <SettingSwitch
+                  icon={ShieldCheck}
+                  label="Mode Ujian"
+                  description="Aktifkan perlindungan anti-cheat."
+                  enabled={isAntiCheatOn}
                   onClick={handleToggleAntiCheat}
-                  className={`flex-1 py-3 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 transition-all text-[10px] border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}
-                >
-                  <ShieldCheck size={16} />{" "}
-                  <span className="text-center leading-tight">
-                    {isAntiCheatOn
-                      ? "Matikan Mode Ujian"
-                      : "Hidupkan Mode Ujian"}
-                  </span>
-                </button>
-                <button
+                />
+                <SettingSwitch
+                  icon={isAppOnlyOn ? Unlock : Lock}
+                  label="Akses Khusus Aplikasi"
+                  description="Batasi ujian agar hanya bisa dibuka dari aplikasi."
+                  enabled={isAppOnlyOn}
                   onClick={handleToggleAppOnly}
-                  className={`flex-1 py-3 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 transition-all text-[10px] border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}
-                >
-                  {isAppOnlyOn ? <Unlock size={16} /> : <Lock size={16} />}{" "}
-                  <span className="text-center leading-tight">
-                    {isAppOnlyOn ? "Buka Akses Web" : "Kunci APK Saja"}
-                  </span>
-                </button>
-              </div>
+                />
+                <SettingSwitch
+                  icon={Trash2}
+                  label="Izin Hapus Semua"
+                  description="Izinkan guru menghapus semua soal dan nilai."
+                  enabled={isDeleteAllOn}
+                  onClick={handleToggleDeleteAll}
+                />
+                <SettingSwitch
+                  icon={Timer}
+                  label="Batas Pengumpulan 40 Menit"
+                  description="Siswa mengumpulkan jawaban setelah 40 menit."
+                  enabled={isSubmitDelayOn}
+                  onClick={handleToggleSubmitDelay}
+                />
+              </section>
             )}
 
             <div className="flex gap-2">
@@ -1233,26 +1331,38 @@ const AdminDashboard = () => {
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
                           ID:
                         </span>
-                        <EditableCell
-                          item={item}
-                          column={currentConfig.columns[0]}
-                          onSave={handleSaveCell}
-                        />
+                        {isSettingsTab ? (
+                          <span className="font-mono text-xs text-slate-500">
+                            #{item.id}
+                          </span>
+                        ) : (
+                          <EditableCell
+                            item={item}
+                            column={currentConfig.columns[0]}
+                            onSave={handleSaveCell}
+                          />
+                        )}
                       </div>
                       <div className="font-black text-slate-800 text-sm mt-1">
-                        <EditableCell
-                          item={item}
-                          column={currentConfig.columns[1]}
-                          onSave={handleSaveCell}
-                        />
+                        {isSettingsTab ? (
+                          item[currentConfig.columns[1].key] || "-"
+                        ) : (
+                          <EditableCell
+                            item={item}
+                            column={currentConfig.columns[1]}
+                            onSave={handleSaveCell}
+                          />
+                        )}
                       </div>
                     </div>
-                    <button
-                      onClick={() => confirmDelete(item.id)}
-                      className="p-2.5 text-red-500 bg-red-50 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-colors shrink-0"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {!isSettingsTab && (
+                      <button
+                        onClick={() => confirmDelete(item.id)}
+                        className="p-2.5 text-red-500 bg-red-50 rounded-xl border border-red-100 hover:bg-red-500 hover:text-white transition-colors shrink-0"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-2.5 text-xs">
@@ -1265,35 +1375,38 @@ const AdminDashboard = () => {
                           {col.label}
                         </span>
                         <div className="font-semibold text-slate-700">
-                          <EditableCell
-                            item={item}
-                            column={
-                              // Logika integrasi: Jika sedang di tab jadwal dan kolomnya mapel, tarik data dari allData.mapel
-                              col.key === "mapel" && tab === "jadwal"
-                                ? {
-                                    ...col,
-                                    options: [
-                                      ...new Set(
-                                        allData.mapel
-                                          .map((m) => m.nama_mapel)
-                                          .filter(Boolean),
-                                      ),
-                                    ],
-                                  }
-                                : col.isCombobox
+                          {isSettingsTab ? (
+                            item[col.key] || "-"
+                          ) : (
+                            <EditableCell
+                              item={item}
+                              column={
+                                col.key === "mapel" && tab === "jadwal"
                                   ? {
                                       ...col,
                                       options: [
-                                        ...new Set([
-                                          ...col.options,
-                                          ...getFilterOptions(col.key),
-                                        ]),
+                                        ...new Set(
+                                          allData.mapel
+                                            .map((m) => m.nama_mapel)
+                                            .filter(Boolean),
+                                        ),
                                       ],
                                     }
-                                  : col
-                            }
-                            onSave={handleSaveCell}
-                          />
+                                  : col.isCombobox
+                                    ? {
+                                        ...col,
+                                        options: [
+                                          ...new Set([
+                                            ...col.options,
+                                            ...getFilterOptions(col.key),
+                                          ]),
+                                        ],
+                                      }
+                                    : col
+                              }
+                              onSave={handleSaveCell}
+                            />
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1331,33 +1444,39 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
-          <div className="w-full md:w-auto flex flex-col md:flex-row gap-3 z-10">
-            {tab === "settings" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 w-full">
-                <button
+          <div
+            className={`w-full flex flex-col gap-3 z-10 ${isSettingsTab ? "md:flex-1" : "md:w-auto md:flex-row"}`}
+          >
+            {isSettingsTab && (
+              <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                <SettingSwitch
+                  icon={ShieldCheck}
+                  label="Mode Ujian"
+                  description="Perlindungan anti-cheat."
+                  enabled={isAntiCheatOn}
                   onClick={handleToggleAntiCheat}
-                  className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${isAntiCheatOn ? "bg-red-50 text-red-600 border-red-200" : "bg-blue-600 text-white border-blue-400"}`}
-                >
-                  <ShieldCheck size={18} />{" "}
-                  {isAntiCheatOn ? "Matikan Anti-Cheat" : "Hidupkan Anti-Cheat"}
-                </button>
-                <button
+                />
+                <SettingSwitch
+                  icon={isAppOnlyOn ? Unlock : Lock}
+                  label="Akses Khusus Aplikasi"
+                  description="Ujian hanya dari aplikasi."
+                  enabled={isAppOnlyOn}
                   onClick={handleToggleAppOnly}
-                  className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${isAppOnlyOn ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-slate-800 text-white border-slate-700"}`}
-                >
-                  {isAppOnlyOn ? <Unlock size={18} /> : <Lock size={18} />}{" "}
-                  {isAppOnlyOn ? "Buka Akses Browser" : "Kunci Aplikasi"}
-                </button>
-                <button
+                />
+                <SettingSwitch
+                  icon={Trash2}
+                  label="Izin Hapus Semua"
+                  description="Izin guru menghapus soal dan nilai."
+                  enabled={isDeleteAllOn}
                   onClick={handleToggleDeleteAll}
-                  className={`w-full px-4 py-3 rounded-2xl font-bold shadow-md flex items-center justify-center gap-2 transition-all text-sm border ${!isDeleteAllOn ? "bg-slate-100 text-slate-500 border-slate-300" : "bg-rose-50 text-rose-600 border-rose-200"}`}
-                  title="Mengatur izin Hapus Semua Soal dan Nilai"
-                >
-                  <Trash2 size={18} />{" "}
-                  {isDeleteAllOn
-                    ? "Kunci Hapus Semua Soal & Nilai"
-                    : "Buka Hapus Semua Soal & Nilai"}
-                </button>
+                />
+                <SettingSwitch
+                  icon={Timer}
+                  label="Batas Pengumpulan 40 Menit"
+                  description="Kunci pengumpulan sebelum 40 menit."
+                  enabled={isSubmitDelayOn}
+                  onClick={handleToggleSubmitDelay}
+                />
               </div>
             )}
             {/* TOMBOL PINTU MASUK KELAS VIRTUAL ADMIN */}
@@ -1368,12 +1487,14 @@ const AdminDashboard = () => {
               <MonitorSmartphone size={20} className="animate-pulse" /> Live
               Ujian
             </button>
-            <button
-              onClick={handleAddNewRow}
-              className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400 z-10"
-            >
-              <Plus size={20} /> Tambah Data Baru
-            </button>
+            {!isSettingsTab && (
+              <button
+                onClick={handleAddNewRow}
+                className="w-full md:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400 z-10"
+              >
+                <Plus size={20} /> Tambah Data Baru
+              </button>
+            )}
           </div>
         </header>
 
@@ -1503,16 +1624,20 @@ const AdminDashboard = () => {
                       </th>
                     );
                   })}
-                  <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider w-[80px]">
-                    Hapus
-                  </th>
+                  {!isSettingsTab && (
+                    <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider w-[80px]">
+                      Hapus
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading && data.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={currentConfig.columns.length + 1}
+                      colSpan={
+                        currentConfig.columns.length + (isSettingsTab ? 0 : 1)
+                      }
                       className="py-20 text-center text-slate-400 font-bold text-sm bg-white"
                     >
                       <RefreshCw
@@ -1525,10 +1650,14 @@ const AdminDashboard = () => {
                 ) : processedData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={currentConfig.columns.length + 1}
+                      colSpan={
+                        currentConfig.columns.length + (isSettingsTab ? 0 : 1)
+                      }
                       className="py-20 text-center text-slate-400 font-semibold text-base bg-white"
                     >
-                      Belum ada data. Klik "Tambah Data Baru".
+                      {isSettingsTab
+                        ? "Belum ada data konfigurasi."
+                        : 'Belum ada data. Klik "Tambah Data Baru".'}
                     </td>
                   </tr>
                 ) : (
@@ -1552,47 +1681,54 @@ const AdminDashboard = () => {
                             style={stickyStyle}
                             className={`px-4 py-3 font-semibold text-slate-700 ${isID ? "border-r border-slate-100 bg-inherit" : ""} ${isName ? "border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] bg-inherit" : ""}`}
                           >
-                            <EditableCell
-                              item={item}
-                              column={
-                                // Logika integrasi: Jika sedang di tab jadwal dan kolomnya mapel, tarik data dari allData.mapel
-                                col.key === "mapel" && tab === "jadwal"
-                                  ? {
-                                      ...col,
-                                      options: [
-                                        ...new Set(
-                                          allData.mapel
-                                            .map((m) => m.nama_mapel)
-                                            .filter(Boolean),
-                                        ),
-                                      ],
-                                    }
-                                  : col.isCombobox
+                            {isSettingsTab ? (
+                              <span className="cursor-default select-text">
+                                {item[col.key] || "-"}
+                              </span>
+                            ) : (
+                              <EditableCell
+                                item={item}
+                                column={
+                                  col.key === "mapel" && tab === "jadwal"
                                     ? {
                                         ...col,
                                         options: [
-                                          ...new Set([
-                                            ...col.options,
-                                            ...getFilterOptions(col.key),
-                                          ]),
+                                          ...new Set(
+                                            allData.mapel
+                                              .map((m) => m.nama_mapel)
+                                              .filter(Boolean),
+                                          ),
                                         ],
                                       }
-                                    : col
-                              }
-                              onSave={handleSaveCell}
-                            />
+                                    : col.isCombobox
+                                      ? {
+                                          ...col,
+                                          options: [
+                                            ...new Set([
+                                              ...col.options,
+                                              ...getFilterOptions(col.key),
+                                            ]),
+                                          ],
+                                        }
+                                      : col
+                                }
+                                onSave={handleSaveCell}
+                              />
+                            )}
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-center whitespace-nowrap bg-inherit">
-                        <button
-                          onClick={() => confirmDelete(item.id)}
-                          className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-colors shadow-sm"
-                          title="Hapus Baris"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
+                      {!isSettingsTab && (
+                        <td className="px-4 py-3 text-center whitespace-nowrap bg-inherit">
+                          <button
+                            onClick={() => confirmDelete(item.id)}
+                            className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-colors shadow-sm"
+                            title="Hapus Baris"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
