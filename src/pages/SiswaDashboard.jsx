@@ -83,9 +83,22 @@ const getVal = (obj, keyName) => {
   return foundKey ? obj[foundKey] : "";
 };
 
-const getSubmitDelayRemaining = (durationSeconds, timeRemaining) => {
+const DEFAULT_SUBMIT_DELAY_MINUTES = 40;
+
+const parseSubmitDelayMinutes = (value) => {
+  const minutes = Number(value);
+  return Number.isSafeInteger(minutes) && minutes > 0
+    ? minutes
+    : DEFAULT_SUBMIT_DELAY_MINUTES;
+};
+
+const getSubmitDelayRemaining = (
+  durationSeconds,
+  timeRemaining,
+  minimumMinutes = DEFAULT_SUBMIT_DELAY_MINUTES,
+) => {
   const elapsedSeconds = Math.max(0, durationSeconds - timeRemaining);
-  return Math.max(0, 40 * 60 - elapsedSeconds);
+  return Math.max(0, minimumMinutes * 60 - elapsedSeconds);
 };
 
 const formatCountdown = (seconds) =>
@@ -205,16 +218,21 @@ const SubmitExamButton = ({
   isRestricted,
   timeLeftRef,
   durationSeconds,
+  minimumMinutes = DEFAULT_SUBMIT_DELAY_MINUTES,
   onClick,
   className,
   label,
 }) => {
-  const [waitSeconds, setWaitSeconds] = useState(40 * 60);
+  const [waitSeconds, setWaitSeconds] = useState(minimumMinutes * 60);
 
   useEffect(() => {
     const updateWaitTime = () =>
       setWaitSeconds(
-        getSubmitDelayRemaining(durationSeconds, timeLeftRef.current),
+        getSubmitDelayRemaining(
+          durationSeconds,
+          timeLeftRef.current,
+          minimumMinutes,
+        ),
       );
     if (!isRestricted) return undefined;
 
@@ -224,7 +242,7 @@ const SubmitExamButton = ({
       clearTimeout(initialUpdateId);
       clearInterval(intervalId);
     };
-  }, [durationSeconds, isRestricted, timeLeftRef]);
+  }, [durationSeconds, isRestricted, minimumMinutes, timeLeftRef]);
 
   const isWaiting = isRestricted && waitSeconds > 0;
 
@@ -297,6 +315,9 @@ const SiswaDashboard = () => {
   const isAntiCheatActiveRef = useRef(true);
   const [isSubmitDelayActive, setIsSubmitDelayActive] = useState(false);
   const isSubmitDelayActiveRef = useRef(false);
+  const [submitDelayMinutes, setSubmitDelayMinutes] = useState(
+    DEFAULT_SUBMIT_DELAY_MINUTES,
+  );
 
   useEffect(() => {
     isAntiCheatActiveRef.current = isAntiCheatActive;
@@ -441,6 +462,14 @@ const SiswaDashboard = () => {
               String(submitDelaySetting?.nilai).toUpperCase() === "ON";
             isSubmitDelayActiveRef.current = submitDelayActive;
             setIsSubmitDelayActive(submitDelayActive);
+
+            const submitDelayMinutesSetting = settingsRes.find(
+              (s) =>
+                String(s.kunci).toUpperCase() === "BATAS_KUMPUL_MENIT",
+            );
+            setSubmitDelayMinutes(
+              parseSubmitDelayMinutes(submitDelayMinutesSetting?.nilai),
+            );
 
             const appOnlySetting = settingsRes.find(
               (s) => String(s.kunci).toUpperCase() === "MODE_APLIKASI",
@@ -771,7 +800,6 @@ const SiswaDashboard = () => {
         "Anda sudah menyelesaikan ujian ini. Nilai Anda sudah terekam di sistem.",
       );
 
-    timeLeftRef.current = examDurasi * 60;
     setActiveExam(exam);
     setLoadingSoal(true);
     setIsMobileDrawerOpen(false);
@@ -862,7 +890,6 @@ const SiswaDashboard = () => {
         setPelanggaran(0);
         setIsLocked(false);
       }
-      timeLeftRef.current = finalTimeLeft;
       try {
         await api.saveSesi(
           getVal(user, "Username"),
@@ -895,7 +922,11 @@ const SiswaDashboard = () => {
     const exam = activeExamRef.current;
     const durationSeconds =
       (parseInt(getVal(exam, "Durasi_Menit")) || 90) * 60;
-    return getSubmitDelayRemaining(durationSeconds, timeLeftRef.current);
+    return getSubmitDelayRemaining(
+      durationSeconds,
+      timeLeftRef.current,
+      submitDelayMinutes,
+    );
   };
 
   const blockManualSubmitIfNeeded = () => {
@@ -906,7 +937,7 @@ const SiswaDashboard = () => {
     showAlert(
       "warning",
       "Belum Bisa Mengumpulkan",
-      `Jawaban baru dapat dikumpulkan setelah 40 menit sejak ujian dimulai. Silakan lanjut mengerjakan selama ${formatCountdown(waitSeconds)} lagi.`,
+      `Jawaban baru dapat dikumpulkan setelah ${submitDelayMinutes} menit sejak ujian dimulai. Silakan lanjut mengerjakan selama ${formatCountdown(waitSeconds)} lagi.`,
     );
     return true;
   };
@@ -1615,6 +1646,7 @@ const SiswaDashboard = () => {
                     durationSeconds={
                       (parseInt(getVal(activeExam, "Durasi_Menit")) || 90) * 60
                     }
+                    minimumMinutes={submitDelayMinutes}
                     label="Kumpulkan Ujian"
                     className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-4 rounded-xl shadow-sm active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2"
                   />
@@ -1784,6 +1816,7 @@ const SiswaDashboard = () => {
                     durationSeconds={
                       (parseInt(getVal(activeExam, "Durasi_Menit")) || 90) * 60
                     }
+                    minimumMinutes={submitDelayMinutes}
                     label="Kumpulkan Ujian Sekarang"
                     className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-sm active:scale-95 transition-colors uppercase tracking-widest text-sm flex items-center justify-center gap-2"
                   />
@@ -1908,7 +1941,6 @@ const SiswaDashboard = () => {
       setActive={setActiveTab}
     >
       <div className="fixed inset-0 bg-slate-50 z-0 pointer-events-none"></div>
-
       {activeTab === "home" && (
         <motion.div
           variants={staggerContainer}

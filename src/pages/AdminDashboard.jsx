@@ -96,6 +96,41 @@ const SettingSwitch = ({ icon, label, description, enabled, onClick }) => (
   </button>
 );
 
+const SettingNumberInput = ({ value, onChange, onSave, disabled }) => (
+  <div className="flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0">
+      <p className="block text-sm font-bold text-slate-800">
+        Durasi Batas Pengumpulan
+      </p>
+      <p className="mt-0.5 text-xs font-medium text-slate-500">
+        Default 40 menit. Berlaku saat batas pengumpulan diaktifkan.
+      </p>
+    </div>
+    <div className="flex shrink-0 items-center gap-2">
+      <input
+        aria-label="Durasi batas pengumpulan dalam menit"
+        type="number"
+        min="1"
+        step="1"
+        inputMode="numeric"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        className="w-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 disabled:bg-slate-50"
+      />
+      <span className="text-xs font-bold text-slate-500">menit</span>
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={disabled}
+        className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        Simpan
+      </button>
+    </div>
+  </div>
+);
+
 // ==========================================
 // 1. KOMPONEN PREMIUM CUSTOM DROPDOWN (SINGLE)
 // ==========================================
@@ -710,6 +745,7 @@ const EditableCell = ({ item, column, onSave }) => {
 // ==========================================
 const AdminDashboard = () => {
   const [tab, setTab] = useState("siswa");
+  const [submitDelayMinutesDraft, setSubmitDelayMinutesDraft] = useState(null);
 
   // STATE CACHE GLOBAL
   const [allData, setAllData] = useState({
@@ -722,6 +758,19 @@ const AdminDashboard = () => {
   const currentConfig = TAB_CONFIG[tab];
   const data = allData[tab] || [];
   const isSettingsTab = tab === "settings";
+  const submitDelayMinutesSetting = allData.settings.find(
+    (item) => String(item.kunci).toUpperCase() === "BATAS_KUMPUL_MENIT",
+  );
+  const savedSubmitDelayMinutes = Number(
+    submitDelayMinutesSetting?.nilai ?? 40,
+  );
+  const submitDelayMinutesValue =
+    Number.isSafeInteger(savedSubmitDelayMinutes) &&
+    savedSubmitDelayMinutes > 0
+      ? savedSubmitDelayMinutes
+      : 40;
+  const submitDelayMinutesInput =
+    submitDelayMinutesDraft ?? String(submitDelayMinutesValue);
 
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -1106,7 +1155,8 @@ const AdminDashboard = () => {
     );
   };
   const submitDelaySetting = allData.settings.find(
-    (item) => item.kunci === "Kunci_Kumpul_40_Menit",
+    (item) =>
+      String(item.kunci).toUpperCase() === "KUNCI_KUMPUL_40_MENIT",
   );
   const isSubmitDelayOn = submitDelaySetting
     ? String(submitDelaySetting.nilai).toUpperCase() === "ON"
@@ -1115,7 +1165,7 @@ const AdminDashboard = () => {
     showAlert(
       "confirm",
       "Ubah Batas Pengumpulan?",
-      `Yakin ingin ${isSubmitDelayOn ? "MEMATIKAN" : "MENGAKTIFKAN"} batas pengumpulan jawaban 40 menit?`,
+      `Yakin ingin ${isSubmitDelayOn ? "MEMATIKAN" : "MENGAKTIFKAN"} batas pengumpulan jawaban setelah ${submitDelayMinutesValue} menit?`,
       async () => {
         closeAlert();
         setIsSyncing(true);
@@ -1127,7 +1177,11 @@ const AdminDashboard = () => {
             });
           else
             await api.create("Settings", {
-              id: (Math.max(...allData.settings.map((s) => s.id)) || 0) + 1,
+              id:
+                allData.settings.reduce(
+                  (max, item) => Math.max(max, Number(item.id) || 0),
+                  0,
+                ) + 1,
               kunci: "Kunci_Kumpul_40_Menit",
               nilai: "ON",
             });
@@ -1135,7 +1189,7 @@ const AdminDashboard = () => {
           showAlert(
             "success",
             "Berhasil!",
-            `Batas pengumpulan 40 menit ${isSubmitDelayOn ? "NONAKTIF" : "AKTIF"}.`,
+            `Batas pengumpulan ${submitDelayMinutesValue} menit ${isSubmitDelayOn ? "NONAKTIF" : "AKTIF"}.`,
           );
         } catch (e) {
           showAlert("danger", "Gagal", e.message);
@@ -1144,6 +1198,49 @@ const AdminDashboard = () => {
         }
       },
     );
+  };
+  const handleSaveSubmitDelayMinutes = async () => {
+    const minutes = Number(submitDelayMinutesDraft ?? submitDelayMinutesValue);
+    if (!Number.isSafeInteger(minutes) || minutes < 1) {
+      showAlert(
+        "warning",
+        "Durasi Tidak Valid",
+        "Masukkan jumlah menit berupa bilangan bulat minimal 1.",
+      );
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      if (submitDelayMinutesSetting) {
+        await api.update("Settings", submitDelayMinutesSetting.id, {
+          ...submitDelayMinutesSetting,
+          nilai: String(minutes),
+        });
+      } else {
+        const maxId = allData.settings.reduce(
+          (max, item) => Math.max(max, Number(item.id) || 0),
+          0,
+        );
+        await api.create("Settings", {
+          id: maxId + 1,
+          kunci: "Batas_Kumpul_Menit",
+          nilai: String(minutes),
+        });
+      }
+
+      await refreshCurrentTab(false);
+      setSubmitDelayMinutesDraft(null);
+      showAlert(
+        "success",
+        "Berhasil!",
+        `Batas pengumpulan disimpan selama ${minutes} menit.`,
+      );
+    } catch (error) {
+      showAlert("danger", "Gagal Menyimpan Durasi", error.message);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -1268,10 +1365,16 @@ const AdminDashboard = () => {
                 />
                 <SettingSwitch
                   icon={Timer}
-                  label="Batas Pengumpulan 40 Menit"
-                  description="Siswa mengumpulkan jawaban setelah 40 menit."
+                  label="Batas Pengumpulan"
+                  description={`Siswa dapat mengumpulkan setelah ${Number.isSafeInteger(submitDelayMinutesValue) && submitDelayMinutesValue > 0 ? submitDelayMinutesValue : 40} menit.`}
                   enabled={isSubmitDelayOn}
                   onClick={handleToggleSubmitDelay}
+                />
+                <SettingNumberInput
+                  value={submitDelayMinutesInput}
+                  onChange={setSubmitDelayMinutesDraft}
+                  onSave={handleSaveSubmitDelayMinutes}
+                  disabled={isSyncing}
                 />
               </section>
             )}
@@ -1472,10 +1575,16 @@ const AdminDashboard = () => {
                 />
                 <SettingSwitch
                   icon={Timer}
-                  label="Batas Pengumpulan 40 Menit"
-                  description="Kunci pengumpulan sebelum 40 menit."
+                  label="Batas Pengumpulan"
+                  description={`Siswa dapat mengumpulkan setelah ${Number.isSafeInteger(submitDelayMinutesValue) && submitDelayMinutesValue > 0 ? submitDelayMinutesValue : 40} menit.`}
                   enabled={isSubmitDelayOn}
                   onClick={handleToggleSubmitDelay}
+                />
+                <SettingNumberInput
+                  value={submitDelayMinutesInput}
+                  onChange={setSubmitDelayMinutesDraft}
+                  onSave={handleSaveSubmitDelayMinutes}
+                  disabled={isSyncing}
                 />
               </div>
             )}
