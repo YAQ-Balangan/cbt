@@ -8,7 +8,7 @@ import {
   EyeOff,
   AlertTriangle,
 } from "lucide-react";
-import { AuthContext } from "../context/AuthContextValue";
+import { AuthContext } from "../context/AuthContext";
 import logoTADBIRA from "../assets/logo.svg";
 
 const LoginPage = () => {
