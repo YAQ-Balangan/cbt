@@ -25,10 +25,28 @@ import {
   ListChecks,
   MonitorSmartphone,
   Timer,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Printer,
 } from "lucide-react";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
+import * as XLSX from "xlsx";
+import {
+  AlignmentType,
+  Document,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun,
+  VerticalAlign,
+  WidthType,
+} from "docx";
+import { saveAs } from "file-saver";
 
 // ==========================================
 // HELPER: FORMAT TANGGAL
@@ -56,6 +74,33 @@ const formatTanggal = (isoString) => {
     }
   }
   return isoString;
+};
+
+const sanitizeExportFilenamePart = (value) =>
+  String(value)
+    .normalize("NFKC")
+    .replace(/[<>:"/\\|?*]/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 48)
+    .trim();
+
+const getAdminTableColumnWidths = (columns, includeActions = false) => {
+  const idWidth = 6;
+  const nameWidth =
+    columns.length >= 8
+      ? 18
+      : columns.length >= 6
+        ? 21
+        : columns.length === 4
+          ? 27
+          : 30;
+  const otherWidth = (100 - idWidth - nameWidth) / (columns.length - 2);
+  const widthScale = includeActions ? 0.94 : 1;
+
+  return columns.map((_, index) =>
+    `${(index === 0 ? idWidth : index === 1 ? nameWidth : otherWidth) * widthScale}%`,
+  );
 };
 
 const SettingSwitch = ({ icon, label, description, enabled, onClick }) => (
@@ -130,6 +175,31 @@ const SettingNumberInput = ({ value, onChange, onSave, disabled }) => (
     </div>
   </div>
 );
+
+const AdminExportButtons = ({ onExport }) => {
+  const options = [
+    { type: "print", label: "Print", icon: Printer },
+    { type: "pdf", label: "PDF", icon: Download },
+    { type: "xls", label: "Excel", icon: FileSpreadsheet },
+    { type: "doc", label: "Word", icon: FileText },
+  ];
+
+  return (
+    <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto">
+      {options.map(({ type, label, icon: Icon }) => (
+        <button
+          key={type}
+          type="button"
+          onClick={() => onExport(type)}
+          className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 md:px-3"
+        >
+          {React.createElement(Icon, { size: 16 })}
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 // ==========================================
 // 1. KOMPONEN PREMIUM CUSTOM DROPDOWN (SINGLE)
@@ -758,6 +828,10 @@ const AdminDashboard = () => {
   const currentConfig = TAB_CONFIG[tab];
   const data = allData[tab] || [];
   const isSettingsTab = tab === "settings";
+  const tableColumnWidths = getAdminTableColumnWidths(
+    currentConfig.columns,
+    !isSettingsTab,
+  );
   const submitDelayMinutesSetting = allData.settings.find(
     (item) => String(item.kunci).toUpperCase() === "BATAS_KUMPUL_MENIT",
   );
@@ -1025,6 +1099,200 @@ const AdminDashboard = () => {
     return result;
   }, [data, search, filters, sortConfig]);
 
+  const handleExport = async (type) => {
+    if (processedData.length === 0) {
+      showAlert("warning", "Data Kosong", "Tidak ada data untuk diekspor.");
+      return;
+    }
+
+    const exportHeaders = currentConfig.columns.map((column) => column.label);
+    const exportRows = processedData.map((item) =>
+      currentConfig.columns.map((column) => {
+        const value = item[column.key];
+        if (Array.isArray(value)) return value.join(", ");
+        if (value && typeof value === "object") return JSON.stringify(value);
+        return value === null || value === undefined || value === ""
+          ? "-"
+          : value;
+      }),
+    );
+    const now = new Date();
+    const dateString = `${now.getDate()}-${now.getMonth() + 1}-${now.getFullYear()}`;
+    const activeFilters = Object.entries(filters)
+      .filter(
+        ([, value]) =>
+          value !== null &&
+          value !== undefined &&
+          String(value).trim() !== "",
+      )
+      .map(([, value]) =>
+        sanitizeExportFilenamePart(
+          Array.isArray(value) ? value.join(" ") : value,
+        ),
+      );
+    if (search.trim()) {
+      const searchName = sanitizeExportFilenamePart(search);
+      if (searchName && !activeFilters.includes(searchName)) {
+        activeFilters.unshift(searchName);
+      }
+    }
+
+    const filterName = activeFilters
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 80)
+      .trim();
+    const fileName = [
+      sanitizeExportFilenamePart(currentConfig.sheet),
+      filterName,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    try {
+      if (type === "print" || type === "pdf") {
+        const escapeHtml = (value) =>
+          String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+        const headerHtml = exportHeaders
+          .map((header) => `<th>${escapeHtml(header)}</th>`)
+          .join("");
+        const rowsHtml = exportRows
+          .map(
+            (row) =>
+              `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`,
+          )
+          .join("");
+        const printColumnGroup = getAdminTableColumnWidths(
+          currentConfig.columns,
+        )
+          .map((width) => `<col style="width:${width}">`)
+          .join("");
+        const pageOrientation =
+          exportHeaders.length > 6 ? "landscape" : "portrait";
+        const printContent = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>${escapeHtml(fileName)}</title><style>@page{size:${pageOrientation};margin:12mm}body{font-family:Arial,sans-serif;color:#111}h1{text-align:center;font-size:18pt;margin:0 0 6px}p{text-align:center;color:#444;font-size:10pt;margin:0 0 18px}table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:9pt}thead{display:table-header-group}th,td{border:1px solid #64748b;padding:5px;text-align:left;vertical-align:top;overflow-wrap:anywhere;word-break:break-word}th{background:#e2e8f0}tr{break-inside:avoid}</style></head><body><h1>${escapeHtml(currentConfig.title)}</h1><p>${escapeHtml(currentConfig.subtitle)} | Total: ${exportRows.length} | Dicetak: ${escapeHtml(now.toLocaleString("id-ID"))}</p><table><colgroup>${printColumnGroup}</colgroup><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`;
+
+        let printFrame = document.getElementById("admin-export-print-frame");
+        if (!printFrame) {
+          printFrame = document.createElement("iframe");
+          printFrame.id = "admin-export-print-frame";
+          printFrame.title = "Pratinjau cetak data admin";
+          printFrame.style.cssText =
+            "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+          document.body.appendChild(printFrame);
+        }
+        const printWindow = printFrame.contentWindow;
+        if (!printWindow) throw new Error("Jendela cetak tidak tersedia.");
+        printWindow.document.open();
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+        printWindow.document.title = fileName;
+        printWindow.focus();
+        window.setTimeout(() => printWindow.print(), 500);
+        return;
+      }
+
+      if (type === "xls") {
+        const worksheet = XLSX.utils.aoa_to_sheet([
+          exportHeaders,
+          ...exportRows,
+        ]);
+        worksheet["!cols"] = exportHeaders.map((header, index) => ({
+          wch:
+            Math.min(
+              exportRows.reduce(
+                (longest, row) =>
+                  Math.max(longest, String(row[index]).length),
+                String(header).length,
+              ) + 2,
+              40,
+            ),
+        }));
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, currentConfig.sheet);
+        XLSX.writeFile(workbook, `${fileName}.xlsx`);
+        return;
+      }
+
+      if (type === "doc") {
+        const headerCells = exportHeaders.map(
+          (header) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: String(header), bold: true })],
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+        );
+        const dataRows = exportRows.map(
+          (row) =>
+            new TableRow({
+              children: row.map(
+                (value) =>
+                  new TableCell({
+                    children: [
+                      new Paragraph({
+                        text: String(value),
+                        alignment: AlignmentType.LEFT,
+                      }),
+                    ],
+                    verticalAlign: VerticalAlign.CENTER,
+                  }),
+              ),
+            }),
+        );
+        const table = new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({ children: headerCells, tableHeader: true }),
+            ...dataRows,
+          ],
+        });
+        const document = new Document({
+          sections: [
+            {
+              properties: {
+                page: {
+                  size: {
+                    orientation: exportHeaders.length > 5 ? "landscape" : "portrait",
+                  },
+                },
+              },
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: currentConfig.title, bold: true })],
+                  alignment: AlignmentType.CENTER,
+                  spacing: { after: 200 },
+                }),
+                new Paragraph({
+                  text: `${currentConfig.subtitle} | Total: ${exportRows.length} | Tanggal: ${dateString}`,
+                  alignment: AlignmentType.CENTER,
+                  spacing: { after: 400 },
+                }),
+                table,
+              ],
+            },
+          ],
+        });
+        saveAs(await Packer.toBlob(document), `${fileName}.docx`);
+      }
+    } catch (error) {
+      console.error("Gagal mengekspor data admin:", error);
+      showAlert(
+        "danger",
+        "Gagal Mengekspor",
+        error.message || "Terjadi kesalahan saat membuat file ekspor.",
+      );
+    }
+  };
+
   const getFilterOptions = (key) => {
     const uniqueVals = [...new Set(data.map((item) => item[key]))];
     return uniqueVals
@@ -1252,7 +1520,7 @@ const AdminDashboard = () => {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}</style>
       {/* BISA SCROLL */}
-      <div className="space-y-6 max-w-7xl mx-auto pb-24 relative">
+      <div className="relative mx-auto w-full max-w-none space-y-6 pb-24">
         {/* BAGIAN ATAS MOBILE */}
         <div className="md:hidden flex flex-col gap-4 px-2 pt-2">
           {/* Header Mobile */}
@@ -1288,7 +1556,7 @@ const AdminDashboard = () => {
                   size={16}
                   className={
                     loading || isSyncing
-                      ? "animate-spin text-emerald-400"
+                      ? "text-emerald-400"
                       : "text-slate-300"
                   }
                 />
@@ -1331,6 +1599,7 @@ const AdminDashboard = () => {
                 <Plus size={16} /> Tambah Baris Kosong
               </button>
             )}
+            {!isSettingsTab && <AdminExportButtons onExport={handleExport} />}
 
             {isSettingsTab && (
               <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -1396,7 +1665,7 @@ const AdminDashboard = () => {
                 <ListChecks size={20} />
                 {(Object.values(filters).some(Boolean) ||
                   sortConfig.key !== "id") && (
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
                 )}
               </button>
             </div>
@@ -1410,10 +1679,7 @@ const AdminDashboard = () => {
           <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-100">
             {loading && data.length === 0 ? (
               <div className="py-16 text-center">
-                <RefreshCw
-                  className="animate-spin mx-auto text-emerald-500 mb-3"
-                  size={28}
-                />
+                <RefreshCw className="mx-auto text-emerald-500 mb-3" size={28} />
                 <span className="font-bold text-slate-400 text-xs">
                   Memuat Data...
                 </span>
@@ -1529,7 +1795,7 @@ const AdminDashboard = () => {
 
           <div className="flex items-center gap-4 z-10">
             <div className="p-4 bg-white/80 text-emerald-600 rounded-2xl shadow-sm border border-white/60">
-              <Settings size={28} className={isSyncing ? "animate-spin" : ""} />
+              <Settings size={28} />
             </div>
             <div>
               <h2 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight drop-shadow-sm">
@@ -1540,8 +1806,8 @@ const AdminDashboard = () => {
                   {currentConfig.subtitle}
                 </p>
                 {isSyncing && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-md text-[10px] font-bold uppercase animate-pulse border border-amber-200">
-                    <RefreshCw size={10} className="animate-spin" /> Syncing...
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-md text-[10px] font-bold uppercase border border-amber-200">
+                    <RefreshCw size={10} /> Syncing...
                   </span>
                 )}
               </div>
@@ -1593,8 +1859,7 @@ const AdminDashboard = () => {
               onClick={() => (window.location.href = "/ujian-dashboard")}
               className="w-full md:w-auto bg-indigo-600 text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-indigo-400 z-10"
             >
-              <MonitorSmartphone size={20} className="animate-pulse" /> Live
-              Ujian
+              <MonitorSmartphone size={20} /> Live Ujian
             </button>
             {!isSettingsTab && (
               <button
@@ -1604,6 +1869,7 @@ const AdminDashboard = () => {
                 <Plus size={20} /> Tambah Data Baru
               </button>
             )}
+            {!isSettingsTab && <AdminExportButtons onExport={handleExport} />}
           </div>
         </header>
 
@@ -1664,10 +1930,7 @@ const AdminDashboard = () => {
                 onClick={() => refreshCurrentTab(false)}
                 className="flex justify-center items-center gap-2 p-3.5 text-slate-500 bg-slate-50 border border-slate-200 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl transition-all shadow-sm"
               >
-                <RefreshCw
-                  size={18}
-                  className={loading || isSyncing ? "animate-spin" : ""}
-                />
+                <RefreshCw size={18} />
               </button>
             </div>
           </Card>
@@ -1678,7 +1941,18 @@ const AdminDashboard = () => {
         {/* ========================================================= */}
         <Card className="hidden md:flex flex-col flex-1 min-h-0 border border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem] overflow-hidden relative">
           <div className="flex-1 overflow-auto w-full relative custom-scrollbar">
-            <table className="w-full text-left text-sm whitespace-nowrap border-collapse min-w-max">
+            <table
+              className={`w-full table-fixed text-left text-xs xl:text-sm border-collapse ${currentConfig.columns.length > 8 ? "min-w-[1100px]" : "min-w-0"}`}
+            >
+              <colgroup>
+                {tableColumnWidths.map((width, index) => (
+                  <col
+                    key={currentConfig.columns[index].key}
+                    style={{ width }}
+                  />
+                ))}
+                {!isSettingsTab && <col style={{ width: "6%" }} />}
+              </colgroup>
               <thead className="sticky top-0 z-20 shadow-sm">
                 <tr>
                   {currentConfig.columns.map((col, index) => {
@@ -1687,7 +1961,11 @@ const AdminDashboard = () => {
                     const stickyStyle = isID
                       ? { position: "sticky", left: 0, zIndex: 30 }
                       : isName
-                        ? { position: "sticky", left: "80px", zIndex: 30 }
+                        ? {
+                            position: "sticky",
+                            left: tableColumnWidths[0],
+                            zIndex: 30,
+                          }
                         : {};
 
                     return (
@@ -1695,20 +1973,20 @@ const AdminDashboard = () => {
                         key={col.key}
                         style={stickyStyle}
                         onClick={() => col.sortable && handleSort(col.key)}
-                        className={`px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider ${col.sortable ? "cursor-pointer hover:bg-slate-100" : ""} ${isID ? "border-r w-[80px]" : ""} ${isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] w-[240px]" : ""}`}
+                        className={`whitespace-normal break-words px-2 py-3 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-wide leading-tight lg:px-3 ${col.sortable ? "cursor-pointer hover:bg-slate-100" : ""} ${isID || isName ? "border-r" : ""} ${isName ? "shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
                           <span
-                            className={
+                            className={`min-w-0 break-words ${
                               sortConfig.key === col.key
                                 ? "text-emerald-700 font-black"
                                 : ""
-                            }
+                            }`}
                           >
                             {col.label}
                           </span>
                           {col.sortable && (
-                            <div className="flex items-center">
+                            <div className="flex shrink-0 items-center">
                               {sortConfig.key === col.key ? (
                                 sortConfig.direction === "asc" ? (
                                   <ChevronUp
@@ -1734,7 +2012,7 @@ const AdminDashboard = () => {
                     );
                   })}
                   {!isSettingsTab && (
-                    <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider w-[80px]">
+                    <th className="px-2 py-3 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-wide leading-tight">
                       Hapus
                     </th>
                   )}
@@ -1750,7 +2028,7 @@ const AdminDashboard = () => {
                       className="py-20 text-center text-slate-400 font-bold text-sm bg-white"
                     >
                       <RefreshCw
-                        className="animate-spin mx-auto text-emerald-500 mb-4"
+                        className="mx-auto text-emerald-500 mb-4"
                         size={32}
                       />
                       Memuat Data...
@@ -1781,14 +2059,18 @@ const AdminDashboard = () => {
                         const stickyStyle = isID
                           ? { position: "sticky", left: 0, zIndex: 10 }
                           : isName
-                            ? { position: "sticky", left: "80px", zIndex: 10 }
+                            ? {
+                                position: "sticky",
+                                left: tableColumnWidths[0],
+                                zIndex: 10,
+                              }
                             : {};
 
                         return (
                           <td
                             key={col.key}
                             style={stickyStyle}
-                            className={`px-4 py-3 font-semibold text-slate-700 ${isID ? "border-r border-slate-100 bg-inherit" : ""} ${isName ? "border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] bg-inherit" : ""}`}
+                            className={`break-words px-2 py-2 align-top text-xs xl:text-sm font-semibold text-slate-700 lg:px-3 ${isID || isName ? "border-r border-slate-100 bg-inherit" : ""} ${isName ? "shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}
                           >
                             {isSettingsTab ? (
                               <span className="cursor-default select-text">
@@ -1828,7 +2110,7 @@ const AdminDashboard = () => {
                         );
                       })}
                       {!isSettingsTab && (
-                        <td className="px-4 py-3 text-center whitespace-nowrap bg-inherit">
+                        <td className="whitespace-nowrap bg-inherit px-2 py-2 text-center">
                           <button
                             onClick={() => confirmDelete(item.id)}
                             className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-colors shadow-sm"

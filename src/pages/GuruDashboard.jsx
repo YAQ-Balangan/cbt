@@ -74,6 +74,15 @@ import {
 } from "docx";
 import { saveAs } from "file-saver";
 
+const sanitizeExportFilenamePart = (value) =>
+  String(value)
+    .normalize("NFKC")
+    .replace(/[<>:"/\\|?*]/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 48)
+    .trim();
+
 // Tambahan: Menggunakan React.memo agar performa lebih ringan
 const Latex = React.memo(({ children }) => {
   const containerRef = useRef(null);
@@ -2942,23 +2951,41 @@ Patuhi aturan berikut secara ketat:
     let isLogMode = tab === "nilai" && nilaiViewMode === "log";
 
     // ==========================================
-    // 1. LOGIKA PENAMAAN FILE DINAMIS (BARU)
+    // 1. NAMA FILE BERDASARKAN FILTER AKTIF
     // ==========================================
     const dateObj = new Date();
     const dateStr = `${dateObj.getDate()}-${dateObj.getMonth() + 1}-${dateObj.getFullYear()}`;
 
-    // Hilangkan spasi pada nama mapel & kelas untuk nama file yang rapi
     const exportMapel = isLogMode ? currentLogMapel : filters.mapel;
-    const mapelStr = exportMapel
-      ? exportMapel.replace(/\s+/g, "_")
-      : "SemuaMapel";
-    const kelasStr = filters.kelas
-      ? filters.kelas.replace(/\s+/g, "_")
-      : "SemuaKelas";
-    const prefixName = isLogMode ? "LogUjian" : "RekapNilai";
+    const prefixName = isLogMode ? "Log" : "Nilai";
+    const activeFilters = [];
+    if (filters.kelas) activeFilters.push(filters.kelas);
+    if (exportMapel) activeFilters.push(exportMapel);
+    Object.entries(filters).forEach(([key, value]) => {
+      if (
+        key !== "kelas" &&
+        key !== "mapel" &&
+        value !== null &&
+        value !== undefined &&
+        String(value).trim() !== ""
+      ) {
+        activeFilters.push(value);
+      }
+    });
+    if (search.trim()) activeFilters.push(search.trim());
 
-    // Hasil Akhir Contoh: RekapNilai_X_MIPA_1_Matematika_2-5-2026
-    let fileName = `${prefixName}_${kelasStr}_${mapelStr}_${dateStr}`;
+    const filterName = activeFilters
+      .map(sanitizeExportFilenamePart)
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 80)
+      .trim();
+    const fileName = [
+      sanitizeExportFilenamePart(prefixName),
+      filterName,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     // ==========================================
     // 2. KUMPULKAN DATA (Cerdas Mendeteksi Lokasi Tab)
