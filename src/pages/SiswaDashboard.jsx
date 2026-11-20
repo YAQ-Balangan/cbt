@@ -27,6 +27,7 @@ import {
   AlertTriangle,
   Info,
   Maximize,
+  ZoomIn,
   Search,
   X,
   BookMarked,
@@ -106,6 +107,11 @@ const formatCountdown = (seconds) =>
   `${Math.floor(seconds / 60)
     .toString()
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+
+const MIN_PAGE_ZOOM = 0.8;
+const MAX_PAGE_ZOOM = 1.4;
+const clampPageZoom = (value) =>
+  Math.min(MAX_PAGE_ZOOM, Math.max(MIN_PAGE_ZOOM, Number(value.toFixed(1))));
 
 const formatTanggalLokal = (dateString) => {
   if (!dateString) return "Hari ini";
@@ -207,15 +213,25 @@ const EXAM_STATUS_STYLES = {
 
 const fontClasses = {
   wacana: [
-    "text-[13px] md:text-[15px]",
-    "text-[15px] md:text-[17px]",
-    "text-[17px] md:text-[19px]",
+    "text-[0.6875rem] md:text-[0.8125rem]",
+    "text-[0.75rem] md:text-[0.875rem]",
+    "text-[0.8125rem] md:text-[0.9375rem]",
+    "text-[0.875rem] md:text-[1rem]",
+    "text-[0.9375rem] md:text-[1.0625rem]",
   ],
-  soal: ["text-sm md:text-lg", "text-base md:text-xl", "text-lg md:text-2xl"],
+  soal: [
+    "text-[0.75rem] md:text-[1rem]",
+    "text-[0.8125rem] md:text-[1.0625rem]",
+    "text-[0.875rem] md:text-[1.125rem]",
+    "text-[0.9375rem] md:text-[1.1875rem]",
+    "text-[1rem] md:text-[1.25rem]",
+  ],
   opsi: [
-    "text-[13px] md:text-base",
-    "text-[15px] md:text-lg",
-    "text-base md:text-xl",
+    "text-[0.6875rem] md:text-[0.875rem]",
+    "text-[0.75rem] md:text-[0.9375rem]",
+    "text-[0.8125rem] md:text-[1rem]",
+    "text-[0.875rem] md:text-[1.0625rem]",
+    "text-[0.9375rem] md:text-[1.125rem]",
   ],
 };
 
@@ -280,17 +296,15 @@ const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp, timeRef }) => {
 
   return (
     <div
-      className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl border shadow-sm transition-colors ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200" : "bg-slate-800 text-white border-slate-700"}`}
+      className={`flex min-h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-3 py-1 shadow-sm transition-colors ${timeLeft < 300 ? "bg-red-50 text-red-600 border-red-200" : "bg-slate-800 text-white border-slate-700"}`}
     >
-      <Timer size={18} />
-      <div className="flex flex-col">
-        <span className="text-[8px] font-black uppercase tracking-widest leading-none mb-[2px] opacity-80">
-          Sisa Waktu
-        </span>
-        <span className="font-black text-sm md:text-base leading-none tracking-wider">
-          {formatTime(timeLeft)}
-        </span>
-      </div>
+      <Timer size={17} />
+      <span className="text-[9px] font-black uppercase leading-none tracking-widest opacity-80">
+        Sisa Waktu
+      </span>
+      <span className="text-base font-black leading-none tracking-wider sm:text-lg">
+        {formatTime(timeLeft)}
+      </span>
     </div>
   );
 });
@@ -406,7 +420,7 @@ const SiswaDashboard = () => {
     isAntiCheatActiveRef.current = isAntiCheatActive;
   }, [isAntiCheatActive]);
 
-  const [fontLevel, setFontLevel] = useState(0);
+  const [fontLevel, setFontLevel] = useState(2);
   const [pageZoom, setPageZoom] = useState(1);
   const [zoomedImg, setZoomedImg] = useState(null);
   const zoomedImgRef = useRef(zoomedImg);
@@ -415,13 +429,23 @@ const SiswaDashboard = () => {
   }, [zoomedImg]);
   useEffect(() => {
     const handleZoomKeyboard = (e) => {
+      if (!activeExamRef.current) return;
+
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.matches("input, textarea, select"))
+      ) {
+        return;
+      }
+
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "=" || e.key === "+") {
           e.preventDefault();
-          setPageZoom((prev) => Math.min(2.0, prev + 0.1));
+          setPageZoom((prev) => clampPageZoom(prev + 0.1));
         } else if (e.key === "-") {
           e.preventDefault();
-          setPageZoom((prev) => Math.max(0.5, prev - 0.1));
+          setPageZoom((prev) => clampPageZoom(prev - 0.1));
         } else if (e.key === "0") {
           e.preventDefault();
           setPageZoom(1);
@@ -433,14 +457,17 @@ const SiswaDashboard = () => {
     return () => window.removeEventListener("keydown", handleZoomKeyboard);
   }, []);
 
-  useEffect(() => {
-    document.documentElement.style.fontSize = `${pageZoom * 100}%`;
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const previousFontSize = root.style.fontSize;
+    if (activeExam) root.style.fontSize = `${pageZoom * 100}%`;
     return () => {
-      document.documentElement.style.fontSize = "100%";
+      root.style.fontSize = previousFontSize;
     };
-  }, [pageZoom]);
+  }, [activeExam, pageZoom]);
 
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [customAlert, setCustomAlert] = useState({
     isOpen: false,
@@ -449,6 +476,8 @@ const SiswaDashboard = () => {
     message: "",
     onConfirm: null,
   });
+  const isFirstViolationAlert =
+    customAlert.type === "warning" && customAlert.title === "Peringatan";
 
   const showAlert = useCallback((type, title, message, onConfirm = null) => {
     setCustomAlert({ isOpen: true, type, title, message, onConfirm });
@@ -515,6 +544,9 @@ const SiswaDashboard = () => {
   const userKelasFull = String(getVal(user, "Kelas") || "")
     .toUpperCase()
     .trim();
+  const userUsername = String(getVal(user, "Username") || "").trim();
+  const showUserIdentifier =
+    userUsername !== "" && userUsername.toUpperCase() !== userKelasFull;
   const userParts = userKelasFull.split(" ");
   const userTingkat = userParts[0] || "";
   const userJurusan = userParts[1] || "";
@@ -653,7 +685,7 @@ const SiswaDashboard = () => {
   }, [user, userKelasFull, userTingkat, userJurusan, userTingkatJurusan]);
 
   // ==============================================================
-  // 2. LOGIKA ANTI-CHEAT SUPER KETAT (Keluar, ESC, Overlay & Refresh)
+  // 2. LOGIKA ANTI-CHEAT (Pindah tab/aplikasi, fokus, navigasi, dan refresh)
   // ==============================================================
   useEffect(() => {
     let isProcessing = false; // <-- ANTI DOUBLE-TRIGGER (Kunci Ganda)
@@ -684,7 +716,7 @@ const SiswaDashboard = () => {
         showAlert(
           "warning",
           "Peringatan",
-          `Sistem mendeteksi aktivitas di luar ujian (Panggilan, Notifikasi, atau Keluar Aplikasi). \n\nSolusi yang bisa dicoba, tarik bilah notifikasi & AKTIFKAN fitur "JANGAN GANGGU" di HP kalian untuk mencegah gangguan dari luar. \n\nMohon berhati-hati, ini adalah PERINGATAN PERTAMA. Jika terulang, layar ujian akan dikunci!`,
+          "Sistem mendeteksi aktivitas di luar ujian. Aktifkan mode Jangan Ganggu dan jangan pindah aplikasi/tab. Jika terulang, ujian akan dikunci.",
         );
 
         // Simpan status tetap ACTIVE ke database tapi poin pelanggaran naik 1
@@ -764,16 +796,6 @@ const SiswaDashboard = () => {
       triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
     };
 
-    const handleFullscreenChange = () => {
-      if (
-        !document.fullscreenElement &&
-        !document.webkitFullscreenElement &&
-        !document.msFullscreenElement
-      ) {
-        console.log("Siswa keluar dari mode Fullscreen");
-      }
-    };
-
     const handleBeforeUnload = (e) => {
       if (activeExamRef.current && !isSubmittingRef.current) {
         e.preventDefault();
@@ -795,9 +817,6 @@ const SiswaDashboard = () => {
     window.addEventListener("resize", handleResize);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleBlur);
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
-    document.addEventListener("msfullscreenchange", handleFullscreenChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("popstate", handlePopState); // <-- Listener Swipe Aktif
 
@@ -806,15 +825,6 @@ const SiswaDashboard = () => {
       clearTimeout(resizeTimeout);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener(
-        "webkitfullscreenchange",
-        handleFullscreenChange,
-      );
-      document.removeEventListener(
-        "msfullscreenchange",
-        handleFullscreenChange,
-      );
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("popstate", handlePopState); // <-- Listener Swipe Dimatikan
     };
@@ -833,20 +843,6 @@ const SiswaDashboard = () => {
           setIsLocked(false);
           isLockedRef.current = false;
           setTimeLeft(timeLeftRef.current);
-
-          // PAKSA FULLSCREEN LAGI
-          try {
-            const docElm = document.documentElement;
-            if (docElm.requestFullscreen) {
-              docElm.requestFullscreen().catch((err) => console.log(err));
-            } else if (docElm.webkitRequestFullscreen) {
-              docElm.webkitRequestFullscreen();
-            } else if (docElm.msRequestFullscreen) {
-              docElm.msRequestFullscreen();
-            }
-          } catch (error) {
-            console.warn("Fullscreen auto-resume tidak didukung.");
-          }
 
           showAlert(
             "success",
@@ -904,19 +900,6 @@ const SiswaDashboard = () => {
     // === MENGAKTIFKAN JEBAKAN HISTORY AGAR SWIPE HP BERFUNGSI ===
     window.history.pushState({ page: "ujian" }, "", window.location.href);
     // ==============================================================
-
-    try {
-      const docElm = document.documentElement;
-      if (docElm.requestFullscreen) {
-        docElm.requestFullscreen().catch((err) => console.log(err));
-      } else if (docElm.webkitRequestFullscreen) {
-        docElm.webkitRequestFullscreen();
-      } else if (docElm.msRequestFullscreen) {
-        docElm.msRequestFullscreen();
-      }
-    } catch (error) {
-      console.warn("Fullscreen tidak didukung.");
-    }
 
     try {
       const allSoal = await api.getSoalUjian(examMapel);
@@ -1144,24 +1127,6 @@ const SiswaDashboard = () => {
       }, 5000); // 5000 milidetik = 5 detik
       // ==========================================
 
-      try {
-        if (
-          document.fullscreenElement ||
-          document.webkitFullscreenElement ||
-          document.msFullscreenElement
-        ) {
-          if (document.exitFullscreen) {
-            document.exitFullscreen().catch((err) => console.log(err));
-          } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-          } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-          }
-        }
-      } catch (error) {
-        console.warn("Gagal keluar dari fullscreen.");
-      }
-
       if (forcedStatus === "Diskualifikasi") {
         showAlert(
           "danger",
@@ -1339,114 +1304,17 @@ const SiswaDashboard = () => {
     const isCurrentRagu = !!raguRagu[currentSoalId];
 
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none relative overflow-hidden transition-all duration-300">
+      <div
+        className="relative flex h-screen h-dvh min-h-0 flex-col overflow-hidden bg-slate-100 font-sans transition-all duration-300"
+      >
         <div className="absolute inset-0 bg-slate-50 z-0 pointer-events-none"></div>
 
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm px-4 py-3 flex justify-between items-center relative">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500 text-white rounded-xl shadow-sm hidden md:block">
-              <ClipboardCheck size={20} />
-            </div>
-            <div>
-              <h1 className="text-base md:text-lg font-black text-slate-800 uppercase tracking-tighter leading-tight truncate max-w-[120px] sm:max-w-xs">
-                {examMapel}
-              </h1>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-1 truncate max-w-[120px] sm:max-w-xs">
-                {getVal(user, "Nama")}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 md:gap-3">
-            <button
-              onClick={() => setFontLevel((prev) => (prev + 1) % 3)}
-              className="flex items-center justify-center p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors border border-slate-200 relative"
-              title="Perbesar Ukuran Teks"
-            >
-              <span className="font-black text-xs md:text-sm">A</span>
-              <span className="font-black text-[10px] md:text-xs">A</span>
-              {fontLevel > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-              )}
-            </button>
-
-            {/* Tombol Kontrol Zoom Tampilan */}
-            <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl overflow-hidden shadow-sm h-full">
-              <button
-                onClick={() => setPageZoom((prev) => Math.max(0.5, prev - 0.1))}
-                className="px-4 py-2 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors font-black text-base"
-                title="Perkecil Tampilan (Ctrl -)"
-              >
-                -
-              </button>
-
-              {pageZoom !== 1 ? (
-                <button
-                  onClick={() => setPageZoom(1)}
-                  className="px-3 py-2 min-w-[54px] flex items-center justify-center text-[11px] font-black text-emerald-600 hover:text-emerald-700 bg-slate-200/50"
-                  title="Reset Zoom (Ctrl 0)"
-                >
-                  {Math.round(pageZoom * 100)}%
-                </button>
-              ) : (
-                <div className="px-4 w-px h-4 bg-slate-300 flex items-center justify-center mx-2"></div>
-              )}
-
-              <button
-                onClick={() => setPageZoom((prev) => Math.min(2.0, prev + 0.1))}
-                className="px-4 py-2 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors font-black text-base"
-                title="Perbesar Tampilan (Ctrl +)"
-              >
-                +
-              </button>
-            </div>
-
-            {/* === KODE BARU: TOMBOL FULLSCREEN MANUAL === */}
-            <button
-              onClick={() => {
-                try {
-                  const docElm = document.documentElement;
-                  if (
-                    !document.fullscreenElement &&
-                    !document.webkitFullscreenElement
-                  ) {
-                    if (docElm.requestFullscreen)
-                      docElm.requestFullscreen().catch(() => {});
-                    else if (docElm.webkitRequestFullscreen)
-                      docElm.webkitRequestFullscreen();
-                    else if (docElm.msRequestFullscreen)
-                      docElm.msRequestFullscreen();
-                  } else {
-                    if (document.exitFullscreen)
-                      document.exitFullscreen().catch(() => {});
-                    else if (document.webkitExitFullscreen)
-                      document.webkitExitFullscreen();
-                  }
-                } catch (e) {}
-              }}
-              className="flex items-center justify-center p-2 md:p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors border border-slate-200 active:scale-95"
-              title="Mode Layar Penuh"
-            >
-              <Maximize size={16} className="md:w-[18px] md:h-[18px]" />
-            </button>
-            {/* =========================================== */}
-
-            {!isAntiCheatActive && (
-              <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 md:px-3 py-2 rounded-xl border border-amber-200 text-[9px] font-black uppercase tracking-widest animate-pulse shadow-sm">
-                <ShieldAlert size={14} />{" "}
-                <span className="hidden sm:inline">Mode Uji Coba</span>
-                <span className="sm:hidden">DEV</span>
-              </div>
-            )}
-
+        <header className="relative z-50 shrink-0 border-b border-slate-200 bg-white px-3 py-1 shadow-sm sm:px-4 sm:py-2">
+          <div className="space-y-1.5">
             <ExamTimer
               initialTime={timeLeft}
               timeRef={timeLeftRef}
               onTick={(newTime) => {
-                // TAMBAHAN: Cek !isSubmittingRef.current agar timer berhenti nge-save saat dikumpulkan
                 if (activeExamRef.current && !isSubmittingRef.current) {
                   api.saveSesi(
                     getVal(user, "Username"),
@@ -1460,7 +1328,112 @@ const SiswaDashboard = () => {
               }}
               onTimeUp={() => handleEndExamClick(true)}
             />
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-sm font-black uppercase leading-tight tracking-tighter text-slate-800 sm:text-base md:text-lg">
+                  {examMapel}
+                </h1>
+                <p className="truncate text-[10px] font-semibold leading-tight text-slate-500">
+                  {getVal(user, "Nama")}
+                </p>
+                <p className="truncate text-[9px] font-bold uppercase leading-tight tracking-wide text-slate-400">
+                  {userKelasFull || "-"}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="rounded-md bg-slate-800 px-1.5 py-1 text-[9px] font-black uppercase tracking-wide text-white sm:px-2">
+                  SOAL {currentSoalIndex + 1}
+                </span>
+                {getVal(currentSoal, "Poin") && (
+                  <span className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-1 text-[9px] font-bold uppercase tracking-wide text-emerald-700 sm:px-2">
+                    {getVal(currentSoal, "Poin")} POIN
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsViewMenuOpen((prev) => !prev)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 transition-colors hover:bg-slate-100"
+                  aria-label="Pengaturan tampilan"
+                  aria-expanded={isViewMenuOpen}
+                  aria-controls="exam-view-controls"
+                  title="Zoom dan ukuran teks"
+                >
+                  <ZoomIn size={17} />
+                </button>
+                {!isAntiCheatActive && (
+                  <div className="flex shrink-0 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-1.5 py-1 text-[9px] font-bold uppercase tracking-wide text-amber-700 sm:px-2">
+                    <ShieldAlert size={13} />
+                    <span className="hidden sm:inline">Mode Uji Coba</span>
+                    <span className="sm:hidden">DEV</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+
+          {isViewMenuOpen && (
+            <div
+              id="exam-view-controls"
+              className="absolute right-3 top-full z-[60] mt-1 w-[220px] rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:right-4"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-slate-600">Zoom</span>
+                <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPageZoom((prev) => clampPageZoom(prev - 0.1))
+                    }
+                    disabled={pageZoom <= MIN_PAGE_ZOOM}
+                    className="flex h-8 w-8 items-center justify-center font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-40"
+                    aria-label="Perkecil tampilan"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPageZoom(1)}
+                    className="min-w-[42px] px-1 text-center text-[10px] font-bold text-emerald-700 hover:bg-slate-200"
+                    aria-label="Reset zoom"
+                    title="Reset zoom (Ctrl 0)"
+                  >
+                    {Math.round(pageZoom * 100)}%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPageZoom((prev) => clampPageZoom(prev + 0.1))
+                    }
+                    disabled={pageZoom >= MAX_PAGE_ZOOM}
+                    className="flex h-8 w-8 items-center justify-center font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-40"
+                    aria-label="Perbesar tampilan"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setFontLevel((prev) => (prev + 1) % fontClasses.soal.length)
+                }
+                className="mt-2 flex w-full items-center justify-between rounded-lg border border-slate-200 px-2.5 py-2 text-left transition-colors hover:bg-slate-50"
+                aria-label="Ubah ukuran teks"
+                title="Ganti ukuran teks"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="font-black text-slate-700">Aa</span>
+                  <span className="text-xs font-medium text-slate-600">
+                    Ukuran teks
+                  </span>
+                </span>
+                <span className="text-[10px] font-bold text-emerald-700">
+                  {fontLevel + 1}/5
+                </span>
+              </button>
+            </div>
+          )}
         </header>
 
         <AnimatePresence>
@@ -1483,7 +1456,10 @@ const SiswaDashboard = () => {
           )}
         </AnimatePresence>
 
-        <main className="flex-1 w-full max-w-7xl mx-auto p-2 md:p-5 flex flex-col justify-center z-10 relative pb-24 lg:pb-5">
+        <main
+          onClick={() => setIsViewMenuOpen(false)}
+          className="relative z-10 mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-2 md:p-5 lg:pb-5"
+        >
           {loadingSoal ? (
             <div className="flex flex-col items-center justify-center h-full m-auto">
               <RefreshCw
@@ -1495,22 +1471,9 @@ const SiswaDashboard = () => {
               </h2>
             </div>
           ) : (
-            <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 w-full h-[calc(100vh-140px)] lg:h-[calc(100vh-120px)] min-h-[500px]">
-              <div className="flex-1 flex flex-col h-full bg-[#F4F4F0] border border-slate-200 rounded-[1.5rem] lg:rounded-[2rem] shadow-sm overflow-hidden relative">
-                <div className="px-5 lg:px-6 py-3 lg:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-2 lg:gap-3">
-                    <span className="bg-slate-800 text-white font-black px-3 py-1.5 lg:px-4 rounded-lg text-xs lg:text-sm shadow-sm">
-                      SOAL NO. {currentSoalIndex + 1}
-                    </span>
-                    {getVal(currentSoal, "Poin") && (
-                      <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-1.5 lg:px-3 rounded-lg text-[10px] lg:text-xs border border-emerald-200">
-                        {getVal(currentSoal, "Poin")} POIN
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-8">
+            <div className="flex min-h-0 w-full flex-1 flex-col gap-3 lg:flex-row lg:gap-6">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.5rem] border border-slate-200 bg-[#F4F4F0] shadow-sm lg:rounded-[2rem]">
+                <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-8">
                   <div className="max-w-4xl mx-auto pb-6">
                     {getVal(currentSoal, "Wacana") && (
                       <div className="p-5 md:p-6 bg-amber-50/50 border border-amber-200 rounded-[1.5rem] relative shadow-sm mb-6 mt-2">
@@ -1753,9 +1716,9 @@ const SiswaDashboard = () => {
         </main>
 
         {!loadingSoal && (
-          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#F4F4F0] border-t border-slate-200 z-40 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] pb-6 sm:pb-4 flex flex-col">
+          <div className="relative z-40 flex shrink-0 flex-col border-t border-slate-200 bg-[#F4F4F0] pb-2 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] lg:hidden">
             {/* 1. Bar Progress Tipis Memanjang di Atas Navigasi */}
-            <div className="w-full h-1.5 bg-slate-200 overflow-hidden">
+            <div className="h-1 w-full overflow-hidden bg-slate-200">
               <div
                 className="h-full bg-emerald-500 transition-all duration-300 ease-out"
                 style={{ width: `${progressPercent}%` }}
@@ -1763,32 +1726,32 @@ const SiswaDashboard = () => {
             </div>
 
             {/* 2. Teks Indikator (Terjawab X dari Y) */}
-            <div className="flex justify-between items-center px-4 pt-2.5 pb-1">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            <div className="flex items-center justify-between px-3 pt-1.5 pb-0.5">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                 Terjawab{" "}
                 <span className="text-emerald-600">{answeredCount}</span> dari{" "}
                 {soalData.length} Soal
               </span>
-              <span className="text-[10px] font-black text-emerald-600">
+              <span className="text-[9px] font-black text-emerald-600">
                 {Math.round(progressPercent)}%
               </span>
             </div>
 
             {/* 3. Barisan Tombol Bawah */}
-            <div className="px-3 pt-1.5 flex justify-between items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2 pt-1">
               <button
                 onClick={() =>
                   setCurrentSoalIndex((prev) => Math.max(0, prev - 1))
                 }
                 disabled={currentSoalIndex === 0}
-                className="p-3.5 bg-white text-slate-600 rounded-xl disabled:opacity-30 active:scale-95 transition-colors border border-slate-200 shadow-sm hover:text-emerald-600"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors active:scale-95 disabled:opacity-30 hover:text-emerald-600"
               >
-                <ArrowLeft size={20} />
+                <ArrowLeft size={18} />
               </button>
 
               <button
                 onClick={toggleRaguRagu}
-                className={`flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl font-bold text-xs border transition-colors shadow-sm ${
+                className={`flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 text-[10px] font-bold transition-colors shadow-sm ${
                   isCurrentRagu
                     ? "bg-amber-400 text-amber-900 border-amber-500"
                     : "bg-white text-amber-700 border-amber-200"
@@ -1798,7 +1761,7 @@ const SiswaDashboard = () => {
                   type="checkbox"
                   checked={isCurrentRagu}
                   readOnly
-                  className="w-4 h-4 accent-amber-600 pointer-events-none"
+                  className="h-3.5 w-3.5 accent-amber-600 pointer-events-none"
                 />
                 <span className="hidden sm:inline">RAGU-RAGU</span>
                 <span className="sm:hidden">RAGU</span>
@@ -1806,9 +1769,9 @@ const SiswaDashboard = () => {
 
               <button
                 onClick={() => setIsMobileDrawerOpen(true)}
-                className="p-3.5 bg-white text-emerald-600 rounded-xl border border-emerald-200 active:scale-95 transition-transform flex items-center justify-center relative shadow-sm"
+                className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-white text-emerald-600 shadow-sm transition-transform active:scale-95"
               >
-                <LayoutDashboard size={20} />
+                <LayoutDashboard size={18} />
                 <span className="absolute -top-1.5 -right-1.5 text-[9px] font-black bg-emerald-500 text-white min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center shadow-sm border border-white">
                   {answeredCount}
                 </span>
@@ -1821,9 +1784,9 @@ const SiswaDashboard = () => {
                   )
                 }
                 disabled={currentSoalIndex === soalData.length - 1}
-                className="p-3.5 bg-emerald-500 text-white rounded-xl shadow-sm disabled:opacity-30 active:scale-95 transition-colors"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-sm transition-colors active:scale-95 disabled:opacity-30"
               >
-                <ArrowRight size={20} />
+                <ArrowRight size={18} />
               </button>
             </div>
           </div>
@@ -1962,59 +1925,61 @@ const SiswaDashboard = () => {
 
         <AnimatePresence>
           {customAlert.isOpen && (
-            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60">
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm">
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-[540px]"
               >
-                <Card className="w-full max-w-md p-8 shadow-2xl border-0 rounded-[2rem] bg-white text-center flex flex-col items-center">
-                  <div
-                    className={`p-4 rounded-2xl mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500" : customAlert.type === "success" ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"}`}
+                <Card
+                  className={`flex ${isFirstViolationAlert ? "h-[50vh] justify-between" : ""} max-h-[calc(100dvh-24px)] w-full flex-col items-center overflow-y-auto rounded-[36px] border-0 bg-white p-5 text-center shadow-2xl sm:p-8`}
+                >
+                  <span
+                    className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-[20px] ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500" : customAlert.type === "success" ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"}`}
                   >
                     {customAlert.type === "success" ? (
-                      <CheckCircle2 size={48} />
+                      <CheckCircle2 size={50} />
                     ) : customAlert.type === "info" ? (
-                      <Info size={48} />
+                      <Info size={50} />
                     ) : (
-                      <AlertTriangle size={48} />
+                      <AlertTriangle size={50} />
                     )}
-                  </div>
-                  <h3 className="text-2xl font-black text-slate-800 mb-3 leading-tight">
+                  </span>
+                  <h3 className="mt-6 break-words text-[clamp(1.5rem,5.2vw,1.875rem)] font-black leading-tight text-slate-800">
                     {customAlert.title}
                   </h3>
-                  <p className="text-sm text-slate-600 mb-8 font-medium px-2 leading-relaxed whitespace-pre-wrap">
+                  <p className="mt-3 max-w-[460px] whitespace-pre-wrap text-[clamp(0.9rem,3.2vw,1.125rem)] font-medium leading-relaxed text-slate-600">
                     {customAlert.message}
                   </p>
-                  <div className="flex gap-3 w-full">
-                    {customAlert.type === "confirm" ? (
-                      <>
-                        <button
-                          onClick={closeAlert}
-                          className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm uppercase tracking-widest"
-                        >
-                          Batal
-                        </button>
-                        <button
-                          onClick={
-                            customAlert.onConfirm
-                              ? customAlert.onConfirm
-                              : closeAlert
-                          }
-                          className="flex-1 py-3.5 rounded-xl font-bold text-white shadow-sm transition-colors text-sm uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600"
-                        >
-                          Ya, Kumpulkan
-                        </button>
-                      </>
-                    ) : (
+                  {customAlert.type === "confirm" && (
+                    <div className="mt-8 flex w-full shrink-0 gap-3">
                       <button
                         onClick={closeAlert}
-                        className={`w-full py-3.5 rounded-xl font-bold text-white shadow-sm text-sm uppercase tracking-widest transition-colors ${customAlert.type === "danger" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                        className="h-14 flex-1 rounded-2xl bg-slate-100 text-[clamp(0.7rem,2.7vw,1rem)] font-bold uppercase tracking-[0.12em] text-slate-600 transition-colors hover:bg-slate-200"
                       >
-                        Mengerti
+                        Batal
                       </button>
-                    )}
-                  </div>
+                      <button
+                        onClick={
+                          customAlert.onConfirm
+                            ? customAlert.onConfirm
+                            : closeAlert
+                        }
+                        className="h-14 flex-1 rounded-2xl bg-emerald-500 text-[clamp(0.7rem,2.7vw,1rem)] font-bold uppercase tracking-[0.12em] text-white shadow-sm transition-colors hover:bg-emerald-600"
+                      >
+                        Ya, Kumpulkan
+                      </button>
+                    </div>
+                  )}
+                  {customAlert.type !== "confirm" && (
+                    <button
+                      onClick={closeAlert}
+                      className="mt-8 h-14 w-full rounded-2xl bg-emerald-600 text-[clamp(0.7rem,2.7vw,1rem)] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:bg-emerald-700"
+                    >
+                      Mengerti
+                    </button>
+                  )}
                 </Card>
               </motion.div>
             </div>
@@ -2084,9 +2049,11 @@ const SiswaDashboard = () => {
                     <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-md uppercase tracking-wider border border-white/10">
                       KELAS: {userKelasFull || "-"}
                     </span>
-                    <span className="text-[10px] font-bold bg-amber-400/20 text-amber-200 px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-400/20">
-                      {getVal(user, "Username")}
-                    </span>
+                    {showUserIdentifier && (
+                      <span className="text-[10px] font-bold bg-amber-400/20 text-amber-200 px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-400/20">
+                        ID: {userUsername}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2343,59 +2310,61 @@ const SiswaDashboard = () => {
       {/* MODAL CUSTOM ALERT */}
       <AnimatePresence>
         {customAlert.isOpen && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-[540px]"
             >
-              <Card className="w-full max-w-md p-8 shadow-2xl border-0 rounded-[2rem] bg-white text-center flex flex-col items-center">
-                <div
-                  className={`p-4 rounded-2xl mb-5 ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500" : customAlert.type === "success" ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"}`}
+              <Card
+                className={`flex ${isFirstViolationAlert ? "h-[50vh] justify-between" : ""} max-h-[calc(100dvh-24px)] w-full flex-col items-center overflow-y-auto rounded-[36px] border-0 bg-white p-5 text-center shadow-2xl sm:p-8`}
+              >
+                <span
+                  className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-[20px] ${customAlert.type === "danger" || customAlert.type === "confirm" ? "bg-red-50 text-red-500" : customAlert.type === "warning" ? "bg-amber-50 text-amber-500" : customAlert.type === "success" ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"}`}
                 >
                   {customAlert.type === "success" ? (
-                    <CheckCircle2 size={48} />
+                    <CheckCircle2 size={50} />
                   ) : customAlert.type === "info" ? (
-                    <Info size={48} />
+                    <Info size={50} />
                   ) : (
-                    <AlertTriangle size={48} />
+                    <AlertTriangle size={50} />
                   )}
-                </div>
-                <h3 className="text-2xl font-black text-slate-800 mb-3 leading-tight">
+                </span>
+                <h3 className="mt-6 break-words text-[clamp(1.5rem,5.2vw,1.875rem)] font-black leading-tight text-slate-800">
                   {customAlert.title}
                 </h3>
-                <p className="text-sm text-slate-600 mb-8 font-medium px-2 leading-relaxed whitespace-pre-wrap">
+                <p className="mt-3 max-w-[460px] whitespace-pre-wrap text-[clamp(0.9rem,3.2vw,1.125rem)] font-medium leading-relaxed text-slate-600">
                   {customAlert.message}
                 </p>
-                <div className="flex gap-3 w-full">
-                  {customAlert.type === "confirm" ? (
-                    <>
-                      <button
-                        onClick={closeAlert}
-                        className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm uppercase tracking-widest"
-                      >
-                        Batal
-                      </button>
-                      <button
-                        onClick={
-                          customAlert.onConfirm
-                            ? customAlert.onConfirm
-                            : closeAlert
-                        }
-                        className="flex-1 py-3.5 rounded-xl font-bold text-white shadow-sm transition-colors text-sm uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600"
-                      >
-                        Ya, Kumpulkan
-                      </button>
-                    </>
-                  ) : (
+                {customAlert.type === "confirm" && (
+                  <div className="mt-8 flex w-full shrink-0 gap-3">
                     <button
                       onClick={closeAlert}
-                      className={`w-full py-3.5 rounded-xl font-bold text-white shadow-sm text-sm uppercase tracking-widest transition-colors ${customAlert.type === "danger" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                      className="h-14 flex-1 rounded-2xl bg-slate-100 text-[clamp(0.7rem,2.7vw,1rem)] font-bold uppercase tracking-[0.12em] text-slate-600 transition-colors hover:bg-slate-200"
                     >
-                      Mengerti
+                      Batal
                     </button>
-                  )}
-                </div>
+                    <button
+                      onClick={
+                        customAlert.onConfirm
+                          ? customAlert.onConfirm
+                          : closeAlert
+                      }
+                      className="h-14 flex-1 rounded-2xl bg-emerald-500 text-[clamp(0.7rem,2.7vw,1rem)] font-bold uppercase tracking-[0.12em] text-white shadow-sm transition-colors hover:bg-emerald-600"
+                    >
+                      Ya, Kumpulkan
+                    </button>
+                  </div>
+                )}
+                {customAlert.type !== "confirm" && (
+                  <button
+                    onClick={closeAlert}
+                    className="mt-8 h-14 w-full rounded-2xl bg-emerald-600 text-[clamp(0.7rem,2.7vw,1rem)] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:bg-emerald-700"
+                  >
+                    Mengerti
+                  </button>
+                )}
               </Card>
             </motion.div>
           </div>

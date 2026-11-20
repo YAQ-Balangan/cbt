@@ -84,6 +84,17 @@ const sanitizeExportFilenamePart = (value) =>
     .slice(0, 48)
     .trim();
 
+const getGuruTableColumnWidths = (columns, includeActions = false) => {
+  const idWidth = 10;
+  const nameWidth = 20;
+  const otherWidth = (100 - idWidth - nameWidth) / (columns.length - 2);
+  const widthScale = includeActions ? 0.9 : 1;
+
+  return columns.map((_, index) =>
+    `${(index === 0 ? idWidth : index === 1 ? nameWidth : otherWidth) * widthScale}%`,
+  );
+};
+
 const getScheduleDateInfo = (value) => {
   const isDateObject = value instanceof Date;
   const dateText = isDateObject ? "" : String(value || "").trim();
@@ -1144,6 +1155,9 @@ const GuruDashboard = () => {
 
   const currentConfig = TAB_CONFIG[tab];
   const data = allData[tab] || [];
+  const nilaiLogTableWidths = currentConfig.columns
+    ? getGuruTableColumnWidths(currentConfig.columns, true)
+    : [];
 
   // ALIAS PENGHINDAR ERROR:
   // Agar ratusan baris fungsi hapus/simpan lama Anda tetap bekerja sempurna tanpa perlu dimodifikasi
@@ -1163,8 +1177,12 @@ const GuruDashboard = () => {
   const [uploadingImgId, setUploadingImgId] = useState(null);
 
   // LOGIKA UNDO / REDO
-  const [actionHistory, setActionHistory] = useState({ undo: [], redo: [] });
+  const [actionHistory, setActionHistory] = useState({
+    soal: { undo: [], redo: [] },
+    nilai: { undo: [], redo: [] },
+  });
   const [isDoingHistory, setIsDoingHistory] = useState(false);
+  const currentActionHistory = actionHistory[tab];
 
   const [mapelOptions, setMapelOptions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1251,20 +1269,81 @@ const GuruDashboard = () => {
   };
   const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
 
+  const fetchData = async (isBackground = false) => {
+    if (!currentConfig) return;
+    if (!isBackground) setLoading(true);
+    if (isBackground) setIsSyncing(true);
+
+    try {
+      const targetTab = tab;
+      const [result, lockedRes, marker, resJadwal] = await Promise.all([
+        api.read(currentConfig.sheet),
+        api.getSesiTerkunci().catch((error) => {
+          console.error("Gagal menarik status siswa terkunci:", error);
+          return null;
+        }),
+        targetTab === "nilai" ? api.getNilaiChangeMarker() : null,
+        targetTab === "soal"
+          ? api.read("Jadwal").catch((error) => {
+              console.error("Gagal menarik jadwal ujian:", error);
+              return null;
+            })
+          : null,
+      ]);
+      setAllData((prev) => ({ ...prev, [targetTab]: result || [] }));
+      if (targetTab === "soal" && resJadwal) setJadwalData(resJadwal);
+      if (lockedRes) {
+        setSesiUjianData((prev) =>
+          JSON.stringify(prev) === JSON.stringify(lockedRes)
+            ? prev
+            : lockedRes,
+        );
+      }
+      if (targetTab === "nilai") {
+        nilaiLoadedRef.current = true;
+        nilaiMarkerRef.current = marker;
+        nilaiMarkerInitializedRef.current = true;
+      }
+    } catch (error) {
+      console.error(`Gagal merefresh data ${tab}:`, error);
+    } finally {
+      setLoading(false);
+      setIsSyncing(false);
+    }
+  };
+
   // --- REKAM JEJAK SEJARAH (UNDO/REDO LOGGER) ---
   const pushAction = (action) => {
-    setActionHistory((prev) => ({ undo: [...prev.undo, action], redo: [] }));
+    setActionHistory((prev) => {
+      const history = prev[tab] || { undo: [], redo: [] };
+      return {
+        ...prev,
+        [tab]: { undo: [...history.undo, action], redo: [] },
+      };
+    });
   };
 
   const handleUndo = async () => {
-    if (actionHistory.undo.length === 0) return;
-    const action = actionHistory.undo[actionHistory.undo.length - 1];
+    const history = actionHistory[tab];
+    if (isDoingHistory || !history || history.undo.length === 0) return;
+    const action = history.undo[history.undo.length - 1];
+    let actionForRedo = action;
     setIsDoingHistory(true);
     try {
       if (action.type === "DELETE") {
         const itemToRestore = { ...action.item };
         delete itemToRestore.id;
-        await api.create(currentConfig.sheet, itemToRestore);
+        const restoredRows = await api.create(
+          currentConfig.sheet,
+          itemToRestore,
+        );
+        const restoredItem = Array.isArray(restoredRows)
+          ? restoredRows[0]
+          : restoredRows;
+        if (restoredItem?.id == null) {
+          throw new Error("Data yang dipulihkan tidak memiliki ID.");
+        }
+        actionForRedo = { ...action, item: restoredItem };
       } else if (action.type === "CREATE") {
         await api.delete(currentConfig.sheet, action.item.id);
       } else if (action.type === "UPDATE") {
@@ -1285,10 +1364,16 @@ const GuruDashboard = () => {
         }
       }
 
-      setActionHistory((prev) => ({
-        undo: prev.undo.slice(0, -1),
-        redo: [...prev.redo, action],
-      }));
+      setActionHistory((prev) => {
+        const currentHistory = prev[tab];
+        return {
+          ...prev,
+          [tab]: {
+            undo: currentHistory.undo.slice(0, -1),
+            redo: [...currentHistory.redo, actionForRedo],
+          },
+        };
+      });
       await fetchData(false);
     } catch (err) {
       showAlert(
@@ -1302,8 +1387,9 @@ const GuruDashboard = () => {
   };
 
   const handleRedo = async () => {
-    if (actionHistory.redo.length === 0) return;
-    const action = actionHistory.redo[actionHistory.redo.length - 1];
+    const history = actionHistory[tab];
+    if (isDoingHistory || !history || history.redo.length === 0) return;
+    const action = history.redo[history.redo.length - 1];
     setIsDoingHistory(true);
     try {
       if (action.type === "DELETE") {
@@ -1328,10 +1414,16 @@ const GuruDashboard = () => {
         }
       }
 
-      setActionHistory((prev) => ({
-        undo: [...prev.undo, action],
-        redo: prev.redo.slice(0, -1),
-      }));
+      setActionHistory((prev) => {
+        const currentHistory = prev[tab];
+        return {
+          ...prev,
+          [tab]: {
+            undo: [...currentHistory.undo, action],
+            redo: currentHistory.redo.slice(0, -1),
+          },
+        };
+      });
       await fetchData(false);
     } catch (err) {
       showAlert("danger", "Redo Gagal", "Gagal mengulang aksi: " + err.message);
@@ -1339,6 +1431,50 @@ const GuruDashboard = () => {
       setIsDoingHistory(false);
     }
   };
+
+  const historyActionHandlersRef = useRef({
+    undo: handleUndo,
+    redo: handleRedo,
+  });
+
+  useEffect(() => {
+    historyActionHandlersRef.current = {
+      undo: handleUndo,
+      redo: handleRedo,
+    };
+  });
+
+  useEffect(() => {
+    const handleHistoryShortcut = (event) => {
+      const isModifierPressed = event.ctrlKey || event.metaKey;
+      const target = event.target;
+      const isTextEditing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (
+        !isModifierPressed ||
+        event.altKey ||
+        event.repeat ||
+        isTextEditing ||
+        customAlert.isOpen
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        void historyActionHandlersRef.current.redo();
+      } else if (key === "z") {
+        event.preventDefault();
+        void historyActionHandlersRef.current.undo();
+      }
+    };
+
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => window.removeEventListener("keydown", handleHistoryShortcut);
+  }, [customAlert.isOpen]);
 
   const fetchMapelList = async () => {
     try {
@@ -1486,51 +1622,6 @@ const GuruDashboard = () => {
       }
     } catch (error) {
       console.error("Gagal menarik semua data:", error);
-    } finally {
-      setLoading(false);
-      setIsSyncing(false);
-    }
-  };
-
-  // ALIAS FETCH: Jika ada aksi yang memaksa refresh (seperti hapus/simpan),
-  // kita hanya refresh tab yang sedang aktif saja agar ringan.
-  const fetchData = async (isBackground = false) => {
-    if (!currentConfig) return;
-    if (!isBackground) setLoading(true);
-    if (isBackground) setIsSyncing(true);
-
-    try {
-      const targetTab = tab;
-      const [result, lockedRes, marker, resJadwal] = await Promise.all([
-        api.read(currentConfig.sheet),
-        api.getSesiTerkunci().catch((error) => {
-          console.error("Gagal menarik status siswa terkunci:", error);
-          return null;
-        }),
-        targetTab === "nilai" ? api.getNilaiChangeMarker() : null,
-        targetTab === "soal"
-          ? api.read("Jadwal").catch((error) => {
-              console.error("Gagal menarik jadwal ujian:", error);
-              return null;
-            })
-          : null,
-      ]);
-      setAllData((prev) => ({ ...prev, [targetTab]: result || [] }));
-      if (targetTab === "soal" && resJadwal) setJadwalData(resJadwal);
-      if (lockedRes) {
-        setSesiUjianData((prev) =>
-          JSON.stringify(prev) === JSON.stringify(lockedRes)
-            ? prev
-            : lockedRes,
-        );
-      }
-      if (targetTab === "nilai") {
-        nilaiLoadedRef.current = true;
-        nilaiMarkerRef.current = marker;
-        nilaiMarkerInitializedRef.current = true;
-      }
-    } catch (error) {
-      console.error(`Gagal merefresh data ${tab}:`, error);
     } finally {
       setLoading(false);
       setIsSyncing(false);
@@ -1770,7 +1861,7 @@ const GuruDashboard = () => {
           if (res && res.error)
             throw new Error(res.error.message || JSON.stringify(res.error));
 
-          if (itemToDelete && tab === "soal") {
+          if (itemToDelete) {
             pushAction({ type: "DELETE", item: itemToDelete });
           }
           await fetchData(false);
@@ -1849,6 +1940,11 @@ const GuruDashboard = () => {
         );
       }
 
+      pushAction({
+        type: "UPDATE",
+        oldItem: nilaiEditItem,
+        newItem: { ...nilaiEditItem, ...payload, ...updatedRows[0] },
+      });
       await fetchData(false);
       setNilaiEditItem(null);
       showAlert(
@@ -1890,9 +1986,7 @@ const GuruDashboard = () => {
             currentConfig.sheet,
             itemsToDelete.map((item) => item.id),
           );
-          if (tab === "soal") {
-            pushAction({ type: "BULK_DELETE", items: itemsToDelete });
-          }
+          pushAction({ type: "BULK_DELETE", items: itemsToDelete });
           await fetchData(false);
           setSelectedIds([]);
         } catch (error) {
@@ -1933,9 +2027,7 @@ const GuruDashboard = () => {
             currentConfig.sheet,
             itemsToDelete.map((item) => item.id),
           );
-          if (tab === "soal") {
-            pushAction({ type: "BULK_DELETE", items: itemsToDelete });
-          }
+          pushAction({ type: "BULK_DELETE", items: itemsToDelete });
           await fetchData(false);
           setSelectedIds([]);
           showAlert(
@@ -3716,29 +3808,37 @@ Patuhi aturan berikut secara ketat:
               </button>
             </div>
 
-            {/* Baris 2: Undo/Redo & Aksi Massal (Khusus Tab Bank Soal) */}
-            {tab === "soal" && (
+            {/* Baris 2: Undo/Redo dan Aksi Massal */}
+            {(tab === "soal" || tab === "nilai") && (
               <div className="flex justify-between items-center gap-2">
                 {/* Undo Redo Mini */}
                 <div className="flex bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden shrink-0">
                   <button
                     onClick={handleUndo}
-                    disabled={isDoingHistory || actionHistory.undo.length === 0}
+                    disabled={
+                      isDoingHistory || currentActionHistory.undo.length === 0
+                    }
                     className="p-2.5 text-slate-500 disabled:opacity-30 hover:bg-emerald-50 border-r border-slate-100 transition-colors"
+                    title="Undo (Ctrl+Z)"
+                    aria-label="Undo"
                   >
                     <Undo size={16} />
                   </button>
                   <button
                     onClick={handleRedo}
-                    disabled={isDoingHistory || actionHistory.redo.length === 0}
+                    disabled={
+                      isDoingHistory || currentActionHistory.redo.length === 0
+                    }
                     className="p-2.5 text-slate-500 disabled:opacity-30 hover:bg-emerald-50 transition-colors"
+                    title="Redo (Ctrl+Y)"
+                    aria-label="Redo"
                   >
                     <Redo size={16} />
                   </button>
                 </div>
 
                 {/* Pilih Semua & Sapu Bersih Mini */}
-                {processedData.length > 0 && (
+                {tab === "soal" && processedData.length > 0 && (
                   <div className="flex gap-2 flex-1">
                     <button
                       onClick={handleSelectAll}
@@ -3798,36 +3898,42 @@ Patuhi aturan berikut secara ketat:
           </div>
 
           <div className="flex flex-wrap w-full md:w-auto gap-2 z-10">
+            <div className="flex items-center rounded-xl border border-slate-200 bg-white shadow-sm">
+              <button
+                onClick={handleUndo}
+                disabled={
+                  isDoingHistory || currentActionHistory.undo.length === 0
+                }
+                className="flex items-center gap-2 border-r border-slate-100 px-3 py-2.5 text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-30"
+                title="Undo (Ctrl+Z)"
+                aria-label="Undo"
+              >
+                {isDoingHistory ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <Undo size={16} />
+                )}
+                <span className="text-xs font-bold">Undo</span>
+              </button>
+              <button
+                onClick={handleRedo}
+                disabled={
+                  isDoingHistory || currentActionHistory.redo.length === 0
+                }
+                className="flex items-center gap-2 px-3 py-2.5 text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-30"
+                title="Redo (Ctrl+Y)"
+                aria-label="Redo"
+              >
+                {isDoingHistory ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <Redo size={16} />
+                )}
+                <span className="text-xs font-bold">Redo</span>
+              </button>
+            </div>
             {tab === "soal" && (
               <div className="flex flex-wrap md:flex-nowrap gap-2 w-full md:w-auto items-center">
-                {/* TOOLBAR UNDO & REDO */}
-                <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden w-full md:w-auto justify-center">
-                  <button
-                    onClick={handleUndo}
-                    disabled={isDoingHistory || actionHistory.undo.length === 0}
-                    className="p-3 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-30 disabled:hover:bg-white transition-all border-r border-slate-100"
-                    title="Undo (Batal Aksi Terakhir)"
-                  >
-                    {isDoingHistory ? (
-                      <RefreshCw size={18} className="animate-spin" />
-                    ) : (
-                      <Undo size={18} />
-                    )}
-                  </button>
-                  <button
-                    onClick={handleRedo}
-                    disabled={isDoingHistory || actionHistory.redo.length === 0}
-                    className="p-3 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-30 disabled:hover:bg-white transition-all"
-                    title="Redo (Ulangi Aksi)"
-                  >
-                    {isDoingHistory ? (
-                      <RefreshCw size={18} className="animate-spin" />
-                    ) : (
-                      <Redo size={18} />
-                    )}
-                  </button>
-                </div>
-
                 <button
                   onClick={() => {
                     setBulkMapel("");
@@ -4427,8 +4533,25 @@ Patuhi aturan berikut secara ketat:
                     ) : (
                       <table
                         id="data-table-guru"
-                        className="w-full text-left text-sm whitespace-nowrap border-collapse"
+                        className="w-full table-fixed min-w-[1000px] text-left text-xs xl:text-sm border-collapse"
+                        style={{
+                          minWidth: `${Math.max(1000, 420 + pivotNilaiData.mapels.length * 100)}px`,
+                        }}
                       >
+                        <colgroup>
+                          <col style={{ width: "7%" }} />
+                          <col style={{ width: "22%" }} />
+                          <col style={{ width: "12%" }} />
+                          {pivotNilaiData.mapels.map((mapel) => (
+                            <col
+                              key={mapel}
+                              style={{
+                                width: `${49 / Math.max(1, pivotNilaiData.mapels.length)}%`,
+                              }}
+                            />
+                          ))}
+                          <col style={{ width: "10%" }} />
+                        </colgroup>
                         <thead className="sticky top-0 z-20 shadow-sm">
                           <tr>
                             <th
@@ -4436,35 +4559,35 @@ Patuhi aturan berikut secara ketat:
                                 position: "sticky",
                                 left: 0,
                                 zIndex: 30,
-                                minWidth: "60px",
+                                minWidth: "70px",
                               }}
-                              className="px-6 py-5 bg-slate-50 border-b-2 border-r border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center"
+                              className="whitespace-normal break-words px-3 py-4 bg-slate-50 border-b-2 border-r border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-wide leading-tight text-center"
                             >
                               No
                             </th>
                             <th
                               style={{
                                 position: "sticky",
-                                left: "60px",
+                                left: "7%",
                                 zIndex: 30,
                                 minWidth: "220px",
                               }}
-                              className="px-6 py-5 bg-slate-50 border-b-2 border-r border-slate-200 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] text-slate-500 font-bold text-xs uppercase tracking-wider"
+                              className="whitespace-normal break-words px-3 py-4 bg-slate-50 border-b-2 border-r border-slate-200 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] text-slate-500 font-bold text-[10px] uppercase tracking-wide leading-tight"
                             >
                               Nama Siswa
                             </th>
-                            <th className="px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider text-center">
+                            <th className="whitespace-normal break-words px-3 py-4 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-wide leading-tight text-center">
                               Kelas
                             </th>
                             {pivotNilaiData.mapels.map((m) => (
                               <th
                                 key={m}
-                                className="px-6 py-5 bg-slate-50 border-b-2 border-l border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider text-center"
+                                className="whitespace-normal break-words px-3 py-4 bg-slate-50 border-b-2 border-l border-slate-200 text-slate-600 font-bold text-[10px] uppercase tracking-wide leading-tight text-center"
                               >
                                 {m}
                               </th>
                             ))}
-                            <th className="px-6 py-5 bg-emerald-50 border-b-2 border-l border-emerald-200 text-emerald-700 font-bold text-xs uppercase tracking-wider text-center">
+                            <th className="whitespace-normal break-words px-3 py-4 bg-emerald-50 border-b-2 border-l border-emerald-200 text-emerald-700 font-bold text-[10px] uppercase tracking-wide leading-tight text-center">
                               Rata-Rata
                             </th>
                           </tr>
@@ -4480,25 +4603,25 @@ Patuhi aturan berikut secara ketat:
                                   position: "sticky",
                                   left: 0,
                                   zIndex: 10,
-                                  minWidth: "60px",
+                                  minWidth: "70px",
                                 }}
-                                className="px-6 py-4 font-bold text-slate-400 bg-white border-r border-slate-100 text-center group-hover:bg-emerald-50 transition-colors"
+                                className="whitespace-normal break-words px-3 py-3 font-bold text-slate-400 bg-white border-r border-slate-100 text-center group-hover:bg-emerald-50 transition-colors"
                               >
                                 {idx + 1}
                               </td>
                               <td
                                 style={{
                                   position: "sticky",
-                                  left: "60px",
+                                  left: "7%",
                                   zIndex: 10,
                                   minWidth: "220px",
                                 }}
-                                className="px-6 py-4 font-bold text-slate-800 bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors col-nama"
+                                className="whitespace-normal break-words px-3 py-3 font-bold text-slate-800 bg-white border-r border-slate-100 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50 transition-colors col-nama"
                               >
                                 {item.nama_siswa}
                               </td>
-                              <td className="px-6 py-4 text-center">
-                                <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-md font-semibold text-[11px] text-slate-600">
+                              <td className="whitespace-normal break-words px-3 py-3 text-center">
+                                <span className="px-2 py-1 bg-slate-100 border border-slate-200 rounded-md font-semibold text-[10px] text-slate-600">
                                   {item.kelas}
                                 </span>
                               </td>
@@ -4509,14 +4632,14 @@ Patuhi aturan berikut secara ketat:
                                 return (
                                   <td
                                     key={m}
-                                    className={`px-6 py-4 text-center font-bold text-base border-l border-slate-100 ${isKkmFailed ? "text-rose-500 bg-rose-50/50" : "text-slate-600"}`}
+                                    className={`whitespace-normal break-words px-3 py-3 text-center font-bold text-sm border-l border-slate-100 ${isKkmFailed ? "text-rose-500 bg-rose-50/50" : "text-slate-600"}`}
                                   >
                                     {skor !== undefined ? skor : "-"}
                                   </td>
                                 );
                               })}
                               <td
-                                className={`px-6 py-4 text-center font-bold text-lg border-l border-slate-100 ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600 bg-rose-50" : "text-emerald-600 bg-emerald-50/50"}`}
+                                className={`whitespace-normal break-words px-3 py-3 text-center font-bold text-sm border-l border-slate-100 ${parseFloat(item.RataRata) < KKM_SCORE ? "text-rose-600 bg-rose-50" : "text-emerald-600 bg-emerald-50/50"}`}
                               >
                                 {item.RataRata}
                               </td>
@@ -4632,8 +4755,17 @@ Patuhi aturan berikut secara ketat:
                     ) : (
                       <table
                         id="data-table-guru"
-                        className="w-full text-left text-sm whitespace-nowrap border-collapse"
+                        className="w-full min-w-[1100px] table-fixed text-left text-xs xl:text-sm border-collapse"
                       >
+                        <colgroup>
+                          {nilaiLogTableWidths.map((width, index) => (
+                            <col
+                              key={currentConfig.columns[index].key}
+                              style={{ width }}
+                            />
+                          ))}
+                          <col style={{ width: "10%" }} />
+                        </colgroup>
                         <thead className="sticky top-0 z-20 shadow-sm">
                           <tr>
                             {currentConfig.columns.map((col, index) => {
@@ -4644,21 +4776,21 @@ Patuhi aturan berikut secara ketat:
                                     position: "sticky",
                                     left: 0,
                                     zIndex: 30,
-                                    minWidth: "100px",
+                                    minWidth: "90px",
                                   }
                                 : isName
                                   ? {
                                       position: "sticky",
-                                      left: "100px",
+                                      left: nilaiLogTableWidths[0],
                                       zIndex: 30,
-                                      minWidth: "220px",
+                                      minWidth: "200px",
                                     }
                                   : {};
                               return (
                                 <th
                                   key={col.key}
                                   style={stickyStyle}
-                                  className={`px-6 py-5 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider ${isID || isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}
+                                  className={`whitespace-normal break-words px-3 py-4 bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-wide leading-tight ${isID || isName ? "border-r shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]" : ""}`}
                                 >
                                   {col.key === "id" ? (
                                     <label className="flex items-center gap-2">
@@ -4677,7 +4809,7 @@ Patuhi aturan berikut secara ketat:
                                 </th>
                               );
                             })}
-                            <th className="px-6 py-5 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider print-hidden min-w-[120px]">
+                            <th className="whitespace-normal break-words px-3 py-4 text-center bg-slate-50 border-b-2 border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-wide leading-tight print-hidden">
                               Aksi
                             </th>
                           </tr>
@@ -4696,21 +4828,21 @@ Patuhi aturan berikut secara ketat:
                                       position: "sticky",
                                       left: 0,
                                       zIndex: 10,
-                                      minWidth: "100px",
+                                      minWidth: "90px",
                                     }
                                   : isName
                                     ? {
                                         position: "sticky",
-                                        left: "100px",
+                                        left: nilaiLogTableWidths[0],
                                         zIndex: 10,
-                                        minWidth: "220px",
+                                        minWidth: "200px",
                                       }
                                     : {};
                                 return (
                                   <td
                                     key={col.key}
                                     style={stickyStyle}
-                                    className={`px-6 py-4 font-semibold text-slate-700 ${isID || isName ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}
+                                    className={`whitespace-normal break-words px-3 py-3 font-semibold text-slate-700 ${isID || isName ? "bg-white border-r border-slate-100 group-hover:bg-emerald-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.03)]" : ""}`}
                                   >
                                     {col.key === "id" ? (
                                       <label className="flex items-center gap-2">
@@ -4732,7 +4864,7 @@ Patuhi aturan berikut secara ketat:
                                       <Badge type={item[col.key]} />
                                     ) : col.key === "skor" ? (
                                       <span
-                                        className={`text-base font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}
+                                        className={`text-sm font-bold ${parseFloat(item[col.key]) < KKM_SCORE ? "text-rose-500" : "text-emerald-600"}`}
                                       >
                                         {item[col.key]}
                                       </span>
@@ -4742,11 +4874,11 @@ Patuhi aturan berikut secara ketat:
                                   </td>
                                 );
                               })}
-                              <td className="px-6 py-4 text-center print-hidden">
-                                <div className="flex items-center justify-center gap-2">
+                              <td className="px-2 py-3 text-center print-hidden">
+                                <div className="flex items-center justify-center gap-1">
                                   <button
                                     onClick={() => openEditNilai(item)}
-                                    className="p-2 bg-white border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                                    className="p-1.5 bg-white border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
                                     title="Edit nilai"
                                     aria-label={`Edit nilai ${item.nama_siswa}`}
                                   >
@@ -4754,14 +4886,14 @@ Patuhi aturan berikut secara ketat:
                                   </button>
                                   <button
                                     onClick={() => openReviewModal(item)}
-                                    className="p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                                    className="p-1.5 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-sm"
                                     title="Lihat Akurasi/Detail Jawaban"
                                   >
                                     <Eye size={16} />
                                   </button>
                                   <button
                                     onClick={() => handleDelete(item.id)}
-                                    className="p-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                                    className="p-1.5 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-sm"
                                     title="Hapus Log"
                                   >
                                     <Trash2 size={16} />
