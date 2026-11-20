@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import {
   Folder,
+  CalendarDays,
   ArrowLeft,
   Library,
   Layers,
@@ -82,6 +83,109 @@ const sanitizeExportFilenamePart = (value) =>
     .replace(/\s+/g, " ")
     .slice(0, 48)
     .trim();
+
+const getScheduleDateInfo = (value) => {
+  const isDateObject = value instanceof Date;
+  const dateText = isDateObject ? "" : String(value || "").trim();
+  if (!isDateObject && !dateText) return null;
+
+  const dateOnlyMatch = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = isDateObject
+    ? value
+    : dateOnlyMatch
+      ? new Date(
+          Date.UTC(
+            Number(dateOnlyMatch[1]),
+            Number(dateOnlyMatch[2]) - 1,
+            Number(dateOnlyMatch[3]),
+            12,
+          ),
+        )
+      : new Date(dateText);
+
+  if (Number.isNaN(date.getTime())) return null;
+  if (
+    dateOnlyMatch &&
+    (date.getUTCFullYear() !== Number(dateOnlyMatch[1]) ||
+      date.getUTCMonth() !== Number(dateOnlyMatch[2]) - 1 ||
+      date.getUTCDate() !== Number(dateOnlyMatch[3]))
+  ) {
+    return null;
+  }
+
+  const dateParts = dateOnlyMatch
+    ? null
+    : new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Jakarta",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(date);
+
+  return {
+    key: dateOnlyMatch
+      ? dateText
+      : ["year", "month", "day"]
+          .map(
+            (type) =>
+              dateParts.find((part) => part.type === type)?.value || "",
+          )
+          .join("-"),
+    label: date.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: dateOnlyMatch ? "UTC" : "Asia/Jakarta",
+    }),
+  };
+};
+
+const getFolderScheduleDate = (jadwalData, mapel, kelas) => {
+  const mapelKey = String(mapel).trim().toLocaleLowerCase("id-ID");
+  const kelasParts = String(kelas)
+    .trim()
+    .toLocaleUpperCase("id-ID")
+    .split(/\s+/);
+  const kelasVariants = new Set(
+    [
+      kelasParts.join(" "),
+      kelasParts.slice(0, 2).join(" "),
+      kelasParts[0],
+      kelasParts[1],
+    ].filter(Boolean),
+  );
+  const scheduleDates = jadwalData
+    .filter((jadwal) => {
+      if (
+        String(jadwal.mapel || "")
+          .trim()
+          .toLocaleLowerCase("id-ID") !== mapelKey
+      ) {
+        return false;
+      }
+
+      const targetKelas = String(jadwal.kelas || "")
+        .split(",")
+        .map((target) => target.trim().toLocaleUpperCase("id-ID"))
+        .filter(Boolean);
+      return (
+        targetKelas.length === 0 ||
+        targetKelas.some(
+          (target) =>
+            target.includes("SEMUA") || kelasVariants.has(target),
+        )
+      );
+    })
+    .map((jadwal) => getScheduleDateInfo(jadwal.tanggal))
+    .filter((schedule) => schedule?.key && schedule.label)
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  const todayKey = getScheduleDateInfo(new Date())?.key;
+  const selectedDate =
+    scheduleDates.find((schedule) => schedule.key >= todayKey) ||
+    scheduleDates[scheduleDates.length - 1];
+  return selectedDate || null;
+};
 
 // Tambahan: Menggunakan React.memo agar performa lebih ringan
 const Latex = React.memo(({ children }) => {
@@ -1036,6 +1140,7 @@ const GuruDashboard = () => {
     nilai: [],
     settings: [],
   });
+  const [jadwalData, setJadwalData] = useState([]);
 
   const currentConfig = TAB_CONFIG[tab];
   const data = allData[tab] || [];
@@ -1347,7 +1452,7 @@ const GuruDashboard = () => {
     if (isBackground) setIsSyncing(true);
 
     try {
-      const [resSoal, lockedRes, resSettings] = await Promise.all([
+      const [resSoal, lockedRes, resSettings, resJadwal] = await Promise.all([
         api.read(TAB_CONFIG.soal.sheet),
         api.getSesiTerkunci().catch((error) => {
           console.error("Gagal menarik status siswa terkunci:", error);
@@ -1356,6 +1461,10 @@ const GuruDashboard = () => {
         api.read("Settings").catch((error) => {
           console.error("Gagal menarik pengaturan dashboard:", error);
           return [];
+        }),
+        api.read("Jadwal").catch((error) => {
+          console.error("Gagal menarik jadwal ujian:", error);
+          return null;
         }),
       ]);
 
@@ -1367,6 +1476,7 @@ const GuruDashboard = () => {
         };
         return newData;
       });
+      if (resJadwal) setJadwalData(resJadwal);
       if (lockedRes) {
         setSesiUjianData((prev) =>
           JSON.stringify(prev) === JSON.stringify(lockedRes)
@@ -1391,15 +1501,22 @@ const GuruDashboard = () => {
 
     try {
       const targetTab = tab;
-      const [result, lockedRes, marker] = await Promise.all([
+      const [result, lockedRes, marker, resJadwal] = await Promise.all([
         api.read(currentConfig.sheet),
         api.getSesiTerkunci().catch((error) => {
           console.error("Gagal menarik status siswa terkunci:", error);
           return null;
         }),
         targetTab === "nilai" ? api.getNilaiChangeMarker() : null,
+        targetTab === "soal"
+          ? api.read("Jadwal").catch((error) => {
+              console.error("Gagal menarik jadwal ujian:", error);
+              return null;
+            })
+          : null,
       ]);
       setAllData((prev) => ({ ...prev, [targetTab]: result || [] }));
+      if (targetTab === "soal" && resJadwal) setJadwalData(resJadwal);
       if (lockedRes) {
         setSesiUjianData((prev) =>
           JSON.stringify(prev) === JSON.stringify(lockedRes)
@@ -2638,7 +2755,18 @@ Patuhi aturan berikut secara ketat:
           : `${kls}___${item.mapel}`;
 
       if (!groups[key]) {
-        groups[key] = { mapel: item.mapel, kelas: kls, count: 0 };
+        const scheduleDate = getFolderScheduleDate(
+          jadwalData,
+          item.mapel,
+          kls,
+        );
+        groups[key] = {
+          mapel: item.mapel,
+          kelas: kls,
+          count: 0,
+          tanggal: scheduleDate?.label || "",
+          tanggalKey: scheduleDate?.key || "",
+        };
       }
       groups[key].count += 1;
     });
@@ -2656,6 +2784,17 @@ Patuhi aturan berikut secara ketat:
 
     // Sorting otomatis sesuai pengelompokan
     return result.sort((a, b) => {
+      if (groupBy === "tanggal") {
+        if (Boolean(a.tanggalKey) !== Boolean(b.tanggalKey)) {
+          return a.tanggalKey ? -1 : 1;
+        }
+        const tanggalCmp = a.tanggalKey.localeCompare(b.tanggalKey);
+        if (tanggalCmp !== 0) return tanggalCmp;
+        const mapelCmp = a.mapel.localeCompare(b.mapel);
+        if (mapelCmp !== 0) return mapelCmp;
+        return a.kelas.localeCompare(b.kelas);
+      }
+
       if (groupBy === "mapel") {
         const mapelCmp = a.mapel.localeCompare(b.mapel);
         if (mapelCmp !== 0) return mapelCmp;
@@ -2666,7 +2805,7 @@ Patuhi aturan berikut secara ketat:
         return a.mapel.localeCompare(b.mapel);
       }
     });
-  }, [data, tab, folderSearch, groupBy]);
+  }, [data, jadwalData, tab, folderSearch, groupBy]);
 
   const handleOpenFolder = (mapel, kelas) => {
     setFilters({ ...filters, mapel: mapel, kelas: kelas });
@@ -4085,6 +4224,7 @@ Patuhi aturan berikut secara ketat:
                   >
                     <option value="mapel">Grup: Mata Pelajaran</option>
                     <option value="kelas">Grup: Kelas</option>
+                    <option value="tanggal">Grup: Tanggal Ujian</option>
                   </select>
                 </div>
                                {" "}
@@ -4164,6 +4304,15 @@ Patuhi aturan berikut secara ketat:
                           }
                           className={`bg-white border border-slate-200 p-5 rounded-[1.5rem] cursor-pointer transition-all group relative overflow-hidden ${color.border}`}
                         >
+                          {folder.tanggal && (
+                            <span
+                              title={`Tanggal ujian: ${folder.tanggal}`}
+                              className="absolute top-3 right-3 z-10 inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-100 px-2 py-1 text-[9px] font-bold leading-none text-amber-800"
+                            >
+                              <CalendarDays size={11} />
+                              {folder.tanggal}
+                            </span>
+                          )}
                                                    {" "}
                           <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
                                                         <Folder size={100} />   

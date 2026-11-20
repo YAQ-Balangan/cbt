@@ -27,6 +27,7 @@ import {
   AlertTriangle,
   Info,
   Maximize,
+  Search,
   X,
   BookMarked,
 } from "lucide-react";
@@ -108,19 +109,100 @@ const formatCountdown = (seconds) =>
 
 const formatTanggalLokal = (dateString) => {
   if (!dateString) return "Hari ini";
-  try {
-    if (String(dateString).includes("T") && String(dateString).includes("Z")) {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("id-ID", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-    }
-    return dateString;
-  } catch (error) {
-    return dateString;
+  const value = String(dateString).trim();
+  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = dateOnlyMatch
+    ? new Date(
+        Date.UTC(
+          Number(dateOnlyMatch[1]),
+          Number(dateOnlyMatch[2]) - 1,
+          Number(dateOnlyMatch[3]),
+          12,
+        ),
+      )
+    : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return value;
+  if (
+    dateOnlyMatch &&
+    (date.getUTCFullYear() !== Number(dateOnlyMatch[1]) ||
+      date.getUTCMonth() !== Number(dateOnlyMatch[2]) - 1 ||
+      date.getUTCDate() !== Number(dateOnlyMatch[3]))
+  ) {
+    return value;
   }
+  return date.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: dateOnlyMatch ? "UTC" : "Asia/Jakarta",
+  });
+};
+
+const getEffectiveScheduleStatus = (exam) => {
+  const savedStatus = String(getVal(exam, "Status") || "TUTUP").trim();
+  if (savedStatus.toUpperCase() !== "IKUTI TANGGAL") return savedStatus;
+
+  const dateValue = String(getVal(exam, "Tanggal") || "").trim();
+  const isoDateMatch = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const idDateMatch = dateValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!isoDateMatch && !idDateMatch) return "Draft";
+
+  const year = Number(isoDateMatch?.[1] || idDateMatch?.[3]);
+  const month = Number(isoDateMatch?.[2] || idDateMatch?.[2]);
+  const day = Number(isoDateMatch?.[3] || idDateMatch?.[1]);
+  const scheduledDate = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(scheduledDate.getTime()) ||
+    scheduledDate.getFullYear() !== year ||
+    scheduledDate.getMonth() !== month - 1 ||
+    scheduledDate.getDate() !== day
+  ) {
+    return "Draft";
+  }
+
+  const todayParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const todayPart = (type) =>
+    Number(todayParts.find((part) => part.type === type)?.value);
+  const today = new Date(
+    todayPart("year"),
+    todayPart("month") - 1,
+    todayPart("day"),
+  );
+  if (today < scheduledDate) return "Draft";
+  if (today > scheduledDate) return "Selesai";
+  return "Aktif";
+};
+
+const EXAM_STATUS_STYLES = {
+  AKTIF: {
+    label: "Aktif",
+    badge: "border-emerald-200 bg-emerald-100 text-emerald-800",
+    card: "border-l-emerald-500 bg-white",
+    lock: "bg-emerald-100 text-emerald-800",
+  },
+  DRAFT: {
+    label: "Draft",
+    badge: "border-amber-200 bg-amber-100 text-amber-800",
+    card: "border-l-amber-500 bg-amber-50/60",
+    lock: "bg-amber-100 text-amber-800",
+  },
+  SELESAI: {
+    label: "Selesai",
+    badge: "border-slate-300 bg-slate-200 text-slate-700",
+    card: "border-l-slate-400 bg-slate-50",
+    lock: "bg-slate-200 text-slate-600",
+  },
+  DEFAULT: {
+    badge: "border-slate-200 bg-slate-100 text-slate-600",
+    card: "border-l-slate-300 bg-slate-50",
+    lock: "bg-slate-200/70 text-slate-500",
+  },
 };
 
 const fontClasses = {
@@ -290,6 +372,7 @@ const SiswaDashboard = () => {
   const [errorMsg, setErrorMsg] = useState("");
 
   const [exams, setExams] = useState([]);
+  const [examSearch, setExamSearch] = useState("");
   const [myResults, setMyResults] = useState([]);
   const [tokens, setTokens] = useState({});
   const [activeExam, setActiveExam] = useState(null);
@@ -516,21 +599,34 @@ const SiswaDashboard = () => {
         const finalNilai = await api.getNilaiSiswa(userName);
         let finalJadwal = [];
         if (jadwalRes && jadwalRes.length > 0) {
-          finalJadwal = jadwalRes.filter((j) => {
-            const jadwalKelasRaw = String(
-              getVal(j, "Kelas") || "",
-            ).toUpperCase();
-            if (jadwalKelasRaw === "" || jadwalKelasRaw.includes("SEMUA"))
-              return true;
-            const targetArray = jadwalKelasRaw.split(",").map((t) => t.trim());
-            return targetArray.some(
-              (target) =>
-                target === userKelasFull ||
-                target === userTingkatJurusan ||
-                target === userJurusan ||
-                target === userTingkat,
-            );
-          });
+          finalJadwal = jadwalRes
+            .filter((j) => {
+              const jadwalKelasRaw = String(
+                getVal(j, "Kelas") || "",
+              ).toUpperCase();
+              if (jadwalKelasRaw === "" || jadwalKelasRaw.includes("SEMUA"))
+                return true;
+              const targetArray = jadwalKelasRaw
+                .split(",")
+                .map((t) => t.trim());
+              return targetArray.some(
+                (target) =>
+                  target === userKelasFull ||
+                  target === userTingkatJurusan ||
+                  target === userJurusan ||
+                  target === userTingkat,
+              );
+            })
+            .map((exam) => {
+              const statusKey =
+                Object.keys(exam).find(
+                  (key) => key.toLowerCase() === "status",
+                ) || "status";
+              return {
+                ...exam,
+                [statusKey]: getEffectiveScheduleStatus(exam),
+              };
+            });
         }
 
         setExams((prev) =>
@@ -1931,6 +2027,13 @@ const SiswaDashboard = () => {
   // ==============================================================
   // TAMPILAN BERANDA (Pilih Jadwal)
   // ==============================================================
+  const searchTerm = examSearch.trim().toLocaleLowerCase("id-ID");
+  const filteredExams = exams.filter((exam) =>
+    String(getVal(exam, "Mapel") || "Ujian")
+      .toLocaleLowerCase("id-ID")
+      .includes(searchTerm),
+  );
+
   return (
     <Dashboard
       menu={[
@@ -1995,6 +2098,30 @@ const SiswaDashboard = () => {
               <ClipboardCheck className="text-emerald-600" size={20} /> Daftar
               Ujian Tersedia
             </h3>
+            {!loading && !errorMsg && exams.length > 0 && (
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <Search size={18} className="shrink-0 text-slate-400" />
+                <input
+                  type="text"
+                  aria-label="Cari mata pelajaran"
+                  autoComplete="off"
+                  value={examSearch}
+                  onChange={(event) => setExamSearch(event.target.value)}
+                  placeholder="Cari mata pelajaran..."
+                  className="min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:font-medium placeholder:text-slate-400"
+                />
+                {examSearch && (
+                  <button
+                    type="button"
+                    aria-label="Hapus pencarian mata pelajaran"
+                    onClick={() => setExamSearch("")}
+                    className="shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            )}
             {loading ? (
               <div className="py-16 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
                 <RefreshCw
@@ -2016,20 +2143,38 @@ const SiswaDashboard = () => {
                   Belum ada jadwal ujian untuk kelasmu saat ini.
                 </p>
               </div>
+            ) : filteredExams.length === 0 ? (
+              <div className="p-8 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                <Search size={32} className="mx-auto mb-3 text-slate-300" />
+                <p className="font-bold text-slate-600">
+                  Mapel "{examSearch}" tidak ditemukan.
+                </p>
+              </div>
             ) : (
-              exams.map((ex) => {
+              filteredExams.map((ex) => {
                 const examId = getVal(ex, "ID");
                 const examMapel = getVal(ex, "Mapel") || "Ujian";
                 const examStatusRaw = getVal(ex, "Status") || "TUTUP";
-                const isAktif = String(examStatusRaw).toUpperCase() === "AKTIF";
+                const statusKey = String(examStatusRaw).trim().toUpperCase();
+                const statusStyle = ["AKTIF", "DRAFT", "SELESAI"].includes(
+                  statusKey,
+                )
+                  ? EXAM_STATUS_STYLES[statusKey]
+                  : EXAM_STATUS_STYLES.DEFAULT;
+                const statusLabel = statusStyle.label || examStatusRaw;
+                const isAktif = statusKey === "AKTIF";
 
                 return (
                   <Card
                     key={examId || examMapel}
-                    className={`p-5 flex flex-col md:flex-row items-center justify-between gap-5 border-l-[8px] rounded-[1.5rem] transition-colors ${isAktif ? "border-l-emerald-500 bg-white" : "border-l-slate-200 bg-slate-50/50"}`}
+                    className={`p-5 flex flex-col md:flex-row items-center justify-between gap-5 border-l-[8px] rounded-[1.5rem] transition-colors ${statusStyle.card}`}
                   >
                     <div className="flex-1 text-center md:text-left w-full">
-                      <Badge type={isAktif ? "Aktif" : examStatusRaw} />
+                      <span
+                        className={`inline-flex w-max items-center justify-center rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest ${statusStyle.badge}`}
+                      >
+                        {statusLabel}
+                      </span>
                       <h4 className="text-xl font-black text-slate-900 mt-2 uppercase tracking-tight">
                         {examMapel}
                       </h4>
@@ -2063,8 +2208,10 @@ const SiswaDashboard = () => {
                         </button>
                       </div>
                     ) : (
-                      <div className="w-full md:w-auto bg-slate-200/50 text-slate-400 font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2 uppercase tracking-widest text-[11px]">
-                        <Lock size={14} /> {examStatusRaw}
+                      <div
+                        className={`w-full md:w-auto font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2 uppercase tracking-widest text-[11px] ${statusStyle.lock}`}
+                      >
+                        <Lock size={14} /> {statusLabel}
                       </div>
                     )}
                   </Card>

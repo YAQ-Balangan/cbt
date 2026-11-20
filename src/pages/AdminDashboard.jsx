@@ -53,28 +53,46 @@ import { saveAs } from "file-saver";
 // ==========================================
 const formatTanggal = (isoString) => {
   if (!isoString) return "-";
+  const value = String(isoString).trim();
+  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = dateOnlyMatch
+    ? new Date(
+        Date.UTC(
+          Number(dateOnlyMatch[1]),
+          Number(dateOnlyMatch[2]) - 1,
+          Number(dateOnlyMatch[3]),
+          12,
+        ),
+      )
+    : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return value;
   if (
-    typeof isoString === "string" &&
-    isoString.includes("T") &&
-    isoString.includes("Z")
+    dateOnlyMatch &&
+    (date.getUTCFullYear() !== Number(dateOnlyMatch[1]) ||
+      date.getUTCMonth() !== Number(dateOnlyMatch[2]) - 1 ||
+      date.getUTCDate() !== Number(dateOnlyMatch[3]))
   ) {
-    try {
-      const d = new Date(isoString);
-      return d
-        .toLocaleDateString("id-ID", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-        .replace(/\./g, ":");
-    } catch (e) {
-      return isoString;
-    }
+    return value;
   }
-  return isoString;
+  const dateOptions = {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: dateOnlyMatch ? "UTC" : "Asia/Jakarta",
+  };
+  const hasTime = !dateOnlyMatch && value.includes("T");
+
+  return hasTime
+    ? date.toLocaleString("id-ID", {
+        ...dateOptions,
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : date.toLocaleDateString("id-ID", dateOptions);
 };
+
+const AUTO_SCHEDULE_STATUS = "Ikuti Tanggal";
 
 const sanitizeExportFilenamePart = (value) =>
   String(value)
@@ -556,7 +574,8 @@ const TAB_CONFIG = {
   jadwal: {
     sheet: "Jadwal",
     title: "Jadwal Ujian",
-    subtitle: "Manajemen Sesi Ujian CBT",
+    subtitle:
+      "Tabel yang menampilkan jadwal dan token yang bisa di edit dan print.",
     columns: [
       { key: "id", label: "ID", isNumber: true, sortable: true },
       { key: "nama_ujian", label: "Nama Ujian", sortable: true },
@@ -591,7 +610,7 @@ const TAB_CONFIG = {
         key: "status",
         label: "Status",
         isSelect: true,
-        options: ["Draft", "Aktif", "Selesai"],
+        options: ["Draft", "Aktif", "Selesai", AUTO_SCHEDULE_STATUS],
         sortable: true,
         filterable: true,
       },
@@ -803,6 +822,8 @@ const EditableCell = ({ item, column, onSave }) => {
         <Badge type={val || "Kosong"} />
       ) : column.key === "id" ? (
         `#${val}`
+      ) : column.isDate ? (
+        formatTanggal(val)
       ) : (
         val || <span className="text-slate-300 italic text-xs">Kosong...</span>
       )}
@@ -941,7 +962,8 @@ const AdminDashboard = () => {
       newRow.status = "Draft";
       newRow.acak_soal = "ACAK"; // Bawaan otomatis tersetting acak saat baris baru dibuat
       newRow.durasi_menit = 90; // Default durasi agar tidak kosong
-      newRow.tanggal = new Date().toISOString().split("T")[0]; // Default tanggal hari ini
+      const now = new Date();
+      newRow.tanggal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     }
 
     setAllData((prev) => ({
@@ -1109,6 +1131,7 @@ const AdminDashboard = () => {
     const exportRows = processedData.map((item) =>
       currentConfig.columns.map((column) => {
         const value = item[column.key];
+        if (column.isDate) return formatTanggal(value);
         if (Array.isArray(value)) return value.join(", ");
         if (value && typeof value === "object") return JSON.stringify(value);
         return value === null || value === undefined || value === ""
@@ -1518,9 +1541,10 @@ const AdminDashboard = () => {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .admin-dashboard .animate-pulse { animation: none !important; }
       `}</style>
       {/* BISA SCROLL */}
-      <div className="relative mx-auto w-full max-w-none space-y-6 pb-24">
+      <div className="admin-dashboard relative mx-auto w-full max-w-none space-y-6 pb-24">
         {/* BAGIAN ATAS MOBILE */}
         <div className="md:hidden flex flex-col gap-4 px-2 pt-2">
           {/* Header Mobile */}
