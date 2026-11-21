@@ -165,6 +165,8 @@ const getExactTotalSoal = (mapelJadwal, userKelasRaw, allSoal) => {
   }).length;
 };
 
+const DONE_TIMEOUT_MS = 5 * 60 * 1000;
+
 // ==========================================
 // KOMPONEN UTAMA DASHBOARD
 // ==========================================
@@ -194,6 +196,36 @@ const UjianDashboard = () => {
 
   const [studentsData, setStudentsData] = useState([]);
   const [dbUsers, setDbUsers] = useState([]);
+
+  useEffect(() => {
+    const nextExpiry = studentsData
+      .filter(
+        (student) =>
+          ["SELESAI", "DISKUALIFIKASI"].includes(student.status) &&
+          student.completedAt,
+      )
+      .reduce(
+        (earliest, student) =>
+          Math.min(earliest, student.completedAt + DONE_TIMEOUT_MS),
+        Number.POSITIVE_INFINITY,
+      );
+
+    if (!Number.isFinite(nextExpiry)) return undefined;
+
+    const timeoutId = setTimeout(() => {
+      const currentTime = Date.now();
+      setStudentsData((current) =>
+        current.filter(
+          (student) =>
+            !["SELESAI", "DISKUALIFIKASI"].includes(student.status) ||
+            !student.completedAt ||
+            currentTime - student.completedAt < DONE_TIMEOUT_MS,
+        ),
+      );
+    }, Math.max(0, nextExpiry - Date.now()));
+
+    return () => clearTimeout(timeoutId);
+  }, [studentsData]);
 
   // REF: Mengamankan Data Statis (Anti Jebol Server)
   const baseDataRef = useRef({ users: [], soal: [], jadwalMap: {} });
@@ -325,6 +357,9 @@ const UjianDashboard = () => {
   const fetchLiveStatus = async () => {
     setIsSyncing(true);
     try {
+      const nilaiCutoff = (
+        BigInt(Date.now() - 12 * 60 * 60 * 1000) * 1000n
+      ).toString();
       const fetchSesi = supabase
         .from("sesi_ujian")
         .select(
@@ -334,20 +369,21 @@ const UjianDashboard = () => {
           "updated_at",
           new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
         )
-        .then(({ data }) => data || [])
-        .catch(() => []);
+        .then(({ data, error }) => {
+          if (error) throw error;
+          return data || [];
+        });
 
       const fetchNilai = supabase
-        .from("Nilai")
+        .from("nilai")
         .select(
-          "id, id_ujian, username, nama_siswa, mapel, total_soal, status, created_at",
+          "id, nama_siswa, mapel, total_soal, status",
         )
-        .gte(
-          "created_at",
-          new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-        )
-        .then(({ data }) => data || [])
-        .catch(() => []);
+        .gte("id", nilaiCutoff)
+        .then(({ data, error }) => {
+          if (error) throw error;
+          return data || [];
+        });
 
       const [resNilai, resSesiUjian] = await Promise.all([
         fetchNilai,
@@ -375,25 +411,36 @@ const UjianDashboard = () => {
         return isNaN(time) ? 0 : time;
       };
 
-      const finishedExamsSet = new Set();
+      const safeGetResultTime = (id) => {
+        const value = String(id || "");
+        if (!/^\d{16}$/.test(value)) return 0;
+        try {
+          return Number(BigInt(value) / 1000n);
+        } catch {
+          return 0;
+        }
+      };
+
+      const finishedExamsMap = {};
 
       (resNilai || []).forEach((nilai) => {
-        const nNama = String(nilai.nama_siswa || nilai.Nama_Siswa || "")
-          .toLowerCase()
-          .trim();
-        const nUsername = String(nilai.username || nilai.Username || nNama)
-          .toLowerCase()
-          .trim();
+        const nNama = normalizeText(nilai.nama_siswa || nilai.Nama_Siswa);
 
         const userObj = siswaOnly.find(
           (u) =>
-            normalizeText(u.username) === nUsername ||
+            normalizeText(u.username) === nNama ||
             normalizeText(u.nama) === nNama,
         );
-        const userKey = userObj ? normalizeText(userObj.username) : nUsername;
-        const idUjian = String(nilai.id_ujian || "");
-
-        finishedExamsSet.add(`${userKey}_${idUjian}`);
+        const userKey = userObj ? normalizeText(userObj.username) : nNama;
+        const mapel = nilai.mapel || nilai.Mapel || "Ujian";
+        const idUjian =
+          String(nilai.id_ujian || "") ||
+          Object.keys(jadwalMap).find(
+            (jadwalId) =>
+              normalizeText(jadwalMap[jadwalId]) === normalizeText(mapel),
+          ) ||
+          "";
+        const finishedKey = `${userKey}_${idUjian}`;
 
         const statusVal = String(
           nilai.status || nilai.Status || "",
@@ -401,19 +448,16 @@ const UjianDashboard = () => {
         const isDisqualified =
           statusVal.includes("DISKUALIFIKASI") || statusVal.includes("DIS");
 
-        const rawTime =
-          nilai.created_at ||
-          nilai.Created_at ||
-          nilai.Created_At ||
-          nilai.updated_at ||
-          nilai.waktu ||
-          null;
-        const dbTime = safeGetTime(rawTime);
+        const dbTime = safeGetResultTime(nilai.id);
+        if (idUjian && dbTime) {
+          finishedExamsMap[finishedKey] = Math.max(
+            finishedExamsMap[finishedKey] || 0,
+            dbTime,
+          );
+        }
 
         let totalSoal = nilai.total_soal || nilai.Total_Soal;
         if (!totalSoal || totalSoal === "-") {
-          const mapel =
-            nilai.mapel || nilai.Mapel || jadwalMap[idUjian] || "Ujian";
           totalSoal = getExactTotalSoal(mapel, userObj?.kelas, resSoal || []);
         }
 
@@ -426,15 +470,16 @@ const UjianDashboard = () => {
             id: `done-${nilai.id}`,
             username: userObj
               ? userObj.username
-              : nilai.username || nilai.nama_siswa,
+              : nilai.nama_siswa || nilai.Nama_Siswa,
             id_ujian: idUjian,
-            mapel: nilai.mapel || nilai.Mapel || "Ujian",
+            mapel,
             nama: userObj ? userObj.nama : nilai.nama_siswa || nilai.Nama_Siswa,
             gender: userObj ? userObj.gender : "L",
             dijawab: totalSoal,
             totalSoal: totalSoal,
             progress: 100,
             status: isDisqualified ? "DISKUALIFIKASI" : "SELESAI",
+            completedAt: dbTime,
           },
         });
       });
@@ -442,12 +487,51 @@ const UjianDashboard = () => {
       (resSesiUjian || []).forEach((sesi) => {
         const usernameSesiNormal = normalizeText(sesi.username_siswa);
         const idUjian = String(sesi.id_ujian);
-
-        if (finishedExamsSet.has(`${usernameSesiNormal}_${idUjian}`)) return;
+        const finishedKey = `${usernameSesiNormal}_${idUjian}`;
 
         const userObj = siswaOnly.find(
           (u) => normalizeText(u.username) === usernameSesiNormal,
         );
+        const mapel = jadwalMap[idUjian] || "Ujian";
+        const parsedTime = safeGetTime(sesi.updated_at);
+        const eventTime = parsedTime > 0 ? parsedTime : currentTime;
+        const sessionStatus = String(sesi.status || "").toUpperCase();
+        const isCompleted = ["COMPLETED", "DISQUALIFIED"].includes(
+          sessionStatus,
+        );
+
+        if (isCompleted) {
+          finishedExamsMap[finishedKey] = Math.max(
+            finishedExamsMap[finishedKey] || 0,
+            eventTime,
+          );
+          allEvents.push({
+            userKey: usernameSesiNormal,
+            type: "DONE",
+            timestamp: eventTime,
+            sortId: 0,
+            data: {
+              id: `done-${sesi.id_sesi}`,
+              username: sesi.username_siswa,
+              id_ujian: idUjian,
+              mapel,
+              nama: userObj ? userObj.nama : sesi.username_siswa,
+              gender: userObj ? userObj.gender : "L",
+              dijawab: 0,
+              totalSoal: 0,
+              progress: 100,
+              status:
+                sessionStatus === "DISQUALIFIED"
+                  ? "DISKUALIFIKASI"
+                  : "SELESAI",
+              completedAt: eventTime,
+            },
+          });
+          return;
+        }
+
+        const resultTime = finishedExamsMap[finishedKey] || 0;
+        if (resultTime && (!parsedTime || resultTime >= parsedTime)) return;
 
         let jawaban = {};
         try {
@@ -457,7 +541,6 @@ const UjianDashboard = () => {
         } catch (e) {}
 
         const dijawab = Object.keys(jawaban).length;
-        const mapel = jadwalMap[idUjian] || "Ujian";
         const totalSoal = getExactTotalSoal(
           mapel,
           userObj?.kelas,
@@ -468,8 +551,6 @@ const UjianDashboard = () => {
           totalSoal > 0
             ? Math.min(100, Math.round((dijawab / totalSoal) * 100))
             : 0;
-        const parsedTime = safeGetTime(sesi.updated_at || sesi.created_at);
-        const eventTime = parsedTime > 0 ? parsedTime : currentTime;
 
         allEvents.push({
           userKey: usernameSesiNormal,
@@ -486,7 +567,7 @@ const UjianDashboard = () => {
             dijawab: dijawab,
             totalSoal: totalSoal,
             progress: percentage,
-            status: sesi.status === "LOCKED" ? "LOCKED" : "WORKING",
+            status: sessionStatus === "LOCKED" ? "LOCKED" : "WORKING",
           },
         });
       });
@@ -498,13 +579,12 @@ const UjianDashboard = () => {
         return b.sortId - a.sortId;
       });
 
-      const DONE_TIMEOUT_MS = 15 * 60 * 1000;
       const LIVE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
       const latestEventsMap = {};
 
       allEvents.forEach((evt) => {
         if (!latestEventsMap[evt.userKey]) {
-          const age = Math.abs(currentTime - evt.timestamp);
+          const age = Math.max(0, currentTime - evt.timestamp);
           const isExpiredDone =
             evt.type === "DONE" && evt.timestamp > 0 && age > DONE_TIMEOUT_MS;
           const isExpiredLive =
@@ -973,6 +1053,12 @@ const UjianDashboard = () => {
                           );
                         return normalizeText(s.nama) === assignedNamaNormal;
                       });
+                      if (!liveStudent) {
+                        liveStudent = studentsData.find(
+                          (s) =>
+                            normalizeText(s.nama) === assignedNamaNormal,
+                        );
+                      }
                     }
 
                     let deskClass = "bg-amber-100 border-amber-300 shadow-sm";
@@ -1207,7 +1293,7 @@ const UjianDashboard = () => {
         <div className="bg-white p-4 md:p-5 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between shrink-0 gap-4">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigate("/", { replace: true })}
               className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all shadow-sm shrink-0"
               title="Kembali ke halaman sebelumnya"
             >

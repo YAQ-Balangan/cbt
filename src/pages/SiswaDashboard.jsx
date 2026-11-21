@@ -737,7 +737,7 @@ const SiswaDashboard = () => {
             ? finalNilai
             : prev,
         );
-      } catch (err) {
+      } catch {
         if (!isBackground) setErrorMsg("Gagal terhubung ke database ujian.");
       } finally {
         if (!isBackground) setLoading(false);
@@ -1013,6 +1013,22 @@ const SiswaDashboard = () => {
         serverSession = await api.getSesi(usernameSiswa, examId);
       } catch (e) {}
 
+      if (
+        serverSession &&
+        ["COMPLETED", "DISQUALIFIED"].includes(
+          String(serverSession.status).toUpperCase(),
+        )
+      ) {
+        exitExamFullscreen();
+        setActiveExam(null);
+        showAlert(
+          "warning",
+          "Ujian Sudah Selesai",
+          "Hasil ujian ini sudah tersimpan. Silakan periksa halaman nilai.",
+        );
+        return;
+      }
+
       // ...
       let finalAnswers = {};
       let finalTimeLeft = examDurasi * 60;
@@ -1091,7 +1107,9 @@ const SiswaDashboard = () => {
 
   // 5. KALKULASI SKOR & SUBMIT (FINAL FIX)
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
+    if (isSubmittingRef.current) return;
     if (!isForced && blockManualSubmitIfNeeded()) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     // TAMBAHAN 1: Hapus timer save yang masih nyangkut di background agar tidak jadi sesi hantu
@@ -1136,17 +1154,7 @@ const SiswaDashboard = () => {
     let salahCount = totalSoal - benarCount;
 
     try {
-      // BIKIN ID SUPER AMAN UNTUK INT8 SUPABASE (Kombinasi Tanggal/Jam + Angka Acak)
-      // Menghasilkan angka unik yang PASTI muat di kolom int8 dan bebas dari bentrokan
-      const amanId = Number(
-        Date.now().toString() +
-          Math.floor(Math.random() * 1000)
-            .toString()
-            .padStart(3, "0"),
-      );
-
       const dataNilai = {
-        id: amanId, // ID Unik Mandiri tanpa pusing setting Auto Increment Supabase
         nama_siswa: getVal(user, "Nama"),
         kelas: getVal(user, "Kelas"),
         mapel: getVal(activeExamRef.current, "Mapel"),
@@ -1159,26 +1167,49 @@ const SiswaDashboard = () => {
       };
 
       // 1. Simpan nilai ke Supabase
-      await api.create("Nilai", dataNilai);
+      await api.submitNilaiUjian(
+        getVal(user, "Username"),
+        getVal(activeExamRef.current, "ID"),
+        dataNilai,
+      );
 
       // TAMBAHAN 2: Tarik ulang data nilai terbaru secara instan agar langsung muncul di halaman Hasil Ujian
       try {
-        const finalNilai = await api.getNilaiSiswa(getVal(user, "Username"));
+        const finalNilai = await api.getNilaiSiswa(getVal(user, "Nama"));
         setMyResults(finalNilai);
       } catch (e) {
         console.warn("Gagal tarik nilai instan", e);
       }
 
-      // 2. Hapus sesi (Dibungkus try-catch pisah, agar jika gagal, nilai TETAP TERSIMPAN)
-      try {
-        await api.deleteSesi(
-          getVal(user, "Username"),
-          getVal(activeExamRef.current, "ID"),
-        );
-      } catch (errSesi) {
-        console.warn("Sesi gagal dihapus, tapi nilai sudah aman:", errSesi);
-      }
+      const usernameSiswa = getVal(user, "Username");
+      const examIdSelesai = getVal(activeExamRef.current, "ID");
+      const statusSesiSelesai =
+        forcedStatus === "Diskualifikasi" ? "DISQUALIFIED" : "COMPLETED";
+      const syncSesiSelesai = async () => {
+        for (const delayMs of [0, 1000, 3000]) {
+          if (delayMs) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+          try {
+            await api.completeSesi(
+              usernameSiswa,
+              examIdSelesai,
+              currentAnswers,
+              timeLeftRef.current,
+              pelanggaranRef.current,
+              statusSesiSelesai,
+            );
+            return;
+          } catch (error) {
+            if (delayMs === 3000) {
+              console.error("Gagal menyinkronkan status ujian selesai:", error);
+            }
+          }
+        }
+      };
+      void syncSesiSelesai();
 
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       exitExamFullscreen();
       setActiveExam(null);
@@ -1188,25 +1219,17 @@ const SiswaDashboard = () => {
       setIsMobileDrawerOpen(false);
       setActiveTab("nilai");
 
-      // ==========================================
-      // [KODE BARU] AUTO REFRESH SETELAH 3 DETIK
-      // ==========================================
-      setTimeout(() => {
-        window.location.reload();
-      }, 5000); // 5000 milidetik = 5 detik
-      // ==========================================
-
       if (forcedStatus === "Diskualifikasi") {
         showAlert(
           "danger",
           "Diskualifikasi!",
-          "Ujian Anda dihentikan paksa karena telah keluar dari halaman ujian berulang kali. Halaman akan dimuat ulang...",
+          "Ujian Anda dihentikan dan hasilnya telah dikirim.",
         );
       } else if (isForced) {
         showAlert(
           "info",
           "Waktu Habis!",
-          "Waktu ujian Anda telah habis dan jawaban berhasil disimpan. Halaman akan dimuat ulang dalam 3 detik...",
+          "Waktu ujian habis dan jawaban Anda telah dikirim.",
         );
       } else {
         showAlert(
@@ -1217,10 +1240,11 @@ const SiswaDashboard = () => {
       }
     } catch (err) {
       showAlert(
-        "danger",
-        "Gagal Mengirim",
-        "Sistem error: " + (err.message || "Pastikan internet stabil."),
+        "warning",
+        "Pengiriman Belum Berhasil",
+        "Jawaban belum dapat dikirim. Periksa koneksi internet, lalu coba lagi tanpa menutup halaman ini.",
       );
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

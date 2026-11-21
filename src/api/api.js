@@ -158,6 +158,30 @@ export const api = {
         return data || [];
     },
 
+    submitNilaiUjian: async (username, idUjian, payloadData) => {
+        const storageKey = `cbt-submission:${encodeURIComponent(username)}:${encodeURIComponent(idUjian)}`;
+        let submissionId = window.localStorage.getItem(storageKey);
+
+        if (!submissionId) {
+            submissionId = `${Date.now()}${Math.floor(Math.random() * 1000)
+                .toString()
+                .padStart(3, '0')}`;
+            window.localStorage.setItem(storageKey, submissionId);
+        }
+
+        const { data, error } = await supabase
+            .from('nilai')
+            .upsert({ ...payloadData, id: submissionId }, { onConflict: 'id' })
+            .select('id')
+            .single();
+
+        if (error) throw new Error(error.message);
+        if (!data) throw new Error('Nilai belum terkonfirmasi tersimpan.');
+
+        window.localStorage.removeItem(storageKey);
+        return data;
+    },
+
     // ========================================================
     // FITUR AUTO-SAVE KE SERVER & ANTI-CHEAT
     // ========================================================
@@ -189,6 +213,28 @@ export const api = {
         } catch (error) {
             console.error("Gagal save sesi ujian:", error);
         }
+    },
+
+    completeSesi: async (username, idUjian, jawaban, sisaWaktu, pelanggaran = 0, statusSesi = 'COMPLETED') => {
+        const idSesi = `${username}_${idUjian}`;
+        const jawabanString = typeof jawaban === 'string' ? jawaban : JSON.stringify(jawaban);
+        const { data, error } = await supabase
+            .from('sesi_ujian')
+            .upsert({
+                id_sesi: idSesi,
+                username_siswa: username,
+                id_ujian: idUjian,
+                jawaban_sementara: jawabanString,
+                sisa_waktu: sisaWaktu,
+                pelanggaran,
+                status: statusSesi,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'id_sesi' })
+            .select('id_sesi')
+            .single();
+
+        if (error) throw new Error(error.message);
+        if (!data) throw new Error('Status ujian selesai belum terkonfirmasi.');
     },
 
     // Tarik progres sebelumnya saat Siswa mulai/melanjutkan ujian
