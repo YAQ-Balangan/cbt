@@ -487,6 +487,72 @@ const SiswaDashboard = () => {
     [],
   );
 
+  const enterExamFullscreen = () => {
+    const examScreen = document.documentElement;
+    if (
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.msFullscreenElement
+    ) {
+      return;
+    }
+
+    const requestFullscreen =
+      examScreen.requestFullscreen ||
+      examScreen.webkitRequestFullscreen ||
+      examScreen.msRequestFullscreen;
+
+    if (!requestFullscreen) {
+      showAlert(
+        "warning",
+        "Mode Layar Penuh",
+        "Browser ini tidak mendukung mode layar penuh otomatis. Silakan aktifkan layar penuh secara manual jika tersedia.",
+      );
+      return;
+    }
+
+    const handleRequestError = (error) => {
+      console.warn("Gagal masuk mode layar penuh:", error);
+      showAlert(
+        "warning",
+        "Mode Layar Penuh",
+        "Browser menolak mode layar penuh otomatis. Silakan aktifkan layar penuh secara manual jika tersedia.",
+      );
+    };
+
+    try {
+      requestFullscreen.call(examScreen)?.catch(handleRequestError);
+    } catch (error) {
+      handleRequestError(error);
+    }
+  };
+
+  const exitExamFullscreen = () => {
+    if (
+      !(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement
+      )
+    ) {
+      return;
+    }
+
+    const exitFullscreen =
+      document.exitFullscreen ||
+      document.webkitExitFullscreen ||
+      document.msExitFullscreen;
+    if (!exitFullscreen) return;
+
+    try {
+      exitFullscreen.call(document)?.catch((error) => {
+        console.warn("Gagal keluar dari mode layar penuh:", error);
+      });
+    } catch (error) {
+      console.warn("Gagal keluar dari mode layar penuh:", error);
+    }
+  };
+
   const activeExamRef = useRef(activeExam);
   const answersRef = useRef(answers);
   const soalDataRef = useRef(soalData);
@@ -892,6 +958,7 @@ const SiswaDashboard = () => {
         "Anda sudah menyelesaikan ujian ini. Nilai Anda sudah terekam di sistem.",
       );
 
+    enterExamFullscreen();
     setActiveExam(exam);
     setLoadingSoal(true);
     setIsMobileDrawerOpen(false);
@@ -991,6 +1058,7 @@ const SiswaDashboard = () => {
         "Kesalahan Server",
         "Gagal memuat soal: " + error.message,
       );
+      exitExamFullscreen();
       setActiveExam(null);
     } finally {
       setLoadingSoal(false);
@@ -1112,6 +1180,7 @@ const SiswaDashboard = () => {
       }
 
       setIsSubmitting(false);
+      exitExamFullscreen();
       setActiveExam(null);
       setAnswers({});
       setRaguRagu({});
@@ -1288,7 +1357,10 @@ const SiswaDashboard = () => {
             kelas. Harap lapor ke Pengawas.
           </p>
           <button
-            onClick={() => setActiveExam(null)}
+            onClick={() => {
+              exitExamFullscreen();
+              setActiveExam(null);
+            }}
             className="px-6 py-3 bg-slate-800 text-white rounded-lg font-bold"
           >
             Kembali ke Beranda
@@ -1309,7 +1381,7 @@ const SiswaDashboard = () => {
       >
         <div className="absolute inset-0 bg-slate-50 z-0 pointer-events-none"></div>
 
-        <header className="relative z-50 shrink-0 border-b border-slate-200 bg-white px-3 py-1 shadow-sm sm:px-4 sm:py-2">
+        <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white px-3 py-1 shadow-sm sm:px-4 sm:py-2">
           <div className="space-y-1.5">
             <ExamTimer
               initialTime={timeLeft}
@@ -1696,7 +1768,7 @@ const SiswaDashboard = () => {
                   </div>
                 </div>
 
-                <div className="p-5 border-t border-slate-100 bg-slate-50/50 shrink-0">
+                <div className="sticky bottom-0 z-10 shrink-0 border-t border-slate-100 bg-slate-50/50 p-5">
                   <SubmitExamButton
                     onClick={() => handleEndExamClick(false)}
                     isSubmitting={isSubmitting}
@@ -1716,7 +1788,7 @@ const SiswaDashboard = () => {
         </main>
 
         {!loadingSoal && (
-          <div className="relative z-40 flex shrink-0 flex-col border-t border-slate-200 bg-[#F4F4F0] pb-2 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] lg:hidden">
+          <div className="sticky bottom-0 z-40 flex shrink-0 flex-col border-t border-slate-200 bg-[#F4F4F0] pb-2 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)] lg:hidden">
             {/* 1. Bar Progress Tipis Memanjang di Atas Navigasi */}
             <div className="h-1 w-full overflow-hidden bg-slate-200">
               <div
