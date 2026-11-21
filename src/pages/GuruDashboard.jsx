@@ -51,6 +51,7 @@ import {
   Bot,
   ScanSearch,
 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/api";
 import Dashboard from "../components/layout/Dashboard";
 import { Card, Badge } from "../components/ui/Ui";
@@ -679,7 +680,7 @@ const GoogleFormEditor = ({
 
   return (
     <div
-      className={`border rounded-xl md:rounded-[1.5rem] bg-white overflow-hidden shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+      className={`w-full min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm transition-all focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 md:rounded-[1.5rem] ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
     >
       <div className="flex flex-wrap gap-1 md:gap-2 p-2 bg-slate-50 border-b border-slate-200">
         <button
@@ -856,7 +857,7 @@ const GoogleFormEditor = ({
           const command = commands[event.key.toLowerCase()];
           if (command) execCmd(command, event);
         }}
-        className="p-3 md:p-4 min-h-[100px] text-sm md:text-base text-slate-800 outline-none whitespace-pre-wrap empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 cursor-text"
+        className="min-h-[100px] w-full min-w-0 max-w-full break-words p-3 text-sm text-slate-800 outline-none whitespace-pre-wrap [overflow-wrap:anywhere] empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 cursor-text md:p-4 md:text-base"
         data-placeholder={placeholder}
       />
     </div>
@@ -977,7 +978,7 @@ const MemoizedSoalCard = React.memo(
   }) => {
     return (
       <Card
-        className={`p-5 md:p-8 border-t-[6px] transition-all relative group overflow-hidden bg-white rounded-[1.5rem] md:rounded-[2rem] z-10 w-full ${isSelected ? "border-t-red-500 ring-4 ring-red-500/10 shadow-lg" : s.wacana ? "border-t-blue-500" : "border-t-emerald-500"}`}
+        className={`min-w-0 p-4 md:p-8 border-t-[6px] transition-all relative group overflow-hidden bg-white rounded-[1.5rem] md:rounded-[2rem] z-10 w-full ${isSelected ? "border-t-red-500 ring-4 ring-red-500/10 shadow-lg" : s.wacana ? "border-t-blue-500" : "border-t-emerald-500"}`}
       >
         <div className="absolute top-4 left-4 md:top-6 md:left-6 z-10">
           <button
@@ -988,7 +989,7 @@ const MemoizedSoalCard = React.memo(
           </button>
         </div>
 
-        <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20">
+        <div className="relative z-20 mb-4 flex w-full justify-end gap-2 transition-opacity md:absolute md:top-6 md:right-6 md:mb-0 md:w-auto md:opacity-0 md:group-hover:opacity-100">
           <label
             className={`p-1.5 md:p-2 bg-white border border-emerald-200 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition-all shadow-sm cursor-pointer ${isUploadingImg ? "opacity-50 cursor-wait" : ""}`}
             title="Sisipkan Gambar"
@@ -1029,7 +1030,7 @@ const MemoizedSoalCard = React.memo(
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2 items-center mb-6 pl-10 pr-24 md:pl-12 md:pr-40">
+        <div className="mb-6 flex min-w-0 flex-wrap items-center gap-2 pl-10 pr-0 md:pl-12 md:pr-40">
           <span
             className={`font-black px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[10px] md:text-[11px] uppercase border shadow-sm ${isSelected ? "bg-red-500 border-red-600 text-white" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}
           >
@@ -1038,7 +1039,7 @@ const MemoizedSoalCard = React.memo(
           <span className="bg-amber-50 text-amber-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-amber-200 flex items-center gap-1">
             <Target size={12} /> {formatPoinDisplay(s.poin)} POIN
           </span>
-          <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-emerald-200">
+          <span className="min-w-0 break-words bg-emerald-50 text-emerald-700 font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-md text-[9px] md:text-[10px] uppercase border border-emerald-200">
             {s.mapel} | {s.kelas}
           </span>
           {s.wacana && (
@@ -1054,7 +1055,7 @@ const MemoizedSoalCard = React.memo(
         </div>
 
         {s.link_gambar && (
-          <div className="mb-6 max-w-lg rounded-xl border border-slate-200 shadow-sm p-2 bg-slate-50 relative group/img w-max">
+          <div className="relative mb-6 w-full min-w-0 max-w-lg rounded-xl border border-slate-200 bg-slate-50 p-2 shadow-sm group/img">
             <button
               onClick={() => onRemoveImage(s)}
               disabled={isUploadingImg}
@@ -1066,7 +1067,7 @@ const MemoizedSoalCard = React.memo(
             <img
               src={s.link_gambar}
               alt="Lampiran"
-              className={`max-h-56 object-contain rounded-lg ${isUploadingImg ? "opacity-50" : ""}`}
+              className={`block h-auto max-h-56 max-w-full object-contain rounded-lg ${isUploadingImg ? "opacity-50" : ""}`}
             />
             {isUploadingImg && (
               <div className="absolute inset-0 flex items-center justify-center">
@@ -1079,7 +1080,7 @@ const MemoizedSoalCard = React.memo(
           </div>
         )}
         {!s.link_gambar && isUploadingImg && (
-          <div className="mb-6 max-w-lg h-32 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50 flex items-center justify-center">
+          <div className="mb-6 flex h-32 w-full max-w-lg items-center justify-center rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50 px-3 text-center">
             <RefreshCw className="animate-spin text-emerald-600" size={24} />
             <span className="ml-2 text-sm font-bold text-emerald-700">
               Menganalisa & Mengunggah...
@@ -1087,7 +1088,7 @@ const MemoizedSoalCard = React.memo(
           </div>
         )}
 
-        <div className="font-semibold text-slate-800 leading-relaxed text-sm md:text-base mb-6 whitespace-pre-wrap">
+        <div className="mb-6 min-w-0 break-words font-semibold text-sm leading-relaxed text-slate-800 whitespace-pre-wrap [overflow-wrap:anywhere] md:text-base">
           <Latex>{s.pertanyaan || ""}</Latex>
         </div>
 
@@ -1099,7 +1100,7 @@ const MemoizedSoalCard = React.memo(
             return (
               <div
                 key={opt}
-                className={`px-4 py-2.5 md:px-5 md:py-3 rounded-xl border flex items-start gap-3 transition-all ${isCorrect ? "bg-emerald-50 border-emerald-300 shadow-sm" : "bg-white border-slate-200"}`}
+                className={`flex min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 transition-all md:px-5 md:py-3 ${isCorrect ? "bg-emerald-50 border-emerald-300 shadow-sm" : "bg-white border-slate-200"}`}
               >
                 <span
                   className={`font-bold text-xs md:text-sm w-5 flex-shrink-0 pt-0.5 ${isCorrect ? "text-emerald-700" : "text-slate-400"}`}
@@ -1107,7 +1108,7 @@ const MemoizedSoalCard = React.memo(
                   {opt}.
                 </span>
                 <span
-                  className={`text-xs md:text-sm font-medium leading-relaxed whitespace-pre-wrap flex-1 ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
+                  className={`min-w-0 flex-1 break-words text-xs font-medium leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] md:text-sm ${isCorrect ? "text-emerald-900" : "text-slate-600"}`}
                 >
                   <Latex>{s[keyMap] || ""}</Latex>
                 </span>
@@ -1134,8 +1135,41 @@ const MemoizedSoalCard = React.memo(
   },
 );
 
+const MobileQuickMenuButton = ({
+  label,
+  icon,
+  color,
+  badge,
+  spinning = false,
+  onClick,
+}) => (
+  <button
+    onClick={onClick}
+    className="relative flex min-h-16 min-w-0 items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-2.5 text-left transition-colors hover:border-emerald-200 hover:bg-emerald-50 active:scale-[0.98]"
+  >
+    {badge && (
+      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-black text-white">
+        {badge}
+      </span>
+    )}
+    <span
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}
+    >
+      {React.createElement(icon, {
+        size: 20,
+        className: spinning ? "animate-spin" : "",
+      })}
+    </span>
+    <span className="min-w-0 break-words text-xs font-bold leading-tight text-slate-700">
+      {label}
+    </span>
+  </button>
+);
+
 const GuruDashboard = () => {
   const { user } = useContext(AuthContext);
+  const location = useLocation();
+  const navigate = useNavigate();
   const namaGuruLog = user?.nama || user?.username || "Guru";
 
   const [tab, setTab] = useState("soal");
@@ -1235,24 +1269,25 @@ const GuruDashboard = () => {
   const [bulkPoin, setBulkPoin] = useState("2");
   const [bulkProgress, setBulkProgress] = useState(0);
 
-  // --- STATE BARU: DUMMY & AI DETECTOR ---
-  const [isDummyModalOpen, setIsDummyModalOpen] = useState(false);
-  const [dummyConfig, setDummyConfig] = useState({
-    jumlah: 40,
-    poin: 2.5,
-    mapel: "",
-    kelas: "",
-  });
   const [isUploadingFormImg, setIsUploadingFormImg] = useState(false);
 
   // VIEW MODE: "rekap" | "log" | "pelanggaran"
   const [nilaiViewMode, setNilaiViewMode] = useState("rekap");
 
-  const changeTab = (nextTab) => {
+  const changeTab = (nextTab, { fromHistory = false } = {}) => {
     setSearch("");
     setFilters({});
     setSelectedIds([]);
     setLogPage(1);
+    if (tab !== nextTab && !fromHistory) {
+      const searchParams = new URLSearchParams(location.search);
+      searchParams.set("tab", nextTab);
+      navigate({
+        pathname: location.pathname,
+        search: `?${searchParams.toString()}`,
+        hash: location.hash,
+      });
+    }
     setTab(nextTab);
   };
   const changeNilaiViewMode = (nextMode) => {
@@ -1485,53 +1520,6 @@ const GuruDashboard = () => {
       }
     } catch (error) {
       console.error("Gagal menarik Mapel", error);
-    }
-  };
-
-  // --- FUNGSI BARU: GENERATE SOAL DUMMY ---
-  const handleGenerateDummy = async (e) => {
-    e.preventDefault();
-    if (!dummyConfig.mapel || !dummyConfig.kelas)
-      return showAlert("warning", "Validasi", "Harap pilih Mapel dan Kelas.");
-    setIsSaving(true);
-
-    try {
-      const dummyItems = [];
-      for (let i = 0; i < dummyConfig.jumlah; i++) {
-        dummyItems.push({
-          mapel: dummyConfig.mapel,
-          kelas: dummyConfig.kelas,
-          wacana: "",
-          pertanyaan: `[Soal Dummy ${i + 1}] Edit pertanyaan ini...`,
-          poin: dummyConfig.poin,
-          link_gambar: "",
-          opsi_a: "Opsi A",
-          opsi_b: "Opsi B",
-          opsi_c: "Opsi C",
-          opsi_d: "Opsi D",
-          opsi_e: "Opsi E",
-          jawaban_benar: "A",
-          guru_pembuat: namaGuruLog,
-        });
-      }
-
-      // SIMPAN MASSAL DALAM 1 DETIK!
-      const resData = await api.createBulk(currentConfig.sheet, dummyItems);
-
-      // Masukkan ke log sejarah Undo agar aman
-      pushAction({ type: "BULK_CREATE", items: resData });
-
-      await fetchData(false);
-      setIsDummyModalOpen(false);
-      showAlert(
-        "success",
-        "Berhasil",
-        `${dummyConfig.jumlah} Soal Template berhasil dibuat!`,
-      );
-    } catch (err) {
-      showAlert("danger", "Gagal", err.message);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -2144,9 +2132,9 @@ const GuruDashboard = () => {
     }
   };
 
-  const openAddModal = () => {
+  const openAddModal = (targetTab = tab) => {
     setIsEdit(false);
-    setFormData({ ...currentConfig.defaultValues });
+    setFormData({ ...TAB_CONFIG[targetTab].defaultValues });
     setIsModalOpen(true);
   };
 
@@ -2903,7 +2891,7 @@ Patuhi aturan berikut secara ketat:
     setFilters({ ...filters, mapel: mapel, kelas: kelas });
     setSearch("");
     setSoalViewMode("list");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleBackToFolder = () => {
@@ -3504,10 +3492,22 @@ Patuhi aturan berikut secara ketat:
   const isDeleteAllAllowed =
     allData.settings?.find((s) => s.kunci === "Hapus_Semua_Soal")?.nilai !==
     "OFF";
-
+  const scrollDashboardToContent = () => {
+    window.setTimeout(() => {
+      document
+        .querySelector("main")
+        ?.scrollTo({ top: 600, behavior: "smooth" });
+    }, 100);
+  };
   return (
-    <Dashboard menu={MENU_ITEMS} active={tab} setActive={changeTab}>
-      <div className="space-y-6 max-w-7xl mx-auto pb-24 relative">
+    <Dashboard
+      menu={MENU_ITEMS}
+      active={tab}
+      setActive={changeTab}
+      manageTabHistory={false}
+      zoomOut="xl"
+    >
+      <div className="relative mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-24">
         {/* CSS animasi background dihapus agar ringan */}
         {/* ============================================================== */}
         {/* BANNER PERINGATAN GLOBAL (Jika Ada Siswa Terkunci - ANTI CHEAT) */}
@@ -3530,7 +3530,9 @@ Patuhi aturan berikut secara ketat:
                 onClick={() => {
                   changeTab("nilai");
                   changeNilaiViewMode("pelanggaran");
-                  window.scrollTo(0, 0);
+                  document
+                    .querySelector("main")
+                    ?.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 className="shrink-0 bg-white text-red-600 px-3 py-2 md:px-4 md:py-2.5 rounded-xl font-bold text-xs md:text-sm hover:scale-105 active:scale-95 transition-all shadow-sm border border-red-100"
               >
@@ -3551,7 +3553,7 @@ Patuhi aturan berikut secara ketat:
                 <p className="text-[10px] uppercase tracking-widest opacity-80 font-bold mb-0.5">
                   Selamat Datang,
                 </p>
-                <h2 className="text-xl font-black leading-tight">
+                <h2 className="break-words text-xl font-black leading-tight">
                   {namaGuruLog}
                 </h2>
               </div>
@@ -3593,191 +3595,124 @@ Patuhi aturan berikut secara ketat:
             </div>
           </div>
 
-          {/* 2. Grid Menu M-Banking (Tombol Besar) */}
-          <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">
-              Menu
+          <div className="space-y-3">
+            <h3 className="px-1 text-xs font-black uppercase tracking-widest text-slate-400">
+              Akses Cepat
             </h3>
-            <div className="grid grid-cols-4 gap-y-6 gap-x-2">
-              <button
-                onClick={() => (window.location.href = "/ujian-dashboard")}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-[1rem] flex items-center justify-center shadow-inner border border-indigo-200">
-                  <MonitorSmartphone size={24} className="animate-pulse" />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Virtual
-                  <br />
-                  Room
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  changeTab("soal");
-                  openAddModal();
-                }}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-[1rem] flex items-center justify-center shadow-inner">
-                  <Plus size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Buat
-                  <br />
-                  Soal
-                </span>
-              </button>
-              <button
-                onClick={() => setIsSSModeOpen(true)}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-[1rem] flex items-center justify-center shadow-inner border border-amber-100">
-                  <ScanSearch size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Snap Soal
-                  <br />
-                  Mode
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  changeTab("soal");
-                  setIsBulkOpen(true);
-                }}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-[1rem] flex items-center justify-center shadow-inner">
-                  <UploadCloud size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Import Soal
-                  <br />
-                  (Sekaligus)
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  changeTab("soal");
-                  setTimeout(
-                    () => window.scrollTo({ top: 600, behavior: "smooth" }),
-                    100,
-                  );
-                }}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-[1rem] flex items-center justify-center shadow-inner">
-                  <Layers size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Daftar
-                  <br />
-                  Soal
-                </span>
-              </button>
-
-              <button
-                onClick={() => {
-                  changeTab("nilai");
-                  changeNilaiViewMode("rekap");
-                  setTimeout(
-                    () => window.scrollTo({ top: 600, behavior: "smooth" }),
-                    100,
-                  );
-                }}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-[1rem] flex items-center justify-center shadow-inner">
-                  <TableProperties size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Buku
-                  <br />
-                  Nilai
-                </span>
-              </button>
-
-              <button
-                onClick={() => {
-                  changeTab("nilai");
-                  changeNilaiViewMode("log");
-                  setTimeout(
-                    () => window.scrollTo({ top: 600, behavior: "smooth" }),
-                    100,
-                  );
-                }}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-slate-100 text-slate-700 rounded-[1rem] flex items-center justify-center shadow-inner">
-                  <LayoutList size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Log
-                  <br />
-                  Riwayat
-                </span>
-              </button>
-
-              <button
-                onClick={() => {
-                  changeTab("nilai");
-                  changeNilaiViewMode("pelanggaran");
-                  setTimeout(
-                    () => window.scrollTo({ top: 600, behavior: "smooth" }),
-                    100,
-                  );
-                }}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform relative"
-              >
-                {lockedSessions.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center animate-pulse border-2 border-white">
-                    {lockedSessions.length}
-                  </span>
-                )}
-                <div className="w-12 h-12 bg-red-100 text-red-600 rounded-[1rem] flex items-center justify-center shadow-inner">
-                  <ShieldAlert size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Pelanggaran
-                  <br />
-                  Siswa
-                </span>
-              </button>
-
-              {/* TOMBOL SMART EXPORT YANG BARU */}
-              <button
-                onClick={() => setIsExportMenuOpen(true)}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-teal-100 text-teal-600 rounded-[1rem] flex items-center justify-center shadow-inner">
-                  <Download size={24} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Unduh /<br />
-                  Nilai
-                </span>
-              </button>
-
-              <button
-                onClick={() => fetchData(false)}
-                className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
-              >
-                <div className="w-12 h-12 bg-slate-50 border border-slate-200 text-slate-500 rounded-[1rem] flex items-center justify-center">
-                  <RefreshCw
-                    size={24}
-                    className={loading || isSyncing ? "animate-spin" : ""}
-                  />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 text-center leading-tight">
-                  Refresh
-                  <br />
-                  Data
-                </span>
-              </button>
-            </div>
+            <section className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+              <h4 className="mb-2 px-1 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                Bank Soal
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                <MobileQuickMenuButton
+                  label="Tambah Soal"
+                  icon={Plus}
+                  color="bg-emerald-100 text-emerald-700"
+                  onClick={() => {
+                    changeTab("soal");
+                    openAddModal("soal");
+                  }}
+                />
+                <MobileQuickMenuButton
+                  label="Impor Soal"
+                  icon={UploadCloud}
+                  color="bg-blue-100 text-blue-700"
+                  onClick={() => {
+                    changeTab("soal");
+                    setBulkMapel("");
+                    setBulkKelas("");
+                    setBulkText("");
+                    setBulkPoin("2");
+                    setParsedBulkData([]);
+                    setIsBulkOpen(true);
+                  }}
+                />
+                <MobileQuickMenuButton
+                  label="Pindai Soal"
+                  icon={ScanSearch}
+                  color="bg-amber-100 text-amber-700"
+                  onClick={() => {
+                    changeTab("soal");
+                    setIsSSModeOpen(true);
+                  }}
+                />
+                <MobileQuickMenuButton
+                  label="Daftar Soal"
+                  icon={Layers}
+                  color="bg-slate-100 text-slate-700"
+                  onClick={() => {
+                    changeTab("soal");
+                    setSoalViewMode("folder");
+                    scrollDashboardToContent();
+                  }}
+                />
+              </div>
+            </section>
+            <section className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+              <h4 className="mb-2 px-1 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                Monitoring Nilai
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                <MobileQuickMenuButton
+                  label="Rekap Nilai"
+                  icon={TableProperties}
+                  color="bg-indigo-100 text-indigo-700"
+                  onClick={() => {
+                    changeTab("nilai");
+                    changeNilaiViewMode("rekap");
+                    scrollDashboardToContent();
+                  }}
+                />
+                <MobileQuickMenuButton
+                  label="Riwayat Ujian"
+                  icon={LayoutList}
+                  color="bg-slate-100 text-slate-700"
+                  onClick={() => {
+                    changeTab("nilai");
+                    changeNilaiViewMode("log");
+                    scrollDashboardToContent();
+                  }}
+                />
+                <MobileQuickMenuButton
+                  label="Pelanggaran Siswa"
+                  icon={ShieldAlert}
+                  color="bg-red-100 text-red-700"
+                  badge={lockedSessions.length || null}
+                  onClick={() => {
+                    changeTab("nilai");
+                    changeNilaiViewMode("pelanggaran");
+                    scrollDashboardToContent();
+                  }}
+                />
+                <MobileQuickMenuButton
+                  label="Unduh Nilai"
+                  icon={Download}
+                  color="bg-teal-100 text-teal-700"
+                  onClick={() => setIsExportMenuOpen(true)}
+                />
+              </div>
+            </section>
+            <section className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+              <h4 className="mb-2 px-1 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                Lainnya
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                <MobileQuickMenuButton
+                  label="Ruang Ujian Virtual"
+                  icon={MonitorSmartphone}
+                  color="bg-violet-100 text-violet-700"
+                  onClick={() => window.location.assign("/ujian-dashboard")}
+                />
+                <MobileQuickMenuButton
+                  label="Segarkan Data"
+                  icon={RefreshCw}
+                  color="bg-slate-100 text-slate-700"
+                  spinning={loading || isSyncing}
+                  onClick={() => fetchData(false)}
+                />
+              </div>
+            </section>
           </div>
-
           {/* 3. Bar Pencarian Pintas HP Mobile Smart */}
           <div className="space-y-3">
             {/* Baris 1: Pencarian & Tombol Filter (Gaya E-Commerce) */}
@@ -3785,7 +3720,7 @@ Patuhi aturan berikut secara ketat:
               <div className="flex-1 bg-white rounded-2xl p-2.5 shadow-sm border border-slate-100 flex items-center gap-2">
                 <Search className="text-slate-400 ml-2 shrink-0" size={18} />
                 <input
-                  className="w-full bg-transparent border-none outline-none font-bold text-sm text-slate-700 py-1.5 placeholder:text-slate-400 placeholder:font-medium"
+                  className="w-full min-w-0 bg-transparent border-none outline-none font-bold text-sm text-slate-700 py-1.5 placeholder:text-slate-400 placeholder:font-medium"
                   placeholder={
                     tab === "soal" ? "Cari soal..." : "Cari siswa..."
                   }
@@ -3842,7 +3777,7 @@ Patuhi aturan berikut secara ketat:
                   <div className="flex gap-2 flex-1">
                     <button
                       onClick={handleSelectAll}
-                      className={`flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider border transition-colors ${isAllSelected ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-inner" : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50"}`}
+                      className={`min-w-0 flex-1 flex justify-center items-center gap-1.5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider border text-center leading-tight transition-colors ${isAllSelected ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-inner" : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50"}`}
                     >
                       {isAllSelected ? (
                         <CheckSquare size={14} />
@@ -3945,25 +3880,19 @@ Patuhi aturan berikut secara ketat:
                   }}
                   className="flex-1 md:flex-none bg-white text-emerald-700 border border-emerald-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-emerald-50 active:scale-95 transition-all text-sm"
                 >
-                  <FileText size={18} /> Import Soal (Otomatis)
-                </button>
-                <button
-                  onClick={() => setIsDummyModalOpen(true)}
-                  className="flex-1 md:flex-none bg-blue-50 text-blue-600 border border-blue-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-blue-100 active:scale-95 transition-all text-sm"
-                >
-                  <Layers size={18} /> Template Soal (Kosong)
+                  <FileText size={18} /> Impor Soal (Otomatis)
                 </button>
                 <button
                   onClick={() => setIsSSModeOpen(true)}
                   className="flex-1 md:flex-none bg-amber-50 text-amber-700 border border-amber-200 px-5 py-3 rounded-xl font-bold shadow-sm flex items-center justify-center gap-2 hover:bg-amber-100 active:scale-95 transition-all text-sm"
                 >
-                  <ScanSearch size={18} /> Snap Soal
+                  <ScanSearch size={18} /> Pindai Soal
                 </button>
                 <button
                   onClick={openAddModal}
                   className="flex-1 md:flex-none bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-5 py-3 rounded-xl font-bold shadow-md shadow-emerald-500/30 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm border border-emerald-400"
                 >
-                  <Plus size={18} /> Soal Manual
+                  <Plus size={18} /> Tambah Soal
                 </button>
               </div>
             )}
@@ -4257,46 +4186,46 @@ Patuhi aturan berikut secara ketat:
             </div>
           </div>
         )}
-        {/* ============================================================== */} 
-              {/* KONTEN UTAMA: BANK SOAL ATAU NILAI ATAU PELANGGARAN */}       {" "}
-        {/* ============================================================== */} 
-             {" "}
+        {/* ============================================================== */}
+              {/* KONTEN UTAMA: BANK SOAL ATAU NILAI ATAU PELANGGARAN */}       {" "}
+        {/* ============================================================== */}
+             {" "}
         {loading && data.length === 0 ? (
           <div className="py-20 text-center flex flex-col items-center">
-                       {" "}
+                       {" "}
             <RefreshCw
               className="animate-spin text-emerald-500 mb-4"
               size={32}
             />
-                       {" "}
+                       {" "}
             <span className="font-bold text-slate-400 uppercase tracking-widest text-xs">
-                            Memuat Database...            {" "}
+                            Memuat Database...            {" "}
             </span>
-                     {" "}
+                     {" "}
           </div>
         ) : tab === "soal" ? (
           <div className="max-w-6xl mx-auto relative">
-                        {/* TAMPILAN FOLDER */}           {" "}
+                        {/* TAMPILAN FOLDER */}           {" "}
             {soalViewMode === "folder" && (
               <div className="space-y-6">
-                               {" "}
+                               {" "}
                 <div className="flex justify-between items-end mb-2 px-2">
-                                   {" "}
+                                   {" "}
                   <div>
-                                       {" "}
+                                       {" "}
                     <h3 className="text-lg font-black text-slate-700 flex items-center gap-2">
-                                           {" "}
-                      <Library className="text-emerald-500" /> Direktori Soal  
-                                       {" "}
+                                           {" "}
+                      <Library className="text-emerald-500" /> Direktori Soal
+                                       {" "}
                     </h3>
-                                       {" "}
+                                       {" "}
                     <p className="text-sm text-slate-500 font-medium mt-1">
-                                            Pilih folder mapel dan kelas untuk
-                      mengelola soal.                    {" "}
+                                            Pilih folder mapel dan kelas untuk
+                      mengelola soal.                    {" "}
                     </p>
-                                     {" "}
+                                     {" "}
                   </div>
-                                   {" "}
+                                   {" "}
                   <button
                     onClick={() => {
                       setFilters({ mapel: "", kelas: "" });
@@ -4304,10 +4233,10 @@ Patuhi aturan berikut secara ketat:
                     }}
                     className="text-xs font-bold text-emerald-600 hover:text-emerald-700 underline hidden md:block"
                   >
-                                        Tampilkan Semua Soal                
-                     {" "}
+                                        Tampilkan Semua Soal
+                     {" "}
                   </button>
-                                 {" "}
+                                 {" "}
                 </div>
                 <div className="flex flex-col md:flex-row gap-3 px-2 mb-4">
                   <div className="flex-1 relative">
@@ -4333,15 +4262,15 @@ Patuhi aturan berikut secara ketat:
                     <option value="tanggal">Grup: Tanggal Ujian</option>
                   </select>
                 </div>
-                               {" "}
+                               {" "}
                 {folderSoal.length === 0 ? (
                   <div className="py-16 text-center text-slate-400 font-bold border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
-                                        Belum ada soal tersedia.                
-                     {" "}
+                                        Belum ada soal tersedia.
+                     {" "}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                       {" "}
+                                       {" "}
                     {folderSoal.map((folder, idx) => {
                       // Logika Warna Pintar Berdasarkan Kelas (UI Theme TADBIRA Harmony)
                       let color = {
@@ -4408,7 +4337,7 @@ Patuhi aturan berikut secara ketat:
                           onClick={() =>
                             handleOpenFolder(folder.mapel, folder.kelas)
                           }
-                          className={`bg-white border border-slate-200 p-5 rounded-[1.5rem] cursor-pointer transition-all group relative overflow-hidden ${color.border}`}
+                          className={`min-w-0 bg-white border border-slate-200 p-5 rounded-[1.5rem] cursor-pointer transition-all group relative overflow-hidden ${color.border}`}
                         >
                           {folder.tanggal && (
                             <span
@@ -4419,109 +4348,97 @@ Patuhi aturan berikut secara ketat:
                               {folder.tanggal}
                             </span>
                           )}
-                                                   {" "}
+                                                   {" "}
                           <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
-                                                        <Folder size={100} />   
-                                                 {" "}
+                                                        <Folder size={100} />
+                                                 {" "}
                           </div>
-                                                   {" "}
+                                                   {" "}
                           <div
                             className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-sm border ${color.icon}`}
                           >
-                                                       {" "}
+                                                       {" "}
                             <Folder
                               size={24}
                               fill="currentColor"
                               className="opacity-20"
                             />
-                                                       {" "}
-                            <Folder size={24} className="absolute" />           
-                                         {" "}
+                                                       {" "}
+                            <Folder size={24} className="absolute" />
+                                         {" "}
                           </div>
-                                                   {" "}
+                                                   {" "}
                           <h4
-                            className={`font-black text-slate-800 text-lg leading-tight mb-2 transition-colors line-clamp-2 ${color.text}`}
+                            className={`mb-2 break-words text-lg font-black leading-tight text-slate-800 transition-colors line-clamp-2 [overflow-wrap:anywhere] ${color.text}`}
                           >
-                                                        {folder.mapel}         
-                                           {" "}
+                                                        {folder.mapel}
+                                           {" "}
                           </h4>
-                                                   {" "}
+                                                   {" "}
                           <div className="flex flex-wrap gap-2 items-center">
-                                                       {" "}
+                                                       {" "}
                             <span
                               className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${color.badge}`}
                             >
-                                                            Kelas {folder.kelas}
-                                                         {" "}
+                                                            Kelas {folder.kelas}
+                                                         {" "}
                             </span>
-                                                       {" "}
+                                                       {" "}
                             <span className="bg-slate-100 text-slate-500 px-2.5 py-1 rounded-md text-[10px] font-bold border border-slate-200">
-                                                            {folder.count} Soal
-                                                         {" "}
+                                                            {folder.count} Soal
+                                                         {" "}
                             </span>
-                                                     {" "}
+                                                     {" "}
                           </div>
-                                                 {" "}
+                                                 {" "}
                         </div>
                       );
                     })}
-                                     {" "}
+                                     {" "}
                   </div>
                 )}
-                             {" "}
+                             {" "}
               </div>
             )}
-                        {/* TAMPILAN DAFTAR SOAL (LIST) */}           {" "}
+                        {/* TAMPILAN DAFTAR SOAL (LIST) */}           {" "}
             {soalViewMode === "list" && (
               <div className="flex flex-col gap-0 max-w-5xl mx-auto relative">
-                               {" "}
-                <div className="sticky -top-[16px] md:-top-[25px] z-30 bg-slate-50/90 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex justify-between items-center">
-                                   {" "}
-                  <div className="flex items-center gap-3">
-                                       {" "}
+                               {" "}
+                                <div className="sticky top-0 z-30 mb-6 flex min-w-0 flex-col items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/95 p-3 shadow-sm backdrop-blur-md sm:flex-row sm:items-center md:p-4">
+                  <div className="flex w-full min-w-0 items-center gap-3 sm:w-auto">
                     <button
                       onClick={handleBackToFolder}
-                      className="p-2 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all shadow-sm border border-slate-200"
+                      className="shrink-0 rounded-xl border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition-all hover:bg-emerald-50 hover:text-emerald-600"
+                      aria-label="Kembali ke folder soal"
                     >
-                                            <ArrowLeft size={20} />             
-                           {" "}
+                      <ArrowLeft size={20} />
                     </button>
-                                       {" "}
-                    <div>
-                                           {" "}
-                      <h3 className="font-black text-slate-800 text-sm md:text-base flex items-center gap-2">
-                                                {filters.mapel || "Semua Mapel"}
-                                               {" "}
+                    <div className="min-w-0">
+                      <h3 className="flex min-w-0 flex-wrap items-center gap-2 break-words text-sm font-black text-slate-800 [overflow-wrap:anywhere] md:text-base">
+                        <span>{filters.mapel || "Semua Mata Pelajaran"}</span>
                         {filters.kelas && (
-                          <span className="text-slate-400 font-normal">|</span>
+                          <span className="font-normal text-slate-400">|</span>
                         )}
-                                               {" "}
                         {filters.kelas && (
-                          <span className="text-emerald-600">
+                          <span className="break-words text-emerald-600 [overflow-wrap:anywhere]">
                             {filters.kelas}
                           </span>
                         )}
-                                             {" "}
                       </h3>
-                                           {" "}
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                                                Menampilkan{" "}
-                        {processedData.length} Soal                      {" "}
+                      <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        Menampilkan {processedData.length} soal
                       </p>
-                                         {" "}
                     </div>
-                                     {" "}
                   </div>
-                                 {" "}
                 </div>
-                                {renderBankSoal()}             {" "}
+                {renderBankSoal()}             {" "}
               </div>
             )}
-                     {" "}
+                     {" "}
           </div>
         ) : (
           <div>
-            {/* VIEW NILAI REKAP */}
+            {/*VIEW NILAI REKAP */}
             {nilaiViewMode === "rekap" && (
               <>
                 <Card className="hidden md:block overflow-hidden border-slate-200 shadow-xl shadow-slate-200/40 bg-white rounded-[2rem]">
@@ -5371,9 +5288,9 @@ Patuhi aturan berikut secara ketat:
         )}
         {/* MODAL BUAT/EDIT MANUAL SEDERHANA */}
         {isModalOpen && tab === "soal" && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 overflow-y-auto">
-            <div className="w-full max-w-4xl my-auto py-4 md:py-8">
-              <Card className="p-4 md:p-8 shadow-2xl border-0 rounded-[1.5rem] md:rounded-[2rem] bg-white">
+          <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-900/80 p-2 sm:items-center sm:p-4">
+            <div className="my-auto w-full max-w-4xl py-2 sm:py-4">
+              <Card className="min-w-0 rounded-[1.5rem] border-0 bg-white p-3 shadow-2xl sm:p-4 md:rounded-[2rem] md:p-8">
                 <div className="flex justify-between items-center mb-4 md:mb-6 pb-3 md:pb-5 border-b border-slate-100">
                   <div>
                     <h3 className="text-lg md:text-2xl font-bold text-slate-800 tracking-tight">
@@ -5392,10 +5309,10 @@ Patuhi aturan berikut secara ketat:
                   </button>
                 </div>
                 <form onSubmit={handleSave} className="space-y-4 md:space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 bg-slate-50 p-4 md:p-5 rounded-[1rem] md:rounded-[1.5rem] border border-slate-100">
+                  <div className="grid grid-cols-1 gap-3 rounded-[1rem] border border-slate-100 bg-slate-50 p-3 sm:grid-cols-2 sm:gap-4 sm:p-4 md:rounded-[1.5rem] md:p-5 xl:grid-cols-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
-                        ID Sistem
+                        ID Soal
                       </label>
                       <input
                         type="text"
@@ -5406,7 +5323,7 @@ Patuhi aturan berikut secara ketat:
                     </div>
                     <div className="space-y-1.5 md:col-span-1">
                       <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
-                        Mapel
+                        Mata Pelajaran
                       </label>
                       <PremiumSelect
                         value={formData.mapel || ""}
@@ -5421,7 +5338,7 @@ Patuhi aturan berikut secara ketat:
                               }))
                             : [{ label: "Memuat Data...", value: "" }]
                         }
-                        placeholder="Pilih Mapel..."
+                        placeholder="Pilih Mata Pelajaran..."
                         disabled={isSaving || mapelOptions.length === 0}
                       />
                     </div>
@@ -5441,7 +5358,7 @@ Patuhi aturan berikut secara ketat:
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-amber-600 ml-1">
-                        Bobot Poin
+                        Poin Soal
                       </label>
                       <input
                         type="number"
@@ -5480,7 +5397,7 @@ Patuhi aturan berikut secara ketat:
                   <div className="space-y-1 md:space-y-1.5">
                     <div className="flex justify-between items-center ml-1">
                       <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                        Pertanyaan Inti (Bisa Format Teks & Gambar){" "}
+                        Pertanyaan Soal{" "}
                         <span className="text-red-500">*</span>
                       </label>
                       {isUploadingFormImg && (
@@ -5503,7 +5420,7 @@ Patuhi aturan berikut secara ketat:
                   {/* Input Gambar Sederhana via Modal */}
                   <div className="space-y-1 md:space-y-1.5">
                     <label className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 ml-1">
-                      URL Lampiran Gambar (Bila ada)
+                      Tautan Gambar Pendukung (Opsional)
                     </label>
                     <input
                       type="text"
@@ -6014,105 +5931,6 @@ Patuhi aturan berikut secara ketat:
             </div>
           </div>
         )}
-        {/* MODAL GENERATE SOAL DUMMY */}
-        {isDummyModalOpen && (
-          <div className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-slate-900/80">
-            <div className="w-full max-w-md bg-white rounded-[1.5rem] p-6 shadow-2xl">
-              <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
-                <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                  <Layers className="text-blue-500" /> Buat Template Soal
-                  (Kosong)
-                </h3>
-                <button
-                  onClick={() => setIsDummyModalOpen(false)}
-                  className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <form onSubmit={handleGenerateDummy} className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">
-                    Pilih Mapel
-                  </label>
-                  <PremiumSelect
-                    value={dummyConfig.mapel}
-                    onChange={(val) =>
-                      setDummyConfig({ ...dummyConfig, mapel: val })
-                    }
-                    options={mapelOptions.map((opt) => ({
-                      label: opt,
-                      value: opt,
-                    }))}
-                    placeholder="Mata Pelajaran..."
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">
-                    Sasaran Kelas
-                  </label>
-                  <PremiumMultiSelect
-                    value={dummyConfig.kelas}
-                    onChange={(val) =>
-                      setDummyConfig({ ...dummyConfig, kelas: val })
-                    }
-                    options={OPSI_KELAS_LENGKAP}
-                    placeholder="Pilih Kelas..."
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 mb-1 block">
-                      Mode Jumlah Soal
-                    </label>
-                    <select
-                      className="w-full p-3 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none"
-                      value={dummyConfig.jumlah}
-                      onChange={(e) =>
-                        setDummyConfig({
-                          ...dummyConfig,
-                          jumlah: Number(e.target.value),
-                        })
-                      }
-                    >
-                      <option value={10}>10 Soal (Test)</option>
-                      <option value={40}>40 Soal</option>
-                      <option value={50}>50 Soal</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 mb-1 block">
-                      Poin per Soal
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      className="w-full p-3 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none"
-                      value={dummyConfig.poin}
-                      onChange={(e) =>
-                        setDummyConfig({ ...dummyConfig, poin: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex justify-center items-center gap-2 disabled:opacity-50"
-                >
-                  {isSaving ? (
-                    <RefreshCw className="animate-spin" size={18} />
-                  ) : (
-                    <Check size={18} />
-                  )}{" "}
-                  Generate Soal Sekarang
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
-        {/* ========================================== */}
         {/* LANGKAH 5: MODAL SNAP PDF (SSmode) */}
         {/* ========================================== */}
         <SSmode
