@@ -3688,7 +3688,7 @@ Patuhi aturan berikut secara ketat:
                   label="Ruang Ujian Virtual"
                   icon={MonitorSmartphone}
                   color="bg-violet-100 text-violet-700"
-                  onClick={() => window.location.assign("/ujian-dashboard")}
+                  onClick={() => navigate("/ujian-dashboard")}
                 />
                 <MobileQuickMenuButton
                   label="Segarkan Data"
@@ -3944,7 +3944,7 @@ Patuhi aturan berikut secara ketat:
               </button>
               {/* TOMBOL PINTU MASUK KELAS VIRTUAL */}
               <button
-                onClick={() => (window.location.href = "/ujian-dashboard")}
+                onClick={() => navigate("/ujian-dashboard")}
                 className="w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black transition-all bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 shadow-indigo-500/30 md:ml-2 mt-2 md:mt-0"
               >
                 <MonitorSmartphone size={16} /> Live Ujian{" "}

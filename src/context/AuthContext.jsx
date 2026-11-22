@@ -4,34 +4,142 @@ import { api, APP_NAME } from "../api/api";
 
 export const AuthContext = createContext(null);
 
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const MAX_SESSION_MS = 8 * 60 * 60 * 1000;
+const ACTIVITY_PERSIST_INTERVAL_MS = 30 * 1000;
+
+const SESSION_KEY = `${APP_NAME}_session`;
+
+const readStoredSession = () => {
+  const saved = sessionStorage.getItem(SESSION_KEY);
+  if (!saved) return null;
+
+  try {
+    const session = JSON.parse(saved);
+    if (
+      !session?.user ||
+      !Number.isFinite(session.createdAt) ||
+      !Number.isFinite(session.lastActivityAt)
+    ) {
+      sessionStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+
+    const now = Date.now();
+    if (
+      now - session.lastActivityAt >= IDLE_TIMEOUT_MS ||
+      now - session.createdAt >= MAX_SESSION_MS
+    ) {
+      sessionStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+
+    return session;
+  } catch {
+    sessionStorage.removeItem(SESSION_KEY);
+    return null;
+  }
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(readStoredSession);
+  const loading = false;
+  const user = session?.user ?? null;
 
   useEffect(() => {
-    // UBAH DI SINI: Gunakan sessionStorage
-    const saved = sessionStorage.getItem(`${APP_NAME}_session`);
-    if (saved) {
-      try {
-        setUser(JSON.parse(saved));
-      } catch (e) {
-        sessionStorage.removeItem(`${APP_NAME}_session`);
+    if (!session) return undefined;
+
+    const handlePageHide = () => {
+      if (
+        session.user?.role === "admin" ||
+        session.user?.role === "guru"
+      ) {
+        sessionStorage.removeItem(SESSION_KEY);
       }
-    }
-    setLoading(false);
-  }, []);
+    };
+
+    let lastActivityAt = session.lastActivityAt;
+    let lastPersistedAt = session.lastActivityAt;
+
+    const expireSession = () => {
+      sessionStorage.removeItem(SESSION_KEY);
+      setSession(null);
+    };
+
+    const isExpired = () => {
+      const now = Date.now();
+      if (
+        now - lastActivityAt >= IDLE_TIMEOUT_MS ||
+        now - session.createdAt >= MAX_SESSION_MS
+      ) {
+        expireSession();
+        return true;
+      }
+      return false;
+    };
+
+    const persistActivity = () => {
+      if (lastActivityAt <= lastPersistedAt) return;
+      sessionStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ ...session, lastActivityAt }),
+      );
+      lastPersistedAt = lastActivityAt;
+    };
+
+    const handleActivity = () => {
+      if (isExpired()) return;
+      lastActivityAt = Date.now();
+      if (lastActivityAt - lastPersistedAt >= ACTIVITY_PERSIST_INTERVAL_MS) {
+        persistActivity();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        persistActivity();
+        return;
+      }
+      handleActivity();
+    };
+
+    const sessionTimer = window.setInterval(() => {
+      if (!isExpired()) persistActivity();
+    }, 15 * 1000);
+
+    window.addEventListener("pointerdown", handleActivity);
+    window.addEventListener("keydown", handleActivity);
+    window.addEventListener("touchstart", handleActivity);
+    window.addEventListener("scroll", handleActivity, true);
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(sessionTimer);
+      window.removeEventListener("pointerdown", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+      window.removeEventListener("touchstart", handleActivity);
+      window.removeEventListener("scroll", handleActivity, true);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [session]);
 
   const loginAction = async (u, p) => {
     const userData = await api.login(u, p);
-    setUser(userData);
-    // UBAH DI SINI: Gunakan sessionStorage
-    sessionStorage.setItem(`${APP_NAME}_session`, JSON.stringify(userData));
+    const now = Date.now();
+    const nextSession = {
+      user: userData,
+      createdAt: now,
+      lastActivityAt: now,
+    };
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+    setSession(nextSession);
   };
 
   const logoutAction = () => {
-    setUser(null);
-    // UBAH DI SINI: Gunakan sessionStorage
-    sessionStorage.removeItem(`${APP_NAME}_session`);
+    setSession(null);
+    sessionStorage.removeItem(SESSION_KEY);
   };
 
   return (

@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useContext } from "react";
+import React, { useContext, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 
@@ -27,59 +27,79 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 // --- ROUTER UTAMA ---
 const AppRouter = () => {
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
 
-  // Jika belum login, kunci semua akses HANYA ke halaman Login
+  useEffect(() => {
+    if (!user || !["admin", "guru"].includes(user.role)) return undefined;
+
+    if (window.location.pathname === "/") {
+      const currentState = window.history.state || {};
+      if (!currentState.cbtBackGuard) {
+        window.history.replaceState(
+          { ...currentState, cbtBackGuard: "root" },
+          "",
+          window.location.href,
+        );
+        window.history.pushState(
+          { cbtBackGuard: "sentinel" },
+          "",
+          window.location.href,
+        );
+      }
+    }
+
+    const handleBackGuard = (event) => {
+      if (window.location.pathname !== "/") return;
+      if (event.state?.cbtBackGuard === "root") {
+        logout();
+      }
+    };
+
+    window.addEventListener("popstate", handleBackGuard);
+    return () => window.removeEventListener("popstate", handleBackGuard);
+  }, [user, logout]);
+
   if (!user) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route path="*" element={<LoginPage />} />
-        </Routes>
-      </BrowserRouter>
+      <Routes>
+        <Route path="*" element={<LoginPage />} />
+      </Routes>
     );
   }
 
-  // Jika sudah login, atur jalur halaman menggunakan sistem React Router
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Rute Utama (Dashboard Default) berdasarkan role */}
-        <Route
-          path="/"
-          element={
-            user.role === "admin" ? (
-              <AdminDashboard />
-            ) : user.role === "guru" ? (
-              <GuruDashboard />
-            ) : (
-              <SiswaDashboard />
-            )
-          }
-        />
-
-        {/* PINTU RAHASIA: Rute Khusus UjianDashboard */}
-        {/* Dilindungi oleh ProtectedRoute, hanya Admin & Guru yang bisa lewat */}
-        <Route
-          path="/ujian-dashboard"
-          element={
-            <ProtectedRoute allowedRoles={["admin", "guru"]}>
-              <UjianDashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Fallback: Jika user iseng mengetik URL ngawur, kembalikan ke dashboard */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route
+        path="/"
+        element={
+          user.role === "admin" ? (
+            <AdminDashboard />
+          ) : user.role === "guru" ? (
+            <GuruDashboard />
+          ) : (
+            <SiswaDashboard />
+          )
+        }
+      />
+      <Route
+        path="/ujian-dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "guru"]}>
+            <UjianDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 };
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppRouter />
+      <BrowserRouter>
+        <AppRouter />
+      </BrowserRouter>
 
       {/* Global Styles & Font */}
       <style>{`
