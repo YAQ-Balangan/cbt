@@ -160,6 +160,7 @@ export const api = {
 
     submitNilaiUjian: async (username, idUjian, payloadData) => {
         const storageKey = `cbt-submission:${encodeURIComponent(username)}:${encodeURIComponent(idUjian)}`;
+        const idSesi = `${username}_${idUjian}`;
         let submissionId = window.localStorage.getItem(storageKey);
 
         if (!submissionId) {
@@ -171,7 +172,10 @@ export const api = {
 
         const { data, error } = await supabase
             .from('nilai')
-            .upsert({ ...payloadData, id: submissionId }, { onConflict: 'id' })
+            .upsert(
+                { ...payloadData, id: submissionId, id_sesi: idSesi },
+                { onConflict: 'id_sesi' },
+            )
             .select('id')
             .single();
 
@@ -220,28 +224,6 @@ export const api = {
             console.error("Gagal save sesi ujian:", error);
             return null;
         }
-    },
-
-    completeSesi: async (username, idUjian, jawaban, sisaWaktu, pelanggaran = 0, statusSesi = 'COMPLETED') => {
-        const idSesi = `${username}_${idUjian}`;
-        const jawabanString = typeof jawaban === 'string' ? jawaban : JSON.stringify(jawaban);
-        const { data, error } = await supabase
-            .from('sesi_ujian')
-            .upsert({
-                id_sesi: idSesi,
-                username_siswa: username,
-                id_ujian: idUjian,
-                jawaban_sementara: jawabanString,
-                sisa_waktu: sisaWaktu,
-                pelanggaran,
-                status: statusSesi,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'id_sesi' })
-            .select('id_sesi')
-            .single();
-
-        if (error) throw new Error(error.message);
-        if (!data) throw new Error('Status ujian selesai belum terkonfirmasi.');
     },
 
     // Tarik progres sebelumnya saat Siswa mulai/melanjutkan ujian
@@ -294,6 +276,6 @@ export const api = {
             .delete()
             .eq('id_sesi', idSesi);
 
-        if (error) console.error("Gagal reset sesi ujian:", error.message);
+        if (error) throw new Error(`Gagal menghapus sesi ujian: ${error.message}`);
     }
 };

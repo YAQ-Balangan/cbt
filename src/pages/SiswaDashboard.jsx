@@ -730,7 +730,26 @@ const SiswaDashboard = () => {
     fetchData(false);
     // Diubah menjadi 5 menit (300000 ms) agar hemat kuota request
     const intervalId = setInterval(() => fetchData(true), 300000);
-    return () => clearInterval(intervalId);
+    const channel = api.subscribeToChanges(
+      "Nilai",
+      () => {
+        api
+          .getNilaiSiswa(String(getVal(user, "Nama") || ""))
+          .then(setMyResults)
+          .catch((error) =>
+            console.error("Gagal memperbarui nilai siswa:", error),
+          );
+      },
+      (status, error) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("Realtime nilai siswa tidak tersedia:", error || status);
+        }
+      },
+    );
+    return () => {
+      clearInterval(intervalId);
+      channel.unsubscribe();
+    };
   }, [user, userKelasFull, userTingkat, userJurusan, userTingkatJurusan]);
 
   // ==============================================================
@@ -927,7 +946,20 @@ const SiswaDashboard = () => {
         "Akses DITOLAK. Silakan periksa kembali token ujian Anda.",
       );
 
-    const sudahMengerjakan = myResults.some(
+    let latestResults;
+    try {
+      latestResults = await api.getNilaiSiswa(getVal(user, "Nama"));
+      setMyResults(latestResults);
+    } catch (error) {
+      showAlert(
+        "danger",
+        "Kesalahan Server",
+        "Gagal memeriksa hasil ujian: " + error.message,
+      );
+      return;
+    }
+
+    const sudahMengerjakan = latestResults.some(
       (res) =>
         String(getVal(res, "Mapel")).toUpperCase() ===
         String(examMapel).toUpperCase(),
@@ -1160,26 +1192,17 @@ const SiswaDashboard = () => {
 
       const usernameSiswa = getVal(user, "Username");
       const examIdSelesai = getVal(activeExamRef.current, "ID");
-      const statusSesiSelesai =
-        forcedStatus === "Diskualifikasi" ? "DISQUALIFIED" : "COMPLETED";
       const syncSesiSelesai = async () => {
         for (const delayMs of [0, 1000, 3000]) {
           if (delayMs) {
             await new Promise((resolve) => setTimeout(resolve, delayMs));
           }
           try {
-            await api.completeSesi(
-              usernameSiswa,
-              examIdSelesai,
-              currentAnswers,
-              timeLeftRef.current,
-              pelanggaranRef.current,
-              statusSesiSelesai,
-            );
+            await api.deleteSesi(usernameSiswa, examIdSelesai);
             return;
           } catch (error) {
             if (delayMs === 3000) {
-              console.error("Gagal menyinkronkan status ujian selesai:", error);
+              console.error("Gagal membersihkan sesi ujian selesai:", error);
             }
           }
         }
