@@ -546,7 +546,6 @@ const SiswaDashboard = () => {
   const isLockedRef = useRef(isLocked);
   const pelanggaranRef = useRef(pelanggaran);
   const timeLeftRef = useRef(0);
-  const saveTimeoutRef = useRef(null);
 
   useEffect(() => {
     activeExamRef.current = activeExam;
@@ -1121,11 +1120,6 @@ const SiswaDashboard = () => {
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
-    // TAMBAHAN 1: Hapus timer save yang masih nyangkut di background agar tidak jadi sesi hantu
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
     let skorSiswa = 0;
     let benarCount = 0;
     let detailJawabanArray = [];
@@ -1636,17 +1630,7 @@ const SiswaDashboard = () => {
                               };
                               setAnswers(newAnswers);
 
-                              // 2. Hapus hitung mundur yang lama jika siswa klik ganti opsi dengan cepat
-                              if (saveTimeoutRef.current) {
-                                clearTimeout(saveTimeoutRef.current);
-                              }
-
-                              // 3. Jeda diubah menjadi 5 detik. Perubahan di layar tetap instan,
-                              // tapi pengiriman ke server ditunda agar bisa ditimpa jika siswa berubah pikiran.
-                              saveTimeoutRef.current = setTimeout(() => {
-                                // TAMBAHKAN BARIS INI: Jangan nge-save kalau siswa sedang proses submit
-                                if (isSubmittingRef.current) return;
-
+                              if (!isSubmittingRef.current) {
                                 api.saveSesi(
                                   getVal(user, "Username"),
                                   getVal(activeExam, "ID"),
@@ -1655,7 +1639,7 @@ const SiswaDashboard = () => {
                                   pelanggaranRef.current,
                                   isLockedRef.current ? "LOCKED" : "ACTIVE",
                                 );
-                              }, 5000);
+                              }
                             }}
                             className={`w-full text-left px-5 py-4 md:px-6 md:py-5 rounded-[1.5rem] border-2 transition-all flex items-start gap-4 md:gap-5 group relative overflow-hidden outline-none ${
                               isSelected
