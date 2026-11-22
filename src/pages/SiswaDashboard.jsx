@@ -238,52 +238,38 @@ const fontClasses = {
 /// ==========================================
 // KOMPONEN TIMER INDEPENDEN (ANTI-BUG LOADING)
 // ==========================================
-const ExamTimer = React.memo(({ initialTime, onTick, onTimeUp, timeRef }) => {
-  const [timeLeft, setTimeLeft] = useState(initialTime);
-  const hasStarted = useRef(false); // Otak timer agar tahu kapan mulai
+const ExamTimer = React.memo(({ deadlineAt, onTick, onTimeUp, timeRef }) => {
+  const [timeLeft, setTimeLeft] = useState(0);
+  const hasFinished = useRef(false);
 
-  // Sinkronisasi dengan waktu dari server
   useEffect(() => {
-    setTimeLeft(initialTime);
-  }, [initialTime]);
+    const deadline = Date.parse(deadlineAt);
+    if (!Number.isFinite(deadline)) return undefined;
 
-  // LOGIKA COUNTDOWN MURNI
-  useEffect(() => {
-    if (timeLeft <= 0) return;
-    const timerId = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timerId);
-  }, [timeLeft]);
+    const updateTimeLeft = () => {
+      setTimeLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    };
 
-  // LOGIKA PENYIMPANAN SESI & WAKTU HABIS
+    updateTimeLeft();
+    const timerId = window.setInterval(updateTimeLeft, 1000);
+    return () => window.clearInterval(timerId);
+  }, [deadlineAt]);
+
   useEffect(() => {
     if (timeRef) timeRef.current = timeLeft;
+    if (!deadlineAt) return;
 
-    // Tandai bahwa waktu ujian yang sebenarnya (> 0) sudah diterima timer
-    if (timeLeft > 0) {
-      hasStarted.current = true;
-    }
+    const deadline = Date.parse(deadlineAt);
+    if (!Number.isFinite(deadline)) return;
 
-    // Timer HANYA boleh bereaksi JIKA sudah pernah berjalan normal
-    if (hasStarted.current) {
-      // Auto-save waktu ke server setiap 60 detik (menghemat 75% request)
-      if (timeLeft > 0 && timeLeft % 60 === 0 && timeLeft !== initialTime) {
-        onTick(timeLeft);
-      }
-
-      // Jika waktu benar-benar habis dari hitungan mundur normal
-      if (timeLeft <= 0) {
-        hasStarted.current = false; // Kunci agar timer berhenti
-        const randomDelay = Math.floor(Math.random() * 7000);
-
-        setTimeout(() => {
-          onTimeUp();
-        }, randomDelay);
-      }
+    if (timeLeft > 0 && timeLeft % 60 === 0) {
+      onTick(timeLeft);
+    } else if (timeLeft <= 0 && Date.now() >= deadline && !hasFinished.current) {
+      hasFinished.current = true;
+      onTimeUp();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, initialTime]);
+  }, [timeLeft, deadlineAt]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600);
@@ -397,7 +383,7 @@ const SiswaDashboard = () => {
 
   const [answers, setAnswers] = useState({});
   const [raguRagu, setRaguRagu] = useState({});
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [examDeadlineAt, setExamDeadlineAt] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [appSettings, setAppSettings] = useState({
@@ -559,7 +545,7 @@ const SiswaDashboard = () => {
   const isSubmittingRef = useRef(isSubmitting);
   const isLockedRef = useRef(isLocked);
   const pelanggaranRef = useRef(pelanggaran);
-  const timeLeftRef = useRef(timeLeft);
+  const timeLeftRef = useRef(0);
   const saveTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -580,9 +566,6 @@ const SiswaDashboard = () => {
   useEffect(() => {
     pelanggaranRef.current = pelanggaran;
   }, [pelanggaran]);
-  useEffect(() => {
-    if (timeLeft > 0) timeLeftRef.current = timeLeft;
-  }, [timeLeft]);
   useEffect(() => {
     if (soalData && soalData.length > 0) {
       soalData.forEach((soal) => {
@@ -804,7 +787,6 @@ const SiswaDashboard = () => {
         isLockedRef.current = true;
 
         setPelanggaran(2);
-        setTimeLeft(timeLeftRef.current);
         setIsLocked(true);
 
         await api.saveSesi(
@@ -908,7 +890,6 @@ const SiswaDashboard = () => {
         if (sesi && sesi.status === "ACTIVE") {
           setIsLocked(false);
           isLockedRef.current = false;
-          setTimeLeft(timeLeftRef.current);
 
           showAlert(
             "success",
@@ -963,12 +944,67 @@ const SiswaDashboard = () => {
     setLoadingSoal(true);
     setIsMobileDrawerOpen(false);
     setRaguRagu({});
+    setExamDeadlineAt(null);
 
     // === MENGAKTIFKAN JEBAKAN HISTORY AGAR SWIPE HP BERFUNGSI ===
     window.history.pushState({ page: "ujian" }, "", window.location.href);
     // ==============================================================
 
     try {
+      const usernameSiswa = getVal(user, "Username");
+      const serverSession = await api.getSesi(usernameSiswa, examId);
+
+      if (
+        serverSession &&
+        ["COMPLETED", "DISQUALIFIED"].includes(
+          String(serverSession.status).toUpperCase(),
+        )
+      ) {
+        exitExamFullscreen();
+        setActiveExam(null);
+        showAlert(
+          "warning",
+          "Ujian Sudah Selesai",
+          "Hasil ujian ini sudah tersimpan. Silakan periksa halaman nilai.",
+        );
+        return;
+      }
+
+      let finalAnswers = {};
+      if (serverSession) {
+        try {
+          finalAnswers =
+            typeof serverSession.jawaban_sementara === "string"
+              ? JSON.parse(serverSession.jawaban_sementara)
+              : serverSession.jawaban_sementara || {};
+        } catch (e) {
+          console.warn("Gagal membaca history jawaban", e);
+        }
+      }
+
+      const savedTime = serverSession
+        ? Number(serverSession.sisa_waktu)
+        : examDurasi * 60;
+      const timeToSave = serverSession
+        ? Number.isFinite(savedTime)
+          ? Math.max(0, savedTime)
+          : 0
+        : examDurasi * 60;
+      const deadlineAt = await api.saveSesi(
+        usernameSiswa,
+        examId,
+        finalAnswers,
+        timeToSave,
+        serverSession?.pelanggaran || 0,
+        serverSession?.status || "ACTIVE",
+      );
+      if (!deadlineAt || !Number.isFinite(Date.parse(deadlineAt))) {
+        throw new Error("Gagal menyimpan waktu mulai ujian.");
+      }
+      setExamDeadlineAt(deadlineAt);
+      setAnswers(finalAnswers);
+      setPelanggaran(serverSession?.pelanggaran || 0);
+
       const allSoal = await api.getSoalUjian(examMapel);
       const examMapelUpper = String(examMapel).toUpperCase();
       const filterSoal = allSoal.filter((s) => {
@@ -1006,67 +1042,7 @@ const SiswaDashboard = () => {
       }
 
       setSoalData(finalSoal);
-
-      const usernameSiswa = getVal(user, "Username");
-      let serverSession = null;
-      try {
-        serverSession = await api.getSesi(usernameSiswa, examId);
-      } catch (e) {}
-
-      if (
-        serverSession &&
-        ["COMPLETED", "DISQUALIFIED"].includes(
-          String(serverSession.status).toUpperCase(),
-        )
-      ) {
-        exitExamFullscreen();
-        setActiveExam(null);
-        showAlert(
-          "warning",
-          "Ujian Sudah Selesai",
-          "Hasil ujian ini sudah tersimpan. Silakan periksa halaman nilai.",
-        );
-        return;
-      }
-
-      // ...
-      let finalAnswers = {};
-      let finalTimeLeft = examDurasi * 60;
-
-      if (serverSession) {
-        let parsedJawaban = {};
-        try {
-          parsedJawaban =
-            typeof serverSession.jawaban_sementara === "string"
-              ? JSON.parse(serverSession.jawaban_sementara)
-              : serverSession.jawaban_sementara || {};
-        } catch (e) {
-          console.warn("Gagal membaca history jawaban", e);
-        }
-
-        finalAnswers = parsedJawaban;
-        finalTimeLeft = serverSession.sisa_waktu || examDurasi * 60;
-        setPelanggaran(serverSession.pelanggaran || 0);
-        setIsLocked(serverSession.status === "LOCKED");
-      } else {
-        setPelanggaran(0);
-        setIsLocked(false);
-      }
-      try {
-        await api.saveSesi(
-          getVal(user, "Username"),
-          examId,
-          finalAnswers,
-          finalTimeLeft,
-          serverSession ? serverSession.pelanggaran : 0,
-          serverSession ? serverSession.status : "ACTIVE",
-        );
-      } catch (e) {
-        console.error("Gagal sinkron awal sesi ujian:", e);
-      }
-
-      setAnswers(finalAnswers); // Sekarang jawaban lama murid sukses dimuat kembali ke layar!
-      setTimeLeft(finalTimeLeft);
+      setIsLocked(String(serverSession?.status).toUpperCase() === "LOCKED");
       setCurrentSoalIndex(0);
     } catch (error) {
       showAlert(
@@ -1076,6 +1052,7 @@ const SiswaDashboard = () => {
       );
       exitExamFullscreen();
       setActiveExam(null);
+      setExamDeadlineAt(null);
     } finally {
       setLoadingSoal(false);
     }
@@ -1213,6 +1190,7 @@ const SiswaDashboard = () => {
       setIsSubmitting(false);
       exitExamFullscreen();
       setActiveExam(null);
+      setExamDeadlineAt(null);
       setAnswers({});
       setRaguRagu({});
       setCurrentSoalIndex(0);
@@ -1315,7 +1293,7 @@ const SiswaDashboard = () => {
       <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white flex-col p-6 z-[9999] fixed inset-0 select-none">
         <div className="hidden">
           <ExamTimer
-            initialTime={timeLeft}
+            deadlineAt={examDeadlineAt}
             timeRef={timeLeftRef}
             onTick={(newTime) => {
               if (activeExamRef.current) {
@@ -1408,7 +1386,7 @@ const SiswaDashboard = () => {
         <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white px-3 py-1 shadow-sm sm:px-4 sm:py-2">
           <div className="space-y-1.5">
             <ExamTimer
-              initialTime={timeLeft}
+              deadlineAt={examDeadlineAt}
               timeRef={timeLeftRef}
               onTick={(newTime) => {
                 if (activeExamRef.current && !isSubmittingRef.current) {

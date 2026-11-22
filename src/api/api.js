@@ -205,13 +205,20 @@ export const api = {
                 updated_at: waktuSekarang
             };
 
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from('sesi_ujian')
-                .upsert(payload, { onConflict: 'id_sesi' });
+                .upsert(payload, { onConflict: 'id_sesi' })
+                .select('deadline_at')
+                .single();
 
-            if (error) console.error("Upsert error:", error.message);
+            if (error) {
+                console.error("Upsert error:", error.message);
+                return null;
+            }
+            return data?.deadline_at || null;
         } catch (error) {
             console.error("Gagal save sesi ujian:", error);
+            return null;
         }
     },
 
@@ -247,7 +254,9 @@ export const api = {
             .single();
 
         // Abaikan error jika sesi memang belum ada (belum pernah ngerjain)
-        if (error && error.code !== 'PGRST116') console.error("Gagal tarik sesi:", error.message);
+        if (error && error.code !== 'PGRST116') {
+            throw new Error(`Gagal tarik sesi ujian: ${error.message}`);
+        }
         return data;
     },
 
