@@ -103,6 +103,44 @@ const sanitizeExportFilenamePart = (value) =>
     .slice(0, 48)
     .trim();
 
+const buildAdminExportFilename = (prefix, filters, search) => {
+  const cleanPrefix = sanitizeExportFilenamePart(prefix) || "Data";
+  const mapelName = sanitizeExportFilenamePart(
+    filters.mapel || filters.nama_mapel || "",
+  );
+  const kelasName = sanitizeExportFilenamePart(
+    filters.kelas || filters.jurusan || "",
+  );
+  const otherNames = Object.entries(filters)
+    .filter(
+      ([key, value]) =>
+        key !== "mapel" &&
+        key !== "nama_mapel" &&
+        key !== "kelas" &&
+        key !== "jurusan" &&
+        value !== null &&
+        value !== undefined &&
+        String(value).trim() !== "",
+    )
+    .map(([, value]) =>
+      sanitizeExportFilenamePart(
+        Array.isArray(value) ? value.join(" ") : value,
+      ),
+    )
+    .filter(Boolean);
+  const searchName = sanitizeExportFilenamePart(search);
+  if (searchName && !otherNames.includes(searchName)) {
+    otherNames.push(searchName);
+  }
+
+  const details = [mapelName, kelasName, ...otherNames].filter(Boolean);
+  return [cleanPrefix, ...(details.length ? details : ["Semua"])]
+    .join("-")
+    .slice(0, 100)
+    .replace(/-+$/, "")
+    .trim();
+};
+
 const getAdminTableColumnWidths = (columns, includeActions = false) => {
   const idWidth = 6;
   const nameWidth =
@@ -1141,36 +1179,11 @@ const AdminDashboard = () => {
     );
     const now = new Date();
     const dateString = `${now.getDate()}-${now.getMonth() + 1}-${now.getFullYear()}`;
-    const activeFilters = Object.entries(filters)
-      .filter(
-        ([, value]) =>
-          value !== null &&
-          value !== undefined &&
-          String(value).trim() !== "",
-      )
-      .map(([, value]) =>
-        sanitizeExportFilenamePart(
-          Array.isArray(value) ? value.join(" ") : value,
-        ),
-      );
-    if (search.trim()) {
-      const searchName = sanitizeExportFilenamePart(search);
-      if (searchName && !activeFilters.includes(searchName)) {
-        activeFilters.unshift(searchName);
-      }
-    }
-
-    const filterName = activeFilters
-      .filter(Boolean)
-      .join(" ")
-      .slice(0, 80)
-      .trim();
-    const fileName = [
-      sanitizeExportFilenamePart(currentConfig.sheet),
-      filterName,
-    ]
-      .filter(Boolean)
-      .join(" ");
+    const fileName = buildAdminExportFilename(
+      currentConfig.sheet,
+      filters,
+      search,
+    );
 
     try {
       if (type === "print" || type === "pdf") {

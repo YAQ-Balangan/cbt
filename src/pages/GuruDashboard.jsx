@@ -85,6 +85,16 @@ const sanitizeExportFilenamePart = (value) =>
     .slice(0, 48)
     .trim();
 
+const buildGuruExportFilename = (prefix, mapel, kelas) => {
+  const cleanPrefix = sanitizeExportFilenamePart(prefix) || "Nilai";
+  const cleanMapel = sanitizeExportFilenamePart(mapel) || "Semua";
+  const cleanKelas = sanitizeExportFilenamePart(kelas) || "Semua";
+  return `${cleanPrefix}-${cleanMapel}-${cleanKelas}`
+    .slice(0, 100)
+    .replace(/-+$/, "")
+    .trim();
+};
+
 const getGuruTableColumnWidths = (columns, includeActions = false) => {
   const idWidth = 10;
   const nameWidth = 20;
@@ -3177,34 +3187,11 @@ Patuhi aturan berikut secara ketat:
 
     const exportMapel = isLogMode ? currentLogMapel : filters.mapel;
     const prefixName = isLogMode ? "Log" : "Nilai";
-    const activeFilters = [];
-    if (filters.kelas) activeFilters.push(filters.kelas);
-    if (exportMapel) activeFilters.push(exportMapel);
-    Object.entries(filters).forEach(([key, value]) => {
-      if (
-        key !== "kelas" &&
-        key !== "mapel" &&
-        value !== null &&
-        value !== undefined &&
-        String(value).trim() !== ""
-      ) {
-        activeFilters.push(value);
-      }
-    });
-    if (search.trim()) activeFilters.push(search.trim());
-
-    const filterName = activeFilters
-      .map(sanitizeExportFilenamePart)
-      .filter(Boolean)
-      .join(" ")
-      .slice(0, 80)
-      .trim();
-    const fileName = [
-      sanitizeExportFilenamePart(prefixName),
-      filterName,
-    ]
-      .filter(Boolean)
-      .join(" ");
+    const fileName = buildGuruExportFilename(
+      prefixName,
+      exportMapel,
+      filters.kelas,
+    );
 
     // ==========================================
     // 2. KUMPULKAN DATA (Cerdas Mendeteksi Lokasi Tab)
