@@ -2149,8 +2149,8 @@ const GuruDashboard = () => {
   const handleUnlockSesi = async (username, examId) => {
     try {
       setLoading(true);
-      // Panggil API (status jadi ACTIVE, pelanggaran biarkan 1 agar tidak curang lagi)
-      await api.updateSesiStatus(username, examId, "ACTIVE", 1);
+      // Buka status sesi tanpa menghapus hitungan dua pelanggaran sebelumnya.
+      await api.updateSesiStatus(username, examId, "ACTIVE", 2);
 
       showAlert(
         "success",

@@ -1014,6 +1014,14 @@ const SiswaDashboard = () => {
       try {
         const sesi = await api.getSesi(username, examId);
         if (sesi && sesi.status === "ACTIVE") {
+          const serverPelanggaran = Number(sesi.pelanggaran);
+          if (
+            Number.isSafeInteger(serverPelanggaran) &&
+            serverPelanggaran >= 0
+          ) {
+            pelanggaranRef.current = serverPelanggaran;
+            setPelanggaran(serverPelanggaran);
+          }
           setIsLocked(false);
           isLockedRef.current = false;
 
@@ -1420,18 +1428,7 @@ const SiswaDashboard = () => {
           <ExamTimer
             deadlineAt={examDeadlineAt}
             timeRef={timeLeftRef}
-            onTick={(newTime) => {
-              if (activeExamRef.current) {
-                api.saveSesi(
-                  getVal(user, "Username"),
-                  getVal(activeExamRef.current, "ID"),
-                  answersRef.current,
-                  newTime,
-                  pelanggaranRef.current,
-                  "LOCKED",
-                );
-              }
-            }}
+            onTick={() => {}}
             onTimeUp={() => handleEndExamClick(true)}
           />
         </div>
@@ -1443,7 +1440,7 @@ const SiswaDashboard = () => {
         <p className="text-center text-slate-300 max-w-lg text-sm md:text-base leading-relaxed mb-8">
           Sistem mendeteksi Anda{" "}
           <strong>keluar dari aplikasi / berpindah layar</strong>. Ini adalah
-          pelanggaran pertama. Silakan panggil pengawas untuk membuka kunci agar
+          pelanggaran kedua. Silakan panggil pengawas untuk membuka kunci agar
           Anda bisa melanjutkan ujian.
           <br />
           <br />
