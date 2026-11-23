@@ -248,6 +248,7 @@ const fontClasses = {
 const ExamTimer = React.memo(({ deadlineAt, onTick, onTimeUp, timeRef }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const hasFinished = useRef(false);
+  const retryTimeoutRef = useRef(null);
 
   useEffect(() => {
     const deadline = Date.parse(deadlineAt);
@@ -259,7 +260,10 @@ const ExamTimer = React.memo(({ deadlineAt, onTick, onTimeUp, timeRef }) => {
 
     updateTimeLeft();
     const timerId = window.setInterval(updateTimeLeft, 1000);
-    return () => window.clearInterval(timerId);
+    return () => {
+      window.clearInterval(timerId);
+      window.clearTimeout(retryTimeoutRef.current);
+    };
   }, [deadlineAt]);
 
   useEffect(() => {
@@ -269,11 +273,22 @@ const ExamTimer = React.memo(({ deadlineAt, onTick, onTimeUp, timeRef }) => {
     const deadline = Date.parse(deadlineAt);
     if (!Number.isFinite(deadline)) return;
 
+    const submitAfterDeadline = async () => {
+      if (hasFinished.current) return;
+      hasFinished.current = true;
+      const submitted = await onTimeUp();
+      if (submitted === false) {
+        retryTimeoutRef.current = window.setTimeout(() => {
+          hasFinished.current = false;
+          submitAfterDeadline();
+        }, 10000);
+      }
+    };
+
     if (timeLeft > 0 && timeLeft % 60 === 0) {
       onTick(timeLeft);
     } else if (timeLeft <= 0 && Date.now() >= deadline && !hasFinished.current) {
-      hasFinished.current = true;
-      onTimeUp();
+      submitAfterDeadline();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, deadlineAt]);
@@ -1231,8 +1246,8 @@ const SiswaDashboard = () => {
 
   // 5. KALKULASI SKOR & SUBMIT (FINAL FIX)
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
-    if (isSubmittingRef.current) return;
-    if (!isForced && blockManualSubmitIfNeeded()) return;
+    if (isSubmittingRef.current) return false;
+    if (!isForced && blockManualSubmitIfNeeded()) return false;
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
@@ -1321,6 +1336,10 @@ const SiswaDashboard = () => {
 
       isSubmittingRef.current = false;
       setIsSubmitting(false);
+      isLockedRef.current = false;
+      setIsLocked(false);
+      pelanggaranRef.current = 0;
+      setPelanggaran(0);
       exitExamFullscreen();
       setActiveExam(null);
       setExamDeadlineAt(null);
@@ -1349,6 +1368,7 @@ const SiswaDashboard = () => {
           "Berhasil disubmit! Silahkan periksa halaman nilai Anda.",
         );
       }
+      return true;
     } catch (err) {
       showAlert(
         "warning",
@@ -1357,19 +1377,20 @@ const SiswaDashboard = () => {
       );
       isSubmittingRef.current = false;
       setIsSubmitting(false);
+      return false;
     }
   };
 
   const handleEndExamClick = (isForced = false) => {
-    if (isSubmittingRef.current) return;
-    if (!isForced && blockManualSubmitIfNeeded()) return;
+    if (isSubmittingRef.current) return false;
+    if (!isForced && blockManualSubmitIfNeeded()) return false;
     if (isOffline && !isForced) {
       showAlert(
         "danger",
         "Koneksi Terputus",
         "Tidak dapat mengumpulkan ujian. Pastikan data seluler atau WiFi terhubung kembali, lalu coba lagi. Jangan keluar dari aplikasi!",
       );
-      return;
+      return false;
     }
     if (!isForced) {
       showAlert(
@@ -1382,7 +1403,7 @@ const SiswaDashboard = () => {
         },
       );
     } else {
-      executeEndExam(isForced);
+      return executeEndExam(isForced);
     }
   };
 
@@ -1454,6 +1475,16 @@ const SiswaDashboard = () => {
           </strong>
           .
         </p>
+        {customAlert.isOpen &&
+          customAlert.title === "Pengiriman Belum Berhasil" && (
+            <p
+              role="alert"
+              className="mb-6 max-w-lg rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center text-sm text-amber-200"
+            >
+              {customAlert.message} Sistem akan mencoba mengirim kembali
+              otomatis.
+            </p>
+          )}
         <div className="flex gap-3 text-slate-400 font-bold text-xs uppercase tracking-widest items-center bg-slate-800 border border-slate-700 px-6 py-3.5 rounded-2xl shadow-lg">
           <RefreshCw className="animate-spin text-amber-500" size={18} />{" "}
           Menunggu Persetujuan Guru...
