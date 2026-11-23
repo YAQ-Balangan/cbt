@@ -848,9 +848,11 @@ const SiswaDashboard = () => {
 
     let resizeLogTimeout;
     let resizeCheckTimeout;
+    let resizeGraceTimeout;
     let hiddenTimeout;
     let currentOrientation = getScreenOrientation();
     let viewportWasBlocked = false;
+    let isZoomingOrResizing = false;
     const isMobileDevice =
       /android|iphone|ipad|ipod/i.test(navigator.userAgent) ||
       (typeof window.matchMedia === "function" &&
@@ -909,6 +911,12 @@ const SiswaDashboard = () => {
 
     const handleResize = () => {
       if (!activeExamRef.current) return;
+      isZoomingOrResizing = true;
+      clearTimeout(resizeGraceTimeout);
+      resizeGraceTimeout = setTimeout(() => {
+        isZoomingOrResizing = false;
+      }, 1000);
+
       clearTimeout(resizeLogTimeout);
       resizeLogTimeout = setTimeout(() => {
         console.info("Anti-cheat: resize/orientation ignored", {
@@ -946,7 +954,11 @@ const SiswaDashboard = () => {
 
     const handleBlur = () => {
       if (!activeExamRef.current || zoomedImgRef.current) return;
-      console.info("Anti-cheat: window blur ignored; visibility is authoritative");
+      if (isZoomingOrResizing) {
+        console.info("Anti-cheat: window blur ignored after resize/orientation");
+        return;
+      }
+      triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
     };
 
     const handleBeforeUnload = (e) => {
@@ -983,6 +995,7 @@ const SiswaDashboard = () => {
       window.removeEventListener("resize", handleResize);
       clearTimeout(resizeLogTimeout);
       clearTimeout(resizeCheckTimeout);
+      clearTimeout(resizeGraceTimeout);
       clearTimeout(hiddenTimeout);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
