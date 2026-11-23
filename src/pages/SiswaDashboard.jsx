@@ -838,28 +838,47 @@ const SiswaDashboard = () => {
       }
     };
 
-    // KODE BARU: Pelacak Zoom & Resize Layar
-    let resizeTimeout;
-    let isZoomingOrResizing = false;
+    let resizeLogTimeout;
+    let hiddenTimeout;
 
     const handleResize = () => {
-      isZoomingOrResizing = true;
-      clearTimeout(resizeTimeout);
-      // Berikan masa toleransi 1 detik saat sedang nge-zoom agar tidak kena kunci
-      resizeTimeout = setTimeout(() => {
-        isZoomingOrResizing = false;
-      }, 1000);
+      if (!activeExamRef.current) return;
+      clearTimeout(resizeLogTimeout);
+      resizeLogTimeout = setTimeout(() => {
+        console.info("Anti-cheat: resize/orientation ignored", {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
+      }, 300);
     };
 
     const handleVisibilityChange = () => {
-      if (zoomedImgRef.current) return;
-      if (document.hidden) triggerLock("Tab Disembunyikan / Pindah Tab");
+      clearTimeout(hiddenTimeout);
+      hiddenTimeout = undefined;
+
+      if (zoomedImgRef.current || !activeExamRef.current) return;
+      if (document.visibilityState !== "hidden") {
+        console.info("Anti-cheat: page visible again");
+        return;
+      }
+
+      console.info("Anti-cheat: page hidden; waiting 2 seconds");
+      hiddenTimeout = setTimeout(() => {
+        hiddenTimeout = undefined;
+        if (
+          document.visibilityState === "hidden" &&
+          !zoomedImgRef.current
+        ) {
+          triggerLock("Tab Disembunyikan / Pindah Tab");
+        } else {
+          console.info("Anti-cheat: brief hidden state ignored");
+        }
+      }, 2000);
     };
 
     const handleBlur = () => {
-      if (zoomedImgRef.current) return;
-      if (isZoomingOrResizing) return; // KODE BARU: Abaikan hilang fokus jika sedang nge-zoom
-      triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
+      if (!activeExamRef.current || zoomedImgRef.current) return;
+      console.info("Anti-cheat: window blur ignored; visibility is authoritative");
     };
 
     const handleBeforeUnload = (e) => {
@@ -888,7 +907,8 @@ const SiswaDashboard = () => {
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      clearTimeout(resizeTimeout);
+      clearTimeout(resizeLogTimeout);
+      clearTimeout(hiddenTimeout);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("beforeunload", handleBeforeUnload);
