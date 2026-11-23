@@ -1215,6 +1215,33 @@ const GuruDashboard = () => {
   };
 
   const [sesiUjianData, setSesiUjianData] = useState([]); // State untuk Anti-Curang
+  const [studentNamesByUsername, setStudentNamesByUsername] = useState({});
+
+  useEffect(() => {
+    let isActive = true;
+    api.read("Users")
+      .then((users) => {
+        if (!isActive) return;
+        const names = {};
+        users.forEach((student) => {
+          const username = String(
+            student.username || student.Username || "",
+          ).trim();
+          if (!username) return;
+          names[username.toLowerCase()] = String(
+            student.nama || student.Nama || username,
+          );
+        });
+        setStudentNamesByUsername(names);
+      })
+      .catch((error) =>
+        console.error("Gagal memuat nama siswa terkunci:", error),
+      );
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   // STATE & API GAMBAR
   const IMGBB_API_KEY = "db28c000ce57b260d7d09cb4c18790e0";
@@ -4961,7 +4988,12 @@ Patuhi aturan berikut secara ketat:
                           <div className="flex justify-between items-start mb-4">
                             <div>
                               <p className="font-black text-slate-800 text-lg leading-tight">
-                                {sesi.username_siswa}
+                                {studentNamesByUsername[
+                                  String(sesi.username_siswa).toLowerCase()
+                                ] || "Nama siswa belum ditemukan"}
+                              </p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                Username: {sesi.username_siswa}
                               </p>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                                 ID Ujian: {sesi.id_ujian}
