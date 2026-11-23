@@ -3091,7 +3091,10 @@ Patuhi aturan berikut secara ketat:
     const grouped = {};
     data.forEach((row) => {
       if (!row.nama_siswa) return;
-      const key = `${row.nama_siswa}_${row.kelas}`;
+      const studentIdentity = row.username_siswa
+        ? `username:${row.username_siswa}`
+        : `legacy:${row.nama_siswa}`;
+      const key = `${studentIdentity}_${row.kelas}`;
       const mapelKey = row.mapel;
       if (!grouped[key])
         grouped[key] = { nama_siswa: row.nama_siswa, kelas: row.kelas };

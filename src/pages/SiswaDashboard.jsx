@@ -675,8 +675,8 @@ const SiswaDashboard = () => {
           return;
         }
         const jadwalRes = await api.read("Jadwal");
-        const userName = String(getVal(user, "Nama") || "");
-        const finalNilai = await api.getNilaiSiswa(userName);
+        const usernameSiswa = String(getVal(user, "Username") || "");
+        const finalNilai = await api.getNilaiSiswa(usernameSiswa);
         let finalJadwal = [];
         if (jadwalRes && jadwalRes.length > 0) {
           finalJadwal = jadwalRes
@@ -733,7 +733,7 @@ const SiswaDashboard = () => {
       "Nilai",
       () => {
         api
-          .getNilaiSiswa(String(getVal(user, "Nama") || ""))
+          .getNilaiSiswa(String(getVal(user, "Username") || ""))
           .then(setMyResults)
           .catch((error) =>
             console.error("Gagal memperbarui nilai siswa:", error),
@@ -967,7 +967,7 @@ const SiswaDashboard = () => {
 
     let latestResults;
     try {
-      latestResults = await api.getNilaiSiswa(getVal(user, "Nama"));
+      latestResults = await api.getNilaiSiswa(getVal(user, "Username"));
       setMyResults(latestResults);
     } catch (error) {
       showAlert(
@@ -1198,7 +1198,7 @@ const SiswaDashboard = () => {
 
       // TAMBAHAN 2: Tarik ulang data nilai terbaru secara instan agar langsung muncul di halaman Hasil Ujian
       try {
-        const finalNilai = await api.getNilaiSiswa(getVal(user, "Nama"));
+        const finalNilai = await api.getNilaiSiswa(getVal(user, "Username"));
         setMyResults(finalNilai);
       } catch (e) {
         console.warn("Gagal tarik nilai instan", e);

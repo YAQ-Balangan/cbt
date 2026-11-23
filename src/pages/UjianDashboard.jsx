@@ -377,7 +377,7 @@ const UjianDashboard = () => {
       const fetchNilai = supabase
         .from("nilai")
         .select(
-          "id, nama_siswa, mapel, total_soal, status",
+          "id, nama_siswa, username_siswa, id_ujian, mapel, total_soal, status",
         )
         .gte("id", nilaiCutoff)
         .then(({ data, error }) => {
@@ -426,12 +426,17 @@ const UjianDashboard = () => {
       (resNilai || []).forEach((nilai) => {
         const nNama = normalizeText(nilai.nama_siswa || nilai.Nama_Siswa);
 
-        const userObj = siswaOnly.find(
-          (u) =>
-            normalizeText(u.username) === nNama ||
-            normalizeText(u.nama) === nNama,
-        );
-        const userKey = userObj ? normalizeText(userObj.username) : nNama;
+        const usernameNilai = normalizeText(nilai.username_siswa);
+        const userObj =
+          siswaOnly.find(
+            (u) => normalizeText(u.username) === usernameNilai,
+          ) ||
+          siswaOnly.find(
+            (u) =>
+              normalizeText(u.username) === nNama ||
+              normalizeText(u.nama) === nNama,
+          );
+        const userKey = usernameNilai || (userObj ? normalizeText(userObj.username) : nNama);
         const mapel = nilai.mapel || nilai.Mapel || "Ujian";
         const idUjian =
           String(nilai.id_ujian || "") ||

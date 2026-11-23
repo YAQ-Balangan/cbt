@@ -150,11 +150,15 @@ export const api = {
     },
 
     // 8. GET NILAI SPESIFIK SISWA (Backend Filtering Anti-Lag)
-    getNilaiSiswa: async (namaSiswa) => {
+    getNilaiSiswa: async (usernameSiswa) => {
+        if (!usernameSiswa || !String(usernameSiswa).trim()) {
+            throw new Error('Username siswa diperlukan untuk mengambil nilai.');
+        }
+
         const { data, error } = await supabase
             .from('nilai')
             .select('*')
-            .ilike('nama_siswa', namaSiswa);
+            .eq('username_siswa', String(usernameSiswa).trim());
 
         if (error) throw new Error(error.message);
         return data || [];
@@ -175,7 +179,13 @@ export const api = {
         const { data, error } = await supabase
             .from('nilai')
             .upsert(
-                { ...payloadData, id: submissionId, id_sesi: idSesi },
+                {
+                    ...payloadData,
+                    id: submissionId,
+                    id_sesi: idSesi,
+                    username_siswa: username,
+                    id_ujian: String(idUjian),
+                },
                 { onConflict: 'id_sesi' },
             )
             .select('id')
