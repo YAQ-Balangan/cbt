@@ -159,8 +159,14 @@ export const api = {
     },
 
     submitNilaiUjian: async (username, idUjian, payloadData) => {
-        const storageKey = `cbt-submission:${encodeURIComponent(username)}:${encodeURIComponent(idUjian)}`;
-        const idSesi = `${username}_${idUjian}`;
+        const usernameSiswa = String(username || '').trim();
+        const examId = String(idUjian ?? '').trim();
+        if (!usernameSiswa || !examId) {
+            throw new Error('Username siswa dan ID ujian diperlukan untuk menyimpan nilai.');
+        }
+
+        const storageKey = `cbt-submission:${encodeURIComponent(usernameSiswa)}:${encodeURIComponent(examId)}`;
+        const idSesi = `${usernameSiswa}_${examId}`;
         let submissionId = window.localStorage.getItem(storageKey);
 
         if (!submissionId) {
@@ -173,7 +179,13 @@ export const api = {
         const { data, error } = await supabase
             .from('nilai')
             .upsert(
-                { ...payloadData, id: submissionId, id_sesi: idSesi },
+                {
+                    ...payloadData,
+                    id: submissionId,
+                    id_sesi: idSesi,
+                    username_siswa: usernameSiswa,
+                    id_ujian: examId,
+                },
                 { onConflict: 'id_sesi' },
             )
             .select('id')
