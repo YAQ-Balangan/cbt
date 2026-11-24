@@ -7,7 +7,6 @@ export const AuthContext = createContext(null);
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_SESSION_MS = 8 * 60 * 60 * 1000;
 const ACTIVITY_PERSIST_INTERVAL_MS = 30 * 1000;
-const STAFF_ROLES = ["admin", "guru"];
 
 const SESSION_KEY = `${APP_NAME}_session`;
 
@@ -27,11 +26,9 @@ const readStoredSession = () => {
     }
 
     const now = Date.now();
-    const hasTimeoutExemption = STAFF_ROLES.includes(session.user.role);
     if (
-      !hasTimeoutExemption &&
-      (now - session.lastActivityAt >= IDLE_TIMEOUT_MS ||
-        now - session.createdAt >= MAX_SESSION_MS)
+      now - session.lastActivityAt >= IDLE_TIMEOUT_MS ||
+      now - session.createdAt >= MAX_SESSION_MS
     ) {
       sessionStorage.removeItem(SESSION_KEY);
       return null;
@@ -50,7 +47,16 @@ export const AuthProvider = ({ children }) => {
   const user = session?.user ?? null;
 
   useEffect(() => {
-    if (!session || STAFF_ROLES.includes(session.user?.role)) return undefined;
+    if (!session) return undefined;
+
+    const handlePageHide = () => {
+      if (
+        session.user?.role === "admin" ||
+        session.user?.role === "guru"
+      ) {
+        sessionStorage.removeItem(SESSION_KEY);
+      }
+    };
 
     let lastActivityAt = session.lastActivityAt;
     let lastPersistedAt = session.lastActivityAt;
@@ -105,6 +111,7 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener("keydown", handleActivity);
     window.addEventListener("touchstart", handleActivity);
     window.addEventListener("scroll", handleActivity, true);
+    window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
@@ -113,6 +120,7 @@ export const AuthProvider = ({ children }) => {
       window.removeEventListener("keydown", handleActivity);
       window.removeEventListener("touchstart", handleActivity);
       window.removeEventListener("scroll", handleActivity, true);
+      window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [session]);

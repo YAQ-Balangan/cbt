@@ -2122,6 +2122,7 @@ const GuruDashboard = () => {
   const handleUnlockSesi = async (username, examId) => {
     try {
       setLoading(true);
+      // Panggil API (status jadi ACTIVE, pelanggaran biarkan 1 agar tidak curang lagi)
       await api.updateSesiStatus(username, examId, "ACTIVE", 1);
 
       showAlert(
@@ -3090,10 +3091,7 @@ Patuhi aturan berikut secara ketat:
     const grouped = {};
     data.forEach((row) => {
       if (!row.nama_siswa) return;
-      const studentIdentity = row.username_siswa
-        ? `username:${row.username_siswa}`
-        : `legacy:${row.nama_siswa}`;
-      const key = `${studentIdentity}_${row.kelas}`;
+      const key = `${row.nama_siswa}_${row.kelas}`;
       const mapelKey = row.mapel;
       if (!grouped[key])
         grouped[key] = { nama_siswa: row.nama_siswa, kelas: row.kelas };

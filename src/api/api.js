@@ -9,8 +9,6 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
-const sesiSaveQueues = new Map();
-
 export const api = {
     // 1. LOGIN
     login: async (username, password) => {
@@ -150,15 +148,11 @@ export const api = {
     },
 
     // 8. GET NILAI SPESIFIK SISWA (Backend Filtering Anti-Lag)
-    getNilaiSiswa: async (usernameSiswa) => {
-        if (!usernameSiswa || !String(usernameSiswa).trim()) {
-            throw new Error('Username siswa diperlukan untuk mengambil nilai.');
-        }
-
+    getNilaiSiswa: async (namaSiswa) => {
         const { data, error } = await supabase
             .from('nilai')
             .select('*')
-            .eq('username_siswa', String(usernameSiswa).trim());
+            .ilike('nama_siswa', namaSiswa);
 
         if (error) throw new Error(error.message);
         return data || [];
@@ -179,13 +173,7 @@ export const api = {
         const { data, error } = await supabase
             .from('nilai')
             .upsert(
-                {
-                    ...payloadData,
-                    id: submissionId,
-                    id_sesi: idSesi,
-                    username_siswa: username,
-                    id_ujian: String(idUjian),
-                },
+                { ...payloadData, id: submissionId, id_sesi: idSesi },
                 { onConflict: 'id_sesi' },
             )
             .select('id')
@@ -202,48 +190,39 @@ export const api = {
     // FITUR AUTO-SAVE KE SERVER & ANTI-CHEAT
     // ========================================================
 
-    // Keep per-session writes in order so an older answer snapshot cannot overwrite a newer one.
+    // Auto-Save setiap 15 Detik & Saat Pindah Soal (Optimasi Jalur Kilat 300 Siswa)
     saveSesi: async (username, idUjian, jawaban, sisaWaktu, pelanggaran = 0, statusSesi = 'ACTIVE') => {
-        const idSesi = `${username}_${idUjian}`;
-        const previousSave = sesiSaveQueues.get(idSesi) || Promise.resolve();
-        const currentSave = previousSave.catch(() => null).then(async () => {
-            try {
-                const jawabanString = typeof jawaban === 'string' ? jawaban : JSON.stringify(jawaban);
-                const payload = {
-                    id_sesi: idSesi,
-                    username_siswa: username,
-                    id_ujian: idUjian,
-                    jawaban_sementara: jawabanString,
-                    sisa_waktu: sisaWaktu,
-                    pelanggaran: pelanggaran,
-                    status: statusSesi,
-                    updated_at: new Date().toISOString()
-                };
+        try {
+            const idSesi = `${username}_${idUjian}`;
+            const waktuSekarang = new Date().toISOString();
+            const jawabanString = typeof jawaban === 'string' ? jawaban : JSON.stringify(jawaban);
 
-                const { data, error } = await supabase
-                    .from('sesi_ujian')
-                    .upsert(payload, { onConflict: 'id_sesi' })
-                    .select('deadline_at')
-                    .single();
+            // GANTI LOGIKA LAMA MENJADI JALUR TUNGGAL (UPSERT)
+            const payload = {
+                id_sesi: idSesi,
+                username_siswa: username,
+                id_ujian: idUjian,
+                jawaban_sementara: jawabanString,
+                sisa_waktu: sisaWaktu,
+                pelanggaran: pelanggaran,
+                status: statusSesi,
+                updated_at: waktuSekarang
+            };
 
-                if (error) {
-                    console.error("Upsert error:", error.message);
-                    return null;
-                }
-                return data?.deadline_at || null;
-            } catch (error) {
-                console.error("Gagal save sesi ujian:", error);
+            const { data, error } = await supabase
+                .from('sesi_ujian')
+                .upsert(payload, { onConflict: 'id_sesi' })
+                .select('deadline_at')
+                .single();
+
+            if (error) {
+                console.error("Upsert error:", error.message);
                 return null;
             }
-        });
-        sesiSaveQueues.set(idSesi, currentSave);
-
-        try {
-            return await currentSave;
-        } finally {
-            if (sesiSaveQueues.get(idSesi) === currentSave) {
-                sesiSaveQueues.delete(idSesi);
-            }
+            return data?.deadline_at || null;
+        } catch (error) {
+            console.error("Gagal save sesi ujian:", error);
+            return null;
         }
     },
 

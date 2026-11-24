@@ -241,7 +241,6 @@ const fontClasses = {
 const ExamTimer = React.memo(({ deadlineAt, onTick, onTimeUp, timeRef }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const hasFinished = useRef(false);
-  const retryTimeoutRef = useRef(null);
 
   useEffect(() => {
     const deadline = Date.parse(deadlineAt);
@@ -253,10 +252,7 @@ const ExamTimer = React.memo(({ deadlineAt, onTick, onTimeUp, timeRef }) => {
 
     updateTimeLeft();
     const timerId = window.setInterval(updateTimeLeft, 1000);
-    return () => {
-      window.clearInterval(timerId);
-      window.clearTimeout(retryTimeoutRef.current);
-    };
+    return () => window.clearInterval(timerId);
   }, [deadlineAt]);
 
   useEffect(() => {
@@ -266,22 +262,11 @@ const ExamTimer = React.memo(({ deadlineAt, onTick, onTimeUp, timeRef }) => {
     const deadline = Date.parse(deadlineAt);
     if (!Number.isFinite(deadline)) return;
 
-    const submitAfterDeadline = async () => {
-      if (hasFinished.current) return;
-      hasFinished.current = true;
-      const submitted = await onTimeUp();
-      if (submitted === false) {
-        retryTimeoutRef.current = window.setTimeout(() => {
-          hasFinished.current = false;
-          submitAfterDeadline();
-        }, 10000);
-      }
-    };
-
     if (timeLeft > 0 && timeLeft % 60 === 0) {
       onTick(timeLeft);
     } else if (timeLeft <= 0 && Date.now() >= deadline && !hasFinished.current) {
-      submitAfterDeadline();
+      hasFinished.current = true;
+      onTimeUp();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, deadlineAt]);
@@ -561,6 +546,7 @@ const SiswaDashboard = () => {
   const isLockedRef = useRef(isLocked);
   const pelanggaranRef = useRef(pelanggaran);
   const timeLeftRef = useRef(0);
+  const saveTimeoutRef = useRef(null);
 
   useEffect(() => {
     activeExamRef.current = activeExam;
@@ -690,8 +676,8 @@ const SiswaDashboard = () => {
           return;
         }
         const jadwalRes = await api.read("Jadwal");
-        const usernameSiswa = String(getVal(user, "Username") || "");
-        const finalNilai = await api.getNilaiSiswa(usernameSiswa);
+        const userName = String(getVal(user, "Nama") || "");
+        const finalNilai = await api.getNilaiSiswa(userName);
         let finalJadwal = [];
         if (jadwalRes && jadwalRes.length > 0) {
           finalJadwal = jadwalRes
@@ -748,7 +734,7 @@ const SiswaDashboard = () => {
       "Nilai",
       () => {
         api
-          .getNilaiSiswa(String(getVal(user, "Username") || ""))
+          .getNilaiSiswa(String(getVal(user, "Nama") || ""))
           .then(setMyResults)
           .catch((error) =>
             console.error("Gagal memperbarui nilai siswa:", error),
@@ -853,47 +839,28 @@ const SiswaDashboard = () => {
       }
     };
 
-    let resizeLogTimeout;
-    let hiddenTimeout;
+    // KODE BARU: Pelacak Zoom & Resize Layar
+    let resizeTimeout;
+    let isZoomingOrResizing = false;
 
     const handleResize = () => {
-      if (!activeExamRef.current) return;
-      clearTimeout(resizeLogTimeout);
-      resizeLogTimeout = setTimeout(() => {
-        console.info("Anti-cheat: resize/orientation ignored", {
-          width: window.innerWidth,
-          height: window.innerHeight,
-        });
-      }, 300);
+      isZoomingOrResizing = true;
+      clearTimeout(resizeTimeout);
+      // Berikan masa toleransi 1 detik saat sedang nge-zoom agar tidak kena kunci
+      resizeTimeout = setTimeout(() => {
+        isZoomingOrResizing = false;
+      }, 1000);
     };
 
     const handleVisibilityChange = () => {
-      clearTimeout(hiddenTimeout);
-      hiddenTimeout = undefined;
-
-      if (zoomedImgRef.current || !activeExamRef.current) return;
-      if (document.visibilityState !== "hidden") {
-        console.info("Anti-cheat: page visible again");
-        return;
-      }
-
-      console.info("Anti-cheat: page hidden; waiting 2 seconds");
-      hiddenTimeout = setTimeout(() => {
-        hiddenTimeout = undefined;
-        if (
-          document.visibilityState === "hidden" &&
-          !zoomedImgRef.current
-        ) {
-          triggerLock("Tab Disembunyikan / Pindah Tab");
-        } else {
-          console.info("Anti-cheat: brief hidden state ignored");
-        }
-      }, 2000);
+      if (zoomedImgRef.current) return;
+      if (document.hidden) triggerLock("Tab Disembunyikan / Pindah Tab");
     };
 
     const handleBlur = () => {
-      if (!activeExamRef.current || zoomedImgRef.current) return;
-      console.info("Anti-cheat: window blur observed; ignored");
+      if (zoomedImgRef.current) return;
+      if (isZoomingOrResizing) return; // KODE BARU: Abaikan hilang fokus jika sedang nge-zoom
+      triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
     };
 
     const handleBeforeUnload = (e) => {
@@ -922,14 +889,13 @@ const SiswaDashboard = () => {
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      clearTimeout(resizeLogTimeout);
-      clearTimeout(hiddenTimeout);
+      clearTimeout(resizeTimeout);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("popstate", handlePopState); // <-- Listener Swipe Dimatikan
     };
-  }, [user, activeExam]);
+  }, [user]);
 
   // 3. POLLING BUKA KUNCI DARI GURU
   useEffect(() => {
@@ -982,7 +948,7 @@ const SiswaDashboard = () => {
 
     let latestResults;
     try {
-      latestResults = await api.getNilaiSiswa(getVal(user, "Username"));
+      latestResults = await api.getNilaiSiswa(getVal(user, "Nama"));
       setMyResults(latestResults);
     } catch (error) {
       showAlert(
@@ -1150,10 +1116,15 @@ const SiswaDashboard = () => {
 
   // 5. KALKULASI SKOR & SUBMIT (FINAL FIX)
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
-    if (isSubmittingRef.current) return false;
-    if (!isForced && blockManualSubmitIfNeeded()) return false;
+    if (isSubmittingRef.current) return;
+    if (!isForced && blockManualSubmitIfNeeded()) return;
     isSubmittingRef.current = true;
     setIsSubmitting(true);
+
+    // TAMBAHAN 1: Hapus timer save yang masih nyangkut di background agar tidak jadi sesi hantu
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
 
     let skorSiswa = 0;
     let benarCount = 0;
@@ -1213,7 +1184,7 @@ const SiswaDashboard = () => {
 
       // TAMBAHAN 2: Tarik ulang data nilai terbaru secara instan agar langsung muncul di halaman Hasil Ujian
       try {
-        const finalNilai = await api.getNilaiSiswa(getVal(user, "Username"));
+        const finalNilai = await api.getNilaiSiswa(getVal(user, "Nama"));
         setMyResults(finalNilai);
       } catch (e) {
         console.warn("Gagal tarik nilai instan", e);
@@ -1240,10 +1211,6 @@ const SiswaDashboard = () => {
 
       isSubmittingRef.current = false;
       setIsSubmitting(false);
-      isLockedRef.current = false;
-      setIsLocked(false);
-      pelanggaranRef.current = 0;
-      setPelanggaran(0);
       exitExamFullscreen();
       setActiveExam(null);
       setExamDeadlineAt(null);
@@ -1272,7 +1239,6 @@ const SiswaDashboard = () => {
           "Berhasil disubmit! Silahkan periksa halaman nilai Anda.",
         );
       }
-      return true;
     } catch (err) {
       showAlert(
         "warning",
@@ -1281,20 +1247,19 @@ const SiswaDashboard = () => {
       );
       isSubmittingRef.current = false;
       setIsSubmitting(false);
-      return false;
     }
   };
 
   const handleEndExamClick = (isForced = false) => {
-    if (isSubmittingRef.current) return false;
-    if (!isForced && blockManualSubmitIfNeeded()) return false;
+    if (isSubmittingRef.current) return;
+    if (!isForced && blockManualSubmitIfNeeded()) return;
     if (isOffline && !isForced) {
       showAlert(
         "danger",
         "Koneksi Terputus",
         "Tidak dapat mengumpulkan ujian. Pastikan data seluler atau WiFi terhubung kembali, lalu coba lagi. Jangan keluar dari aplikasi!",
       );
-      return false;
+      return;
     }
     if (!isForced) {
       showAlert(
@@ -1307,7 +1272,7 @@ const SiswaDashboard = () => {
         },
       );
     } else {
-      return executeEndExam(isForced);
+      executeEndExam(isForced);
     }
   };
 
@@ -1354,7 +1319,7 @@ const SiswaDashboard = () => {
             deadlineAt={examDeadlineAt}
             timeRef={timeLeftRef}
             onTick={(newTime) => {
-              if (activeExamRef.current && !isSubmittingRef.current) {
+              if (activeExamRef.current) {
                 api.saveSesi(
                   getVal(user, "Username"),
                   getVal(activeExamRef.current, "ID"),
@@ -1376,24 +1341,20 @@ const SiswaDashboard = () => {
         <p className="text-center text-slate-300 max-w-lg text-sm md:text-base leading-relaxed mb-8">
           Sistem mendeteksi Anda{" "}
           <strong>keluar dari aplikasi / berpindah layar</strong>. Ini adalah
-          pelanggaran. Silakan panggil pengawas untuk membuka kunci agar Anda
-          bisa melanjutkan ujian.
+          pelanggaran pertama. Silakan panggil pengawas untuk membuka kunci agar
+          Anda bisa melanjutkan ujian.
           <br />
           <br />
           <strong className="text-amber-400 font-black tracking-widest text-xs uppercase animate-pulse block mb-4">
             — WAKTU UJIAN ANDA TERUS BERJALAN —
           </strong>
+          <strong className="text-red-400">Peringatan Keras:</strong> Jika Anda
+          mengulanginya lagi, ujian akan langsung dihentikan dan Anda dinyatakan{" "}
+          <strong className="text-red-500 underline uppercase">
+            Diskualifikasi
+          </strong>
+          .
         </p>
-        {customAlert.isOpen &&
-          customAlert.title === "Pengiriman Belum Berhasil" && (
-            <p
-              role="alert"
-              className="mb-6 max-w-lg rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center text-sm text-amber-200"
-            >
-              {customAlert.message} Sistem akan mencoba mengirim kembali
-              otomatis.
-            </p>
-          )}
         <div className="flex gap-3 text-slate-400 font-bold text-xs uppercase tracking-widest items-center bg-slate-800 border border-slate-700 px-6 py-3.5 rounded-2xl shadow-lg">
           <RefreshCw className="animate-spin text-amber-500" size={18} />{" "}
           Menunggu Persetujuan Guru...
@@ -1675,7 +1636,17 @@ const SiswaDashboard = () => {
                               };
                               setAnswers(newAnswers);
 
-                              if (!isSubmittingRef.current) {
+                              // 2. Hapus hitung mundur yang lama jika siswa klik ganti opsi dengan cepat
+                              if (saveTimeoutRef.current) {
+                                clearTimeout(saveTimeoutRef.current);
+                              }
+
+                              // 3. Jeda diubah menjadi 5 detik. Perubahan di layar tetap instan,
+                              // tapi pengiriman ke server ditunda agar bisa ditimpa jika siswa berubah pikiran.
+                              saveTimeoutRef.current = setTimeout(() => {
+                                // TAMBAHKAN BARIS INI: Jangan nge-save kalau siswa sedang proses submit
+                                if (isSubmittingRef.current) return;
+
                                 api.saveSesi(
                                   getVal(user, "Username"),
                                   getVal(activeExam, "ID"),
@@ -1684,7 +1655,7 @@ const SiswaDashboard = () => {
                                   pelanggaranRef.current,
                                   isLockedRef.current ? "LOCKED" : "ACTIVE",
                                 );
-                              }
+                              }, 5000);
                             }}
                             className={`w-full text-left px-5 py-4 md:px-6 md:py-5 rounded-[1.5rem] border-2 transition-all flex items-start gap-4 md:gap-5 group relative overflow-hidden outline-none ${
                               isSelected
@@ -2111,7 +2082,6 @@ const SiswaDashboard = () => {
             </div>
           )}
         </AnimatePresence>
-
       </div>
     );
   }
