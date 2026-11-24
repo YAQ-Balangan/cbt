@@ -1323,8 +1323,8 @@ const GuruDashboard = () => {
       const targetTab = tab;
       const [result, lockedRes, marker, resJadwal] = await Promise.all([
         api.read(currentConfig.sheet),
-        api.getSesiTerkunci().catch((error) => {
-          console.error("Gagal menarik status siswa terkunci:", error);
+        api.getSesiMonitoring().catch((error) => {
+          console.error("Gagal menarik pemantauan anti-curang:", error);
           return null;
         }),
         targetTab === "nilai" ? api.getNilaiChangeMarker() : null,
@@ -1588,8 +1588,8 @@ const GuruDashboard = () => {
     try {
       const [resSoal, lockedRes, resSettings, resJadwal] = await Promise.all([
         api.read(TAB_CONFIG.soal.sheet),
-        api.getSesiTerkunci().catch((error) => {
-          console.error("Gagal menarik status siswa terkunci:", error);
+        api.getSesiMonitoring().catch((error) => {
+          console.error("Gagal menarik pemantauan anti-curang:", error);
           return null;
         }),
         api.read("Settings").catch((error) => {
@@ -1653,14 +1653,14 @@ const GuruDashboard = () => {
     isMonitoringRefreshRef.current = true;
     try {
       try {
-        const lockedRes = await api.getSesiTerkunci();
+        const lockedRes = await api.getSesiMonitoring();
         setSesiUjianData((prev) =>
           JSON.stringify(prev) === JSON.stringify(lockedRes)
             ? prev
             : lockedRes,
         );
       } catch (error) {
-        console.error("Gagal memperbarui status siswa terkunci:", error);
+        console.error("Gagal memperbarui pemantauan anti-curang:", error);
       }
 
       try {
@@ -2118,28 +2118,71 @@ const GuruDashboard = () => {
     }
   };
 
-  // LOGIKA Anti-Curang: GURU BUKA KUNCI
-  const handleUnlockSesi = async (username, examId) => {
+  const refreshSesiMonitoring = async () => {
+    const sessions = await api.getSesiMonitoring();
+    setSesiUjianData(sessions);
+  };
+
+  const handleSesiStatusAction = async (username, examId, status) => {
     try {
       setLoading(true);
-      // Panggil API (status jadi ACTIVE, pelanggaran biarkan 1 agar tidak curang lagi)
-      await api.updateSesiStatus(username, examId, "ACTIVE", 1);
-
-      showAlert(
-        "success",
-        "Akses Dibuka",
-        `Siswa ${username} sekarang bisa melanjutkan ujiannya.`,
-      );
-      fetchData(true);
+      await api.updateSesiStatus(username, examId, status);
+      try {
+        await refreshSesiMonitoring();
+      } catch (error) {
+        showAlert(
+          "warning",
+          "Tindakan Tersimpan",
+          "Status sesi berhasil diperbarui, tetapi daftar pemantauan gagal dimuat ulang: " +
+            error.message,
+        );
+        return;
+      }
+      const messages = {
+        ACTIVE_AFTER_UNLOCK: ["Akses Dibuka", `Siswa ${username} dapat melanjutkan ujian.`],
+        LOCKED: ["Ujian Dikunci", `Sesi ujian ${username} berhasil dikunci.`],
+        DISQUALIFIED: [
+          "Siswa Didiskualifikasi",
+          `Sesi ujian ${username} dihentikan atas keputusan pengawas.`,
+        ],
+      };
+      const [title, message] = messages[status];
+      showAlert("success", title, message);
     } catch (err) {
       showAlert(
         "danger",
-        "Gagal",
-        "Sistem gagal membuka kunci. Periksa koneksi internet: " + err.message,
+        "Tindakan Gagal",
+        "Status sesi tidak berhasil diperbarui: " + err.message,
       );
     } finally {
       setLoading(false);
     }
+  };
+
+  const confirmSesiStatusAction = (sesi, status) => {
+    const actions = {
+      LOCKED: {
+        title: "Kunci Sesi Ujian?",
+        message: `Kunci sesi ${sesi.username_siswa}? Siswa dapat melanjutkan setelah pengawas membuka kunci.`,
+      },
+      ACTIVE_AFTER_UNLOCK: {
+        title: "Buka Kunci Sesi?",
+        message: `Buka kunci sesi ujian ${sesi.username_siswa}?`,
+      },
+      DISQUALIFIED: {
+        title: "Diskualifikasi Siswa?",
+        message: `Diskualifikasikan ${sesi.username_siswa} dari ujian ini? Tindakan ini hanya dilakukan oleh pengawas.`,
+      },
+    };
+    const action = actions[status];
+    showAlert("confirm", action.title, action.message, () => {
+      closeAlert();
+      void handleSesiStatusAction(
+        sesi.username_siswa,
+        sesi.id_ujian,
+        status,
+      );
+    });
   };
 
   const openAddModal = (targetTab = tab) => {
@@ -2977,6 +3020,13 @@ Patuhi aturan berikut secara ketat:
 
   // VARIABEL DATA Anti-Curang
   const lockedSessions = sesiUjianData.filter((s) => s.status === "LOCKED");
+  const monitoredSessions = sesiUjianData.filter(
+    (s) =>
+      Number(s.pelanggaran) > 0 ||
+      ["WARNING", "LOCKED", "DISQUALIFIED"].includes(
+        String(s.status).toUpperCase(),
+      ),
+  );
   const disqualifiedSessions = processedData.filter(
     (d) =>
       tab === "nilai" && String(d.status).toLowerCase() === "diskualifikasi",
@@ -3507,7 +3557,7 @@ Patuhi aturan berikut secara ketat:
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-black text-sm md:text-base leading-tight truncate">
-                  Siswa Curang!
+                  Sesi Perlu Tindakan
                 </p>
                 <p className="text-[10px] md:text-xs font-medium text-red-100 truncate mt-0.5">
                   {lockedSessions.length} perangkat dikunci.
@@ -3576,7 +3626,7 @@ Patuhi aturan berikut secara ketat:
                       ? statsNilai?.remedial || 0
                       : nilaiViewMode === "log"
                         ? processedData.length
-                        : lockedSessions.length}
+                        : monitoredSessions.length}
                 </p>
               </div>
             </div>
@@ -3661,10 +3711,10 @@ Patuhi aturan berikut secara ketat:
                   }}
                 />
                 <MobileQuickMenuButton
-                  label="Pelanggaran Siswa"
+                  label="Sinyal Fokus Siswa"
                   icon={ShieldAlert}
                   color="bg-red-100 text-red-700"
-                  badge={lockedSessions.length || null}
+                  badge={monitoredSessions.length || null}
                   onClick={() => {
                     changeTab("nilai");
                     changeNilaiViewMode("pelanggaran");
@@ -3936,9 +3986,9 @@ Patuhi aturan berikut secara ketat:
                 className={`w-full md:w-auto flex justify-center items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold transition-all ${nilaiViewMode === "pelanggaran" ? "bg-red-500 text-white shadow-sm" : "text-red-500 hover:bg-red-50"}`}
               >
                 <ShieldAlert size={16} /> Control Anti-Curang
-                {lockedSessions.length > 0 && (
+                {monitoredSessions.length > 0 && (
                   <span className="bg-white text-red-600 px-1.5 py-0.5 rounded-md text-[10px] ml-1">
-                    {lockedSessions.length}
+                    {monitoredSessions.length}
                   </span>
                 )}
               </button>
@@ -4011,7 +4061,7 @@ Patuhi aturan berikut secara ketat:
                       ? pivotNilaiData.data.length
                       : nilaiViewMode === "log"
                         ? processedData.length
-                        : lockedSessions.length + disqualifiedSessions.length}
+                        : monitoredSessions.length}
                 </p>
               </div>
             </Card>
@@ -4923,64 +4973,118 @@ Patuhi aturan berikut secara ketat:
             {/* ============================================================== */}
             {nilaiViewMode === "pelanggaran" && (
               <div className="space-y-6 max-w-5xl mx-auto">
-                {/* KOTAK SISWA TERKUNCI (Perlu Tindakan) */}
+                {/* PEMANTAUAN SINYAL DAN TINDAKAN PENGAWAS */}
                 <div className="bg-red-50 border border-red-200 rounded-[2rem] p-5 md:p-8 shadow-sm">
                   <div className="flex items-center gap-3 mb-6 border-b border-red-100 pb-4">
                     <div className="p-3 bg-red-100 text-red-600 rounded-xl">
-                      <Unlock size={24} />
+                      <ShieldAlert size={24} />
                     </div>
                     <div>
                       <h3 className="text-xl font-black text-red-700">
-                        Membutuhkan Tindakan (Siswa Terkunci)
+                        Pemantauan Anti-Curang
                       </h3>
                       <p className="text-red-500/80 text-sm font-semibold">
-                        Siswa di bawah ini keluar aplikasi untuk pertama
-                        kalinya. Ujian mereka dibekukan.
+                        Hitungan menunjukkan sinyal fokus yang terdeteksi,
+                        bukan bukti kecurangan. Pengawas yang menentukan
+                        tindakan.
                       </p>
                     </div>
                   </div>
 
-                  {lockedSessions.length === 0 ? (
+                  {monitoredSessions.length === 0 ? (
                     <div className="py-12 text-center text-red-400 font-bold bg-white/50 rounded-2xl border border-red-100">
                       <CheckCircle2
                         size={40}
                         className="mx-auto mb-3 opacity-50"
                       />
-                      Aman! Tidak ada siswa yang terkunci saat ini.
+                      Belum ada sinyal yang perlu ditinjau.
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                      {lockedSessions.map((sesi) => (
-                        <Card
-                          key={sesi.id_sesi}
-                          className="p-5 bg-white border border-red-200 shadow-sm hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <p className="font-black text-slate-800 text-lg leading-tight">
-                                {sesi.username_siswa}
-                              </p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                ID Ujian: {sesi.id_ujian}
-                              </p>
-                            </div>
-                            <span className="bg-red-100 text-red-600 px-2.5 py-1 rounded-md text-[10px] font-black uppercase animate-pulse">
-                              LOCKED
-                            </span>
-                          </div>
-                          <button
-                            onClick={() =>
-                              handleUnlockSesi(
-                                sesi.username_siswa,
-                                sesi.id_ujian,
-                              )
-                            }
-                            className="w-full bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold py-3 rounded-xl text-sm transition-all flex justify-center items-center gap-2 shadow-sm"
+                      {monitoredSessions.map((sesi) => {
+                        const status = String(sesi.status || "").toUpperCase();
+                        const isSessionLocked = status === "LOCKED";
+                        const isDisqualified = status === "DISQUALIFIED";
+                        return (
+                          <Card
+                            key={sesi.id_sesi}
+                            className="p-5 bg-white border border-red-200 shadow-sm hover:shadow-md transition-shadow"
                           >
-                            <Unlock size={16} /> Buka Kunci Layar
-                          </button>
-                        </Card>
-                      ))}
+                            <div className="flex justify-between items-start mb-4">
+                              <div>
+                                <p className="font-black text-slate-800 text-lg leading-tight">
+                                  {sesi.username_siswa}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                  ID Ujian: {sesi.id_ujian}
+                                </p>
+                                <p className="mt-2 text-xs font-bold text-slate-600">
+                                  Deteksi fokus: {Number(sesi.pelanggaran) || 0}x
+                                </p>
+                              </div>
+                              <span
+                                className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase ${
+                                  isDisqualified
+                                    ? "bg-slate-800 text-white"
+                                    : isSessionLocked
+                                      ? "bg-red-100 text-red-600 animate-pulse"
+                                      : status === "WARNING"
+                                        ? "bg-amber-100 text-amber-700"
+                                        : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {isDisqualified
+                                  ? "DISKUALIFIKASI"
+                                  : isSessionLocked
+                                    ? "TERKUNCI"
+                                    : status === "WARNING"
+                                      ? "PERINGATAN"
+                                      : "AKTIF"}
+                              </span>
+                            </div>
+                            {!isDisqualified && (
+                              <div className="grid grid-cols-1 gap-2">
+                                <button
+                                  onClick={() =>
+                                    confirmSesiStatusAction(
+                                      sesi,
+                                      isSessionLocked
+                                        ? "ACTIVE_AFTER_UNLOCK"
+                                        : "LOCKED",
+                                    )
+                                  }
+                                  className={`w-full ${
+                                    isSessionLocked
+                                      ? "bg-emerald-600 hover:bg-emerald-700"
+                                      : "bg-amber-500 hover:bg-amber-600"
+                                  } active:scale-95 text-white font-bold py-3 rounded-xl text-sm transition-all flex justify-center items-center gap-2 shadow-sm`}
+                                >
+                                  {isSessionLocked ? (
+                                    <>
+                                      <Unlock size={16} /> Buka Kunci
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ShieldAlert size={16} /> Kunci Sesi
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    confirmSesiStatusAction(
+                                      sesi,
+                                      "DISQUALIFIED",
+                                    )
+                                  }
+                                  className="w-full bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold py-3 rounded-xl text-sm transition-all flex justify-center items-center gap-2 shadow-sm"
+                                >
+                                  <UserX size={16} /> Diskualifikasi Manual
+                                </button>
+                              </div>
+                            )}
+                          </Card>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -4996,8 +5100,7 @@ Patuhi aturan berikut secara ketat:
                         Riwayat Diskualifikasi
                       </h3>
                       <p className="text-slate-400 text-sm font-medium">
-                        Siswa di bawah ini ngeyel keluar aplikasi untuk kedua
-                        kalinya dan dihentikan paksa.
+                        Daftar hasil ujian yang berstatus diskualifikasi.
                       </p>
                     </div>
                   </div>

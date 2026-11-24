@@ -220,6 +220,7 @@ const formatCountdown = (seconds) =>
 
 const MIN_PAGE_ZOOM = 0.8;
 const MAX_PAGE_ZOOM = 1.4;
+const BLUR_TOLERANCE_MS = 3000;
 const clampPageZoom = (value) =>
   Math.min(MAX_PAGE_ZOOM, Math.max(MIN_PAGE_ZOOM, Number(value.toFixed(1))));
 
@@ -513,6 +514,7 @@ const SiswaDashboard = () => {
   const [isAcakSoalActive, setIsAcakSoalActive] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const [pelanggaran, setPelanggaran] = useState(0);
+  const [isBlurred, setIsBlurred] = useState(false);
   const [isAntiCheatActive, setIsAntiCheatActive] = useState(true);
   const isAntiCheatActiveRef = useRef(true);
   const [isSubmitDelayActive, setIsSubmitDelayActive] = useState(false);
@@ -664,6 +666,9 @@ const SiswaDashboard = () => {
   const isSubmittingRef = useRef(isSubmitting);
   const isLockedRef = useRef(isLocked);
   const pelanggaranRef = useRef(pelanggaran);
+  const sessionStatusRef = useRef("ACTIVE");
+  const blurEpisodeRef = useRef(null);
+  const executeEndExamRef = useRef(null);
   const timeLeftRef = useRef(0);
   const saveTimeoutRef = useRef(null);
 
@@ -961,114 +966,131 @@ const SiswaDashboard = () => {
   }, [user, userKelasFull, userTingkat, userJurusan, userTingkatJurusan]);
 
   // ==============================================================
-  // 2. LOGIKA ANTI-CHEAT (Pindah tab/aplikasi, fokus, navigasi, dan refresh)
+  // 2. DETEKSI KEHILANGAN FOKUS
   // ==============================================================
   useEffect(() => {
-    let isProcessing = false; // <-- ANTI DOUBLE-TRIGGER (Kunci Ganda)
+    let pendingBlurRecords = Promise.resolve();
 
-    const triggerLock = async (jenisPelanggaran) => {
-      if (!isAntiCheatActiveRef.current) return;
+    const recordBlurEpisode = async (durationMs) => {
       if (
+        !isAntiCheatActiveRef.current ||
         !activeExamRef.current ||
         isSubmittingRef.current ||
-        isLockedRef.current ||
-        isProcessing
-      )
+        isLockedRef.current
+      ) {
         return;
+      }
 
-      isProcessing = true;
-      console.warn("TERDETEKSI KECURANGAN:", jenisPelanggaran);
-
-      let currentPelanggaran = pelanggaranRef.current;
       const username = getVal(user, "Username");
       const examId = getVal(activeExamRef.current, "ID");
+      const nextCount = (Number(pelanggaranRef.current) || 0) + 1;
+      const currentStatus = sessionStatusRef.current;
+      const isLongBlur = durationMs >= BLUR_TOLERANCE_MS;
+      const nextStatus = isLongBlur
+        ? currentStatus === "ACTIVE"
+          ? "WARNING"
+          : "LOCKED"
+        : currentStatus;
 
-      if (currentPelanggaran === 0) {
-        // TAHAP 1: PERINGATAN SAJA (Toleransi 1x)
-        pelanggaranRef.current = 1;
-        setPelanggaran(1);
+      pelanggaranRef.current = nextCount;
+      setPelanggaran(nextCount);
 
-        // Memunculkan Pop-up Notif tanpa mengunci layar
+      try {
+        const savedDeadline = await api.saveSesi(
+          username,
+          examId,
+          answersRef.current,
+          timeLeftRef.current,
+          nextCount,
+          currentStatus,
+        );
+        if (!savedDeadline) {
+          throw new Error("Hitungan deteksi belum berhasil tersimpan.");
+        }
+
+        if (!isLongBlur || nextStatus === currentStatus) return;
+
+        const transitioned = await api.transitionSesiStatus(
+          username,
+          examId,
+          nextStatus,
+          [currentStatus],
+        );
+        if (!transitioned) return;
+
+        sessionStatusRef.current = nextStatus;
+        if (nextStatus === "LOCKED") {
+          isLockedRef.current = true;
+          setIsLocked(true);
+        } else {
+          showAlert(
+            "warning",
+            "Peringatan",
+            "Ujian mendeteksi layar tidak aktif selama lebih dari 3 detik. Jika kembali terjadi, sesi akan dikunci dan perlu dibuka oleh pengawas.",
+          );
+        }
+      } catch (error) {
+        console.error("Gagal mencatat kehilangan fokus:", error);
         showAlert(
-          "warning",
-          "Peringatan",
-          "Sistem mendeteksi aktivitas di luar ujian. Aktifkan mode Jangan Ganggu dan jangan pindah aplikasi/tab. Jika terulang, ujian akan dikunci.",
+          "danger",
+          "Gangguan Menyimpan Deteksi",
+          "Hitungan atau status deteksi belum berhasil disimpan. Periksa koneksi dan panggil pengawas bila sesi terkunci.",
         );
-
-        // Simpan status tetap ACTIVE ke database tapi poin pelanggaran naik 1
-        await api.saveSesi(
-          username,
-          examId,
-          answersRef.current,
-          timeLeftRef.current,
-          1,
-          "ACTIVE",
-        );
-
-        setTimeout(() => {
-          isProcessing = false;
-        }, 3000);
-      } else if (currentPelanggaran === 1) {
-        // TAHAP 2: TERKUNCI (Harus dibuka oleh Guru)
-        pelanggaranRef.current = 2;
-        isLockedRef.current = true;
-
-        setPelanggaran(2);
-        setIsLocked(true);
-
-        await api.saveSesi(
-          username,
-          examId,
-          answersRef.current,
-          timeLeftRef.current,
-          2,
-          "LOCKED",
-        );
-
-        setTimeout(() => {
-          isProcessing = false;
-        }, 2000);
-      } else if (currentPelanggaran >= 2) {
-        // TAHAP 3: DISKUALIFIKASI (Ngeyel setelah dibuka kuncinya)
-        pelanggaranRef.current = 3;
-        isLockedRef.current = true;
-
-        setPelanggaran(3);
-
-        await api.saveSesi(
-          username,
-          examId,
-          answersRef.current,
-          timeLeftRef.current,
-          3,
-          "DISQUALIFIED",
-        );
-        executeEndExam(true, "Diskualifikasi");
       }
     };
 
-    // KODE BARU: Pelacak Zoom & Resize Layar
-    let resizeTimeout;
-    let isZoomingOrResizing = false;
+    const enqueueBlurRecord = (durationMs) => {
+      pendingBlurRecords = pendingBlurRecords.then(() =>
+        recordBlurEpisode(durationMs),
+      );
+    };
 
-    const handleResize = () => {
-      isZoomingOrResizing = true;
-      clearTimeout(resizeTimeout);
-      // Berikan masa toleransi 1 detik saat sedang nge-zoom agar tidak kena kunci
-      resizeTimeout = setTimeout(() => {
-        isZoomingOrResizing = false;
-      }, 1000);
+    const startBlurEpisode = () => {
+      if (
+        zoomedImgRef.current ||
+        !activeExamRef.current ||
+        isSubmittingRef.current ||
+        isLockedRef.current ||
+        blurEpisodeRef.current
+      ) {
+        return;
+      }
+
+      const episode = {
+        startedAt: Date.now(),
+        counted: false,
+        timeoutId: null,
+      };
+      blurEpisodeRef.current = episode;
+      setIsBlurred(true);
+      episode.timeoutId = window.setTimeout(() => {
+        if (blurEpisodeRef.current !== episode || episode.counted) return;
+        episode.counted = true;
+        enqueueBlurRecord(BLUR_TOLERANCE_MS);
+      }, BLUR_TOLERANCE_MS);
+    };
+
+    const finishBlurEpisode = () => {
+      const episode = blurEpisodeRef.current;
+      if (!episode) return;
+
+      window.clearTimeout(episode.timeoutId);
+      blurEpisodeRef.current = null;
+      setIsBlurred(false);
+
+      if (!episode.counted) {
+        episode.counted = true;
+        enqueueBlurRecord(Date.now() - episode.startedAt);
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (!document.hidden) finishBlurEpisode();
     };
 
     const handleVisibilityChange = () => {
-      if (zoomedImgRef.current) return;
-      if (document.hidden) triggerLock("Tab Disembunyikan / Pindah Tab");
-    };
-
-    const handleBlur = () => {
-      if (zoomedImgRef.current) return;
-      if (isZoomingOrResizing) return; // KODE BARU: Abaikan hilang fokus jika sedang nge-zoom
-      triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
+      if (document.hidden) startBlurEpisode();
+      else finishBlurEpisode();
     };
 
     const handleBeforeUnload = (e) => {
@@ -1078,58 +1100,30 @@ const SiswaDashboard = () => {
       }
     };
 
-    // FUNGSI BARU: Menangkap Swipe/Back HP
-    const handlePopState = (e) => {
+    const handlePopState = () => {
       if (activeExamRef.current && !isSubmittingRef.current) {
-        // 1. Jebak browser agar tetap di halaman ujian (tidak benar-benar back)
         window.history.pushState({ page: "ujian" }, "", window.location.href);
-
-        // 2. Ubah fungsi swipe/tombol back menjadi mundur ke soal sebelumnya
         setCurrentSoalIndex((prev) => Math.max(0, prev - 1));
       }
     };
 
-    window.addEventListener("resize", handleResize);
+    window.addEventListener("blur", startBlurEpisode);
+    window.addEventListener("focus", handleWindowFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleBlur);
     window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("popstate", handlePopState); // <-- Listener Swipe Aktif
+    window.addEventListener("popstate", handlePopState);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
-      clearTimeout(resizeTimeout);
+      const episode = blurEpisodeRef.current;
+      if (episode) window.clearTimeout(episode.timeoutId);
+      blurEpisodeRef.current = null;
+      window.removeEventListener("blur", startBlurEpisode);
+      window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleBlur);
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("popstate", handlePopState); // <-- Listener Swipe Dimatikan
+      window.removeEventListener("popstate", handlePopState);
     };
-  }, [user]);
-
-  // 3. POLLING BUKA KUNCI DARI GURU
-  useEffect(() => {
-    if (!activeExam || !isLocked) return;
-    // Diubah menjadi 15 detik untuk siswa yang sedang terkunci
-    const interval = setInterval(async () => {
-      const username = getVal(user, "Username");
-      const examId = getVal(activeExam, "ID");
-      try {
-        const sesi = await api.getSesi(username, examId);
-        if (sesi && sesi.status === "ACTIVE") {
-          setIsLocked(false);
-          isLockedRef.current = false;
-
-          showAlert(
-            "success",
-            "Kunci Dibuka",
-            "Pengawas telah memaafkan dan membuka kunci ujian Anda. DILARANG KELUAR APLIKASI LAGI!",
-          );
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [activeExam, isLocked, user, showAlert]);
+  }, [user, showAlert]);
 
   // 4. MEMULAI UJIAN
   const handleStartExam = async (exam) => {
@@ -1185,6 +1179,10 @@ const SiswaDashboard = () => {
         "Anda sudah menyelesaikan ujian ini. Nilai Anda sudah terekam di sistem.",
       );
 
+    sessionStatusRef.current = "ACTIVE";
+    isLockedRef.current = false;
+    setIsLocked(false);
+    setIsBlurred(false);
     enterExamFullscreen();
     setActiveExam(exam);
     setLoadingSoal(true);
@@ -1215,6 +1213,11 @@ const SiswaDashboard = () => {
         );
         return;
       }
+
+      const sessionStatus = String(
+        serverSession?.status || "ACTIVE",
+      ).toUpperCase();
+      sessionStatusRef.current = sessionStatus;
 
       let finalAnswers = {};
       if (serverSession) {
@@ -1253,7 +1256,9 @@ const SiswaDashboard = () => {
       }
       setExamDeadlineAt(deadlineAt);
       setAnswers(finalAnswers);
-      setPelanggaran(serverSession?.pelanggaran || 0);
+      const savedViolations = Number(serverSession?.pelanggaran) || 0;
+      pelanggaranRef.current = savedViolations;
+      setPelanggaran(savedViolations);
 
       const allSoal = await api.getSoalUjian(examMapel);
       const examMapelUpper = String(examMapel).toUpperCase();
@@ -1292,7 +1297,9 @@ const SiswaDashboard = () => {
       }
 
       setSoalData(finalSoal);
-      setIsLocked(String(serverSession?.status).toUpperCase() === "LOCKED");
+      const sessionIsLocked = sessionStatus === "LOCKED";
+      isLockedRef.current = sessionIsLocked;
+      setIsLocked(sessionIsLocked);
       setCurrentSoalIndex(0);
     } catch (error) {
       showAlert(
@@ -1432,6 +1439,10 @@ const SiswaDashboard = () => {
     exitExamFullscreen();
     setActiveExam(null);
     setExamDeadlineAt(null);
+    sessionStatusRef.current = "ACTIVE";
+    isLockedRef.current = false;
+    setIsLocked(false);
+    setIsBlurred(false);
     setAnswers({});
     setRaguRagu({});
     setCurrentSoalIndex(0);
@@ -1441,6 +1452,10 @@ const SiswaDashboard = () => {
     setIsSubmitting(false);
     void syncPendingSubmissions();
   };
+
+  useEffect(() => {
+    executeEndExamRef.current = executeEndExam;
+  }, [executeEndExam]);
 
   const handleEndExamClick = (isForced = false, forcedStatus = "Selesai") => {
     if (isSubmittingRef.current) return;
@@ -1459,6 +1474,66 @@ const SiswaDashboard = () => {
       executeEndExam(isForced, forcedStatus);
     }
   };
+
+  useEffect(() => {
+    if (!activeExam) return undefined;
+
+    const checkSessionStatus = async () => {
+      try {
+        const sesi = await api.getSesi(
+          getVal(user, "Username"),
+          getVal(activeExam, "ID"),
+        );
+        const status = String(sesi?.status || "").toUpperCase();
+
+        if (["DISQUALIFIED", "DISKUALIFIKASI"].includes(status)) {
+          sessionStatusRef.current = "DISQUALIFIED";
+          isLockedRef.current = true;
+          setIsLocked(true);
+          if (!isSubmittingRef.current) {
+            executeEndExamRef.current?.(true, "Diskualifikasi");
+          }
+          return;
+        }
+
+        if (status === "LOCKED") {
+          sessionStatusRef.current = "LOCKED";
+          if (!isLockedRef.current) {
+            const episode = blurEpisodeRef.current;
+            if (episode) window.clearTimeout(episode.timeoutId);
+            blurEpisodeRef.current = null;
+            setIsBlurred(false);
+            isLockedRef.current = true;
+            setIsLocked(true);
+          }
+          return;
+        }
+
+        if (
+          isLockedRef.current &&
+          ["ACTIVE", "ACTIVE_AFTER_UNLOCK"].includes(status)
+        ) {
+          sessionStatusRef.current = "ACTIVE_AFTER_UNLOCK";
+          isLockedRef.current = false;
+          setIsLocked(false);
+          showAlert(
+            "success",
+            "Kunci Dibuka",
+            "Pengawas telah membuka kunci ujian Anda. Anda dapat melanjutkan mengerjakan.",
+          );
+          return;
+        }
+
+        if (status) sessionStatusRef.current = status;
+      } catch (error) {
+        console.error("Gagal memeriksa status sesi ujian:", error);
+      }
+    };
+
+    checkSessionStatus();
+    const intervalId = window.setInterval(checkSessionStatus, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [activeExam, user, showAlert]);
 
   const toggleRaguRagu = () => {
     const currentSoal = soalData[currentSoalIndex];
@@ -1493,7 +1568,7 @@ const SiswaDashboard = () => {
   }
 
   // ==============================================================
-  // TAMPILAN LOCK SCREEN (PELANGGARAN PERTAMA)
+  // TAMPILAN LOCK SCREEN
   // ==============================================================
   if (isLocked) {
     return (
@@ -1510,16 +1585,11 @@ const SiswaDashboard = () => {
                   answersRef.current,
                   newTime,
                   pelanggaranRef.current,
-                  pelanggaranRef.current >= 3 ? "DISQUALIFIED" : "LOCKED",
+                  "LOCKED",
                 );
               }
             }}
-            onTimeUp={() =>
-              handleEndExamClick(
-                true,
-                pelanggaranRef.current >= 3 ? "Diskualifikasi" : "Selesai",
-              )
-            }
+            onTimeUp={() => handleEndExamClick(true, "Selesai")}
           />
         </div>
 
@@ -1528,21 +1598,16 @@ const SiswaDashboard = () => {
           UJIAN TERKUNCI
         </h1>
         <p className="text-center text-slate-300 max-w-lg text-sm md:text-base leading-relaxed mb-8">
-          Sistem mendeteksi Anda{" "}
-          <strong>keluar dari aplikasi / berpindah layar</strong>. Ini adalah
-          pelanggaran pertama. Silakan panggil pengawas untuk membuka kunci agar
-          Anda bisa melanjutkan ujian.
+          Sesi ujian dikunci karena layar tidak aktif cukup lama atau pengawas
+          menguncinya. Silakan panggil pengawas untuk membuka kunci agar Anda
+          bisa melanjutkan ujian.
           <br />
           <br />
           <strong className="text-amber-400 font-black tracking-widest text-xs uppercase animate-pulse block mb-4">
             — WAKTU UJIAN ANDA TERUS BERJALAN —
           </strong>
-          <strong className="text-red-400">Peringatan Keras:</strong> Jika Anda
-          mengulanginya lagi, ujian akan langsung dihentikan dan Anda dinyatakan{" "}
-          <strong className="text-red-500 underline uppercase">
-            Diskualifikasi
-          </strong>
-          .
+          Jika layar kembali tidak aktif setelah kunci dibuka, sesi dapat
+          dikunci lagi. <strong>Diskualifikasi hanya dapat diputuskan oleh pengawas.</strong>
         </p>
         <div className="flex gap-3 text-slate-400 font-bold text-xs uppercase tracking-widest items-center bg-slate-800 border border-slate-700 px-6 py-3.5 rounded-2xl shadow-lg">
           <RefreshCw className="animate-spin text-amber-500" size={18} />{" "}
@@ -1594,6 +1659,16 @@ const SiswaDashboard = () => {
         className="relative flex h-screen h-dvh min-h-0 flex-col overflow-hidden bg-slate-100 font-sans transition-all duration-300"
       >
         <div className="absolute inset-0 bg-slate-50 z-0 pointer-events-none"></div>
+        {isBlurred && (
+          <div className="fixed inset-0 z-[99998] flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
+            <ShieldAlert size={64} className="mb-5 text-amber-400" />
+            <h2 className="text-2xl font-black">Layar Ujian Disembunyikan</h2>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+              Kembali ke halaman ujian untuk melanjutkan. Perpindahan singkat
+              hanya dicatat sebagai hitungan dan tidak langsung mengunci ujian.
+            </p>
+          </div>
+        )}
 
         <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white px-3 py-1 shadow-sm sm:px-4 sm:py-2">
           <div className="space-y-1.5">
@@ -1608,16 +1683,11 @@ const SiswaDashboard = () => {
                     answersRef.current,
                     newTime,
                     pelanggaranRef.current,
-                    isLockedRef.current ? "LOCKED" : "ACTIVE",
+                    sessionStatusRef.current,
                   );
                 }
               }}
-              onTimeUp={() =>
-                handleEndExamClick(
-                  true,
-                  pelanggaranRef.current >= 3 ? "Diskualifikasi" : "Selesai",
-                )
-              }
+              onTimeUp={() => handleEndExamClick(true, "Selesai")}
             />
             <div className="flex min-w-0 items-center justify-between gap-2">
               <div className="min-w-0 flex-1">

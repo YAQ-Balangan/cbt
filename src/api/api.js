@@ -191,7 +191,7 @@ export const api = {
     // FITUR AUTO-SAVE KE SERVER & ANTI-CHEAT
     // ========================================================
 
-    // Auto-Save setiap 15 Detik & Saat Pindah Soal (Optimasi Jalur Kilat 300 Siswa)
+    // Autosave answers and time without overwriting teacher-controlled session status.
     saveSesi: async (username, idUjian, jawaban, sisaWaktu, pelanggaran = 0, statusSesi = 'ACTIVE') => {
         try {
             const idSesi = `${username}_${idUjian}`;
@@ -201,7 +201,6 @@ export const api = {
                 throw new Error('Format jawaban sesi ujian tidak valid.');
             }
 
-            // GANTI LOGIKA LAMA MENJADI JALUR TUNGGAL (UPSERT)
             const payload = {
                 id_sesi: idSesi,
                 username_siswa: username,
@@ -215,15 +214,46 @@ export const api = {
 
             const { data, error } = await supabase
                 .from('sesi_ujian')
-                .upsert(payload, { onConflict: 'id_sesi' })
+                .update({
+                    jawaban_sementara: jawabanData,
+                    sisa_waktu: sisaWaktu,
+                    pelanggaran: pelanggaran,
+                    updated_at: waktuSekarang
+                })
+                .eq('id_sesi', idSesi)
+                .neq('status', 'DISQUALIFIED')
+                .neq('status', 'COMPLETED')
+                .select('deadline_at')
+                .maybeSingle();
+
+            if (error) {
+                console.error("Gagal memperbarui sesi ujian:", error.message);
+                return null;
+            }
+            if (data) return data.deadline_at || null;
+
+            const { data: existingSession, error: lookupError } = await supabase
+                .from('sesi_ujian')
+                .select('id_sesi, deadline_at, status')
+                .eq('id_sesi', idSesi)
+                .maybeSingle();
+
+            if (lookupError) throw new Error(lookupError.message);
+            if (existingSession) {
+                if (['DISQUALIFIED', 'COMPLETED'].includes(existingSession.status)) {
+                    return existingSession.deadline_at || null;
+                }
+                throw new Error('Sesi ujian ditemukan, tetapi gagal diperbarui.');
+            }
+
+            const { data: createdSession, error: insertError } = await supabase
+                .from('sesi_ujian')
+                .insert(payload)
                 .select('deadline_at')
                 .single();
 
-            if (error) {
-                console.error("Upsert error:", error.message);
-                return null;
-            }
-            return data?.deadline_at || null;
+            if (insertError) throw new Error(insertError.message);
+            return createdSession?.deadline_at || null;
         } catch (error) {
             console.error("Gagal save sesi ujian:", error);
             return null;
@@ -246,14 +276,14 @@ export const api = {
         return data;
     },
 
-    // GURU: Buka Kunci Siswa
-    updateSesiStatus: async (username, idUjian, statusUpdate, pelanggaranReset = 0) => {
+    // GURU: Mengubah status sesi tanpa mengubah hitungan deteksi.
+    updateSesiStatus: async (username, idUjian, statusUpdate) => {
         const idSesi = `${username}_${idUjian}`;
+        const nextStatus = statusUpdate === 'ACTIVE' ? 'ACTIVE_AFTER_UNLOCK' : statusUpdate;
         const { error } = await supabase
             .from('sesi_ujian')
             .update({
-                status: statusUpdate,
-                pelanggaran: pelanggaranReset,
+                status: nextStatus,
                 updated_at: new Date().toISOString()
             })
             .eq('id_sesi', idSesi);
@@ -261,12 +291,29 @@ export const api = {
         if (error) throw new Error(error.message);
     },
 
-    // GURU: Menarik daftar Siswa yang ngeyel keluar / Terkunci
-    getSesiTerkunci: async () => {
+    transitionSesiStatus: async (username, idUjian, statusUpdate, expectedStatuses) => {
+        const idSesi = `${username}_${idUjian}`;
         const { data, error } = await supabase
             .from('sesi_ujian')
-            .select('id_sesi, username_siswa, id_ujian, status')
-            .eq('status', 'LOCKED');
+            .update({
+                status: statusUpdate,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id_sesi', idSesi)
+            .in('status', expectedStatuses)
+            .select('status')
+            .maybeSingle();
+
+        if (error) throw new Error(error.message);
+        return data?.status || null;
+    },
+
+    // GURU: Menarik sesi aktif untuk pemantauan dan tindakan pengawas.
+    getSesiMonitoring: async () => {
+        const { data, error } = await supabase
+            .from('sesi_ujian')
+            .select('id_sesi, username_siswa, id_ujian, status, pelanggaran, updated_at')
+            .in('status', ['ACTIVE', 'WARNING', 'ACTIVE_AFTER_UNLOCK', 'LOCKED', 'DISQUALIFIED']);
 
         if (error) throw new Error(error.message);
         return data || [];
