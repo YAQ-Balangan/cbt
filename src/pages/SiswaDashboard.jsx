@@ -385,6 +385,7 @@ const SiswaDashboard = () => {
   const [raguRagu, setRaguRagu] = useState({});
   const [examDeadlineAt, setExamDeadlineAt] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const autoSubmitRetryRef = useRef(null);
 
   const [appSettings, setAppSettings] = useState({
     title: "TADBIRA",
@@ -547,6 +548,15 @@ const SiswaDashboard = () => {
   const pelanggaranRef = useRef(pelanggaran);
   const timeLeftRef = useRef(0);
   const saveTimeoutRef = useRef(null);
+
+  useEffect(
+    () => () => {
+      if (autoSubmitRetryRef.current) {
+        clearTimeout(autoSubmitRetryRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     activeExamRef.current = activeExam;
@@ -1118,6 +1128,10 @@ const SiswaDashboard = () => {
   const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
     if (isSubmittingRef.current) return;
     if (!isForced && blockManualSubmitIfNeeded()) return;
+    if (autoSubmitRetryRef.current) {
+      clearTimeout(autoSubmitRetryRef.current);
+      autoSubmitRetryRef.current = null;
+    }
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
@@ -1240,17 +1254,28 @@ const SiswaDashboard = () => {
         );
       }
     } catch (err) {
+      console.error("Gagal menyimpan nilai ujian:", err);
       showAlert(
         "warning",
         "Pengiriman Belum Berhasil",
-        "Jawaban belum dapat dikirim. Periksa koneksi internet, lalu coba lagi tanpa menutup halaman ini.",
+        isForced
+          ? "Nilai akan dicoba kirim kembali secara otomatis. Jangan tutup halaman ujian sampai pengiriman berhasil."
+          : "Jawaban belum dapat dikirim. Periksa koneksi internet, lalu coba lagi tanpa menutup halaman ini.",
       );
       isSubmittingRef.current = false;
       setIsSubmitting(false);
+      if (isForced && activeExamRef.current) {
+        autoSubmitRetryRef.current = window.setTimeout(() => {
+          autoSubmitRetryRef.current = null;
+          if (activeExamRef.current && !isSubmittingRef.current) {
+            void executeEndExam(true, forcedStatus);
+          }
+        }, 15000);
+      }
     }
   };
 
-  const handleEndExamClick = (isForced = false) => {
+  const handleEndExamClick = (isForced = false, forcedStatus = "Selesai") => {
     if (isSubmittingRef.current) return;
     if (!isForced && blockManualSubmitIfNeeded()) return;
     if (isOffline && !isForced) {
@@ -1272,7 +1297,7 @@ const SiswaDashboard = () => {
         },
       );
     } else {
-      executeEndExam(isForced);
+      executeEndExam(isForced, forcedStatus);
     }
   };
 
@@ -1326,11 +1351,16 @@ const SiswaDashboard = () => {
                   answersRef.current,
                   newTime,
                   pelanggaranRef.current,
-                  "LOCKED",
+                  pelanggaranRef.current >= 3 ? "DISQUALIFIED" : "LOCKED",
                 );
               }
             }}
-            onTimeUp={() => handleEndExamClick(true)}
+            onTimeUp={() =>
+              handleEndExamClick(
+                true,
+                pelanggaranRef.current >= 3 ? "Diskualifikasi" : "Selesai",
+              )
+            }
           />
         </div>
 
@@ -1423,7 +1453,12 @@ const SiswaDashboard = () => {
                   );
                 }
               }}
-              onTimeUp={() => handleEndExamClick(true)}
+              onTimeUp={() =>
+                handleEndExamClick(
+                  true,
+                  pelanggaranRef.current >= 3 ? "Diskualifikasi" : "Selesai",
+                )
+              }
             />
             <div className="flex min-w-0 items-center justify-between gap-2">
               <div className="min-w-0 flex-1">

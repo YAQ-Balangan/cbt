@@ -165,23 +165,13 @@ export const api = {
             throw new Error('Username siswa dan ID ujian diperlukan untuk menyimpan nilai.');
         }
 
-        const storageKey = `cbt-submission:${encodeURIComponent(usernameSiswa)}:${encodeURIComponent(examId)}`;
         const idSesi = `${usernameSiswa}_${examId}`;
-        let submissionId = window.localStorage.getItem(storageKey);
-
-        if (!submissionId) {
-            submissionId = `${Date.now()}${Math.floor(Math.random() * 1000)
-                .toString()
-                .padStart(3, '0')}`;
-            window.localStorage.setItem(storageKey, submissionId);
-        }
 
         const { data, error } = await supabase
             .from('nilai')
             .upsert(
                 {
                     ...payloadData,
-                    id: submissionId,
                     id_sesi: idSesi,
                     username_siswa: usernameSiswa,
                     id_ujian: examId,
@@ -194,7 +184,6 @@ export const api = {
         if (error) throw new Error(error.message);
         if (!data) throw new Error('Nilai belum terkonfirmasi tersimpan.');
 
-        window.localStorage.removeItem(storageKey);
         return data;
     },
 
@@ -207,14 +196,17 @@ export const api = {
         try {
             const idSesi = `${username}_${idUjian}`;
             const waktuSekarang = new Date().toISOString();
-            const jawabanString = typeof jawaban === 'string' ? jawaban : JSON.stringify(jawaban);
+            const jawabanData = typeof jawaban === 'string' ? JSON.parse(jawaban) : jawaban || {};
+            if (!jawabanData || typeof jawabanData !== 'object' || Array.isArray(jawabanData)) {
+                throw new Error('Format jawaban sesi ujian tidak valid.');
+            }
 
             // GANTI LOGIKA LAMA MENJADI JALUR TUNGGAL (UPSERT)
             const payload = {
                 id_sesi: idSesi,
                 username_siswa: username,
                 id_ujian: idUjian,
-                jawaban_sementara: jawabanString,
+                jawaban_sementara: jawabanData,
                 sisa_waktu: sisaWaktu,
                 pelanggaran: pelanggaran,
                 status: statusSesi,
