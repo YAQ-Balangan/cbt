@@ -1215,6 +1215,31 @@ const GuruDashboard = () => {
   };
 
   const [sesiUjianData, setSesiUjianData] = useState([]); // State untuk Anti-Curang
+  const [siswaNameByUsername, setSiswaNameByUsername] = useState({});
+
+  useEffect(() => {
+    let isMounted = true;
+
+    api
+      .read("Users")
+      .then((users) => {
+        if (!isMounted) return;
+        const namesByUsername = {};
+        users.forEach((student) => {
+          const username = String(student.username || "").trim().toLowerCase();
+          const name = String(student.nama || "").trim();
+          if (username && name) namesByUsername[username] = name;
+        });
+        setSiswaNameByUsername(namesByUsername);
+      })
+      .catch((error) => {
+        console.error("Gagal menarik nama siswa untuk pemantauan:", error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // STATE & API GAMBAR
   const IMGBB_API_KEY = "db28c000ce57b260d7d09cb4c18790e0";
@@ -5013,7 +5038,11 @@ Patuhi aturan berikut secara ketat:
                             <div className="flex justify-between items-start mb-4">
                               <div>
                                 <p className="font-black text-slate-800 text-lg leading-tight">
-                                  {sesi.username_siswa}
+                                  {siswaNameByUsername[
+                                    String(sesi.username_siswa || "")
+                                      .trim()
+                                      .toLowerCase()
+                                  ] || sesi.username_siswa}
                                 </p>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                                   ID Ujian: {sesi.id_ujian}

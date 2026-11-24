@@ -192,6 +192,7 @@ const UjianDashboard = () => {
     message: "",
     inputValue: "",
     onConfirm: null,
+    confirmLabel: "Ya, Lanjutkan",
   });
 
   const [studentsData, setStudentsData] = useState([]);
@@ -250,6 +251,7 @@ const UjianDashboard = () => {
     message,
     onConfirm = null,
     defaultValue = "",
+    confirmLabel = "Ya, Lanjutkan",
   ) => {
     setCustomAlert({
       isOpen: true,
@@ -258,6 +260,7 @@ const UjianDashboard = () => {
       message,
       inputValue: defaultValue,
       onConfirm,
+      confirmLabel,
     });
   };
   const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
@@ -363,7 +366,7 @@ const UjianDashboard = () => {
       const fetchSesi = supabase
         .from("sesi_ujian")
         .select(
-          "id_sesi, id_ujian, username_siswa, jawaban_sementara, status, updated_at",
+          "id_sesi, id_ujian, username_siswa, jawaban_sementara, status, pelanggaran, updated_at",
         )
         .gte(
           "updated_at",
@@ -568,6 +571,7 @@ const UjianDashboard = () => {
             totalSoal: totalSoal,
             progress: percentage,
             status: sessionStatus === "LOCKED" ? "LOCKED" : "WORKING",
+            pelanggaran: Number(sesi.pelanggaran) || 0,
           },
         });
       });
@@ -904,29 +908,81 @@ const UjianDashboard = () => {
     });
   };
 
-  const handleUnlockStudent = async (username, examId) => {
+  const handleStudentSessionAction = async (student, status) => {
     try {
-      await api.updateSesiStatus(username, examId, "ACTIVE", 1);
+      const nextStatus =
+        status === "ACTIVE_AFTER_UNLOCK" ? "ACTIVE" : status;
+      await api.updateSesiStatus(student.username, student.id_ujian, nextStatus);
+      const displayedStatus =
+        status === "DISQUALIFIED"
+          ? "DISKUALIFIKASI"
+          : status === "ACTIVE_AFTER_UNLOCK"
+            ? "WORKING"
+            : status;
       setStudentsData((prev) =>
         prev.map((s) =>
-          s.username === username ? { ...s, status: "WORKING" } : s,
+          s.username === student.username && s.id_ujian === student.id_ujian
+            ? {
+                ...s,
+                status: displayedStatus,
+                completedAt:
+                  status === "DISQUALIFIED" ? Date.now() : s.completedAt,
+                progress:
+                  status === "DISQUALIFIED" ? 100 : s.progress,
+              }
+            : s,
         ),
       );
-      showAlert(
-        "success",
-        "Kunci Terbuka",
-        `Akses ujian untuk siswa bersangkutan berhasil dipulihkan.`,
-      );
+      const messages = {
+        LOCKED: ["Sesi Dikunci", `Sesi ujian ${student.nama} berhasil dikunci.`],
+        ACTIVE_AFTER_UNLOCK: [
+          "Kunci Dibuka",
+          `Akses ujian ${student.nama} berhasil dipulihkan.`,
+        ],
+        DISQUALIFIED: [
+          "Siswa Didiskualifikasi",
+          `Sesi ujian ${student.nama} dihentikan atas keputusan pengawas.`,
+        ],
+      };
+      const [title, message] = messages[status];
+      showAlert("success", title, message);
     } catch (err) {
       showAlert(
         "danger",
-        "Gagal Membuka Kunci",
-        "Pastikan koneksi internet Anda stabil.",
+        "Tindakan Gagal",
+        `Status sesi ${student.nama} tidak berhasil diperbarui: ${err.message}`,
       );
     }
   };
 
   const lockedStudents = studentsData.filter((s) => s.status === "LOCKED");
+  const monitoredStudents = studentsData.filter((s) =>
+    ["WORKING", "LOCKED"].includes(s.status),
+  );
+  const confirmStudentSessionAction = (student, status) => {
+    const actions = {
+      LOCKED: {
+        title: "Kunci Sesi Ujian?",
+        message: `Kunci sesi ujian ${student.nama}? Pengawas dapat membukanya kembali.`,
+        confirmLabel: "Kunci Sesi",
+      },
+      ACTIVE_AFTER_UNLOCK: {
+        title: "Buka Kunci Sesi?",
+        message: `Buka kunci sesi ujian ${student.nama}?`,
+        confirmLabel: "Buka Kunci",
+      },
+      DISQUALIFIED: {
+        title: "Diskualifikasi Siswa?",
+        message: `Diskualifikasikan ${student.nama} dari ujian ini? Tindakan ini hanya dilakukan oleh pengawas.`,
+        confirmLabel: "Diskualifikasi",
+      },
+    };
+    const action = actions[status];
+    showAlert("confirm", action.title, action.message, () => {
+      closeAlert();
+      void handleStudentSessionAction(student, status);
+    }, "", action.confirmLabel);
+  };
 
   // =================================================================================
   // RENDER UI DENAH / KELAS
@@ -1482,39 +1538,74 @@ const UjianDashboard = () => {
         {renderClassroom()}
 
         <AnimatePresence>
-          {activeTab === "live" && lockedStudents.length > 0 && (
+          {activeTab === "live" && monitoredStudents.length > 0 && (
             <motion.div
               initial={{ x: 300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 300, opacity: 0 }}
-              className="absolute right-4 bottom-4 md:right-8 md:bottom-8 z-50 w-80 bg-white rounded-2xl shadow-[0_10px_40px_rgba(249,115,22,0.3)] border-2 border-orange-500 flex flex-col overflow-hidden"
+              className="absolute right-4 bottom-4 md:right-8 md:bottom-8 z-50 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-[0_10px_40px_rgba(249,115,22,0.3)] border-2 border-orange-500 flex flex-col overflow-hidden"
             >
               <div className="bg-orange-500 text-white p-3 flex justify-between items-center">
                 <div className="flex items-center gap-2 font-black text-sm">
-                  <AlertTriangle size={18} className="animate-pulse" />{" "}
-                  PELANGGARAN UJIAN
+                  <ShieldAlert size={18} className="animate-pulse" />{" "}
+                  TINDAKAN PENGAWAS
                 </div>
                 <span className="bg-white text-orange-600 px-2 py-0.5 rounded-full text-xs font-bold">
                   {lockedStudents.length} Terkunci
                 </span>
               </div>
-              <div className="max-h-60 overflow-y-auto p-2 bg-orange-50 custom-scrollbar">
-                {lockedStudents.map((siswa) => (
+              <div className="max-h-[55vh] overflow-y-auto p-2 bg-orange-50 custom-scrollbar">
+                {monitoredStudents.map((siswa) => (
                   <div
-                    key={siswa.username}
+                    key={`${siswa.username}_${siswa.id_ujian}`}
                     className="bg-white p-3 rounded-xl shadow-sm mb-2 last:mb-0 border border-orange-100"
                   >
-                    <p className="font-bold text-sm text-slate-800">
-                      {siswa.nama}
-                    </p>
-                    <button
-                      onClick={() =>
-                        handleUnlockStudent(siswa.username, siswa.id_ujian)
-                      }
-                      className="mt-2 w-full py-1.5 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-600 text-xs font-bold rounded-lg transition-colors border border-orange-200 hover:border-orange-500"
-                    >
-                      Buka Kunci Sekarang
-                    </button>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-sm text-slate-800">
+                          {siswa.nama}
+                        </p>
+                        <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                          Deteksi fokus: {Number(siswa.pelanggaran) || 0}x
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded px-2 py-1 text-[9px] font-black ${
+                          siswa.status === "LOCKED"
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {siswa.status === "LOCKED" ? "TERKUNCI" : "AKTIF"}
+                      </span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() =>
+                          confirmStudentSessionAction(
+                            siswa,
+                            siswa.status === "LOCKED"
+                              ? "ACTIVE_AFTER_UNLOCK"
+                              : "LOCKED",
+                          )
+                        }
+                        className={`py-1.5 ${
+                          siswa.status === "LOCKED"
+                            ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-500"
+                            : "bg-orange-100 text-orange-700 hover:bg-orange-500"
+                        } hover:text-white text-xs font-bold rounded-lg transition-colors`}
+                      >
+                        {siswa.status === "LOCKED" ? "Buka Kunci" : "Kunci"}
+                      </button>
+                      <button
+                        onClick={() =>
+                          confirmStudentSessionAction(siswa, "DISQUALIFIED")
+                        }
+                        className="py-1.5 bg-red-100 hover:bg-red-600 hover:text-white text-red-700 text-xs font-bold rounded-lg transition-colors"
+                      >
+                        Diskualifikasi
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1684,7 +1775,9 @@ const UjianDashboard = () => {
                       }
                       className={`w-full py-3.5 px-4 rounded-xl font-bold text-white shadow-lg transition-all text-sm order-1 sm:order-2 ${customAlert.type === "confirm" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/30"}`}
                     >
-                      {customAlert.type === "prompt" ? "Simpan" : "Ya, Hapus"}
+                      {customAlert.type === "prompt"
+                        ? "Simpan"
+                        : customAlert.confirmLabel}
                     </button>
                   </>
                 ) : (
