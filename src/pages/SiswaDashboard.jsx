@@ -113,13 +113,6 @@ const MAX_PAGE_ZOOM = 1.4;
 const clampPageZoom = (value) =>
   Math.min(MAX_PAGE_ZOOM, Math.max(MIN_PAGE_ZOOM, Number(value.toFixed(1))));
 
-const getScreenOrientation = () => {
-  const angle = window.screen.orientation?.angle;
-  if (Number.isFinite(angle)) return Math.abs(angle % 180);
-  if (Number.isFinite(window.orientation)) return Math.abs(window.orientation % 180);
-  return window.screen.width >= window.screen.height ? 90 : 0;
-};
-
 const formatTanggalLokal = (dateString) => {
   if (!dateString) return "Hari ini";
   const value = String(dateString).trim();
@@ -398,7 +391,6 @@ const SiswaDashboard = () => {
   const [myResults, setMyResults] = useState([]);
   const [tokens, setTokens] = useState({});
   const [activeExam, setActiveExam] = useState(null);
-  const [isSplitScreenBlocked, setIsSplitScreenBlocked] = useState(false);
 
   const [soalData, setSoalData] = useState([]);
   const [loadingSoal, setLoadingSoal] = useState(false);
@@ -862,76 +854,10 @@ const SiswaDashboard = () => {
     };
 
     let resizeLogTimeout;
-    let resizeCheckTimeout;
-    let resizeGraceTimeout;
     let hiddenTimeout;
-    let currentOrientation = getScreenOrientation();
-    let viewportWasBlocked = false;
-    let isZoomingOrResizing = false;
-    const isMobileDevice =
-      /android|iphone|ipad|ipod/i.test(navigator.userAgent) ||
-      (typeof window.matchMedia === "function" &&
-        window.matchMedia("(pointer: coarse)").matches);
-
-    const checkViewport = () => {
-      if (
-        !activeExamRef.current ||
-        !isAntiCheatActiveRef.current ||
-        !isMobileDevice
-      ) {
-        viewportWasBlocked = false;
-        setIsSplitScreenBlocked(false);
-        return;
-      }
-
-      const nextOrientation = getScreenOrientation();
-      if (nextOrientation !== currentOrientation) {
-        currentOrientation = nextOrientation;
-        viewportWasBlocked = false;
-        setIsSplitScreenBlocked(false);
-        resizeCheckTimeout = setTimeout(checkViewport, 1200);
-        return;
-      }
-
-      const screenWidth = Math.max(
-        window.screen.width || 0,
-        window.screen.availWidth || 0,
-      );
-      const screenHeight = Math.max(
-        window.screen.height || 0,
-        window.screen.availHeight || 0,
-      );
-      const splitScreenDetected =
-        screenWidth > 0 &&
-        screenHeight > 0 &&
-        (window.innerWidth < screenWidth * 0.75 ||
-          window.innerHeight < screenHeight * 0.7);
-
-      if (splitScreenDetected !== viewportWasBlocked) {
-        viewportWasBlocked = splitScreenDetected;
-        console.info(
-          splitScreenDetected
-            ? "Anti-cheat: split-screen viewport detected; exam content blocked"
-            : "Anti-cheat: full exam viewport restored",
-          {
-            width: window.innerWidth,
-            height: window.innerHeight,
-            screenWidth,
-            screenHeight,
-          },
-        );
-      }
-      setIsSplitScreenBlocked(splitScreenDetected);
-    };
 
     const handleResize = () => {
       if (!activeExamRef.current) return;
-      isZoomingOrResizing = true;
-      clearTimeout(resizeGraceTimeout);
-      resizeGraceTimeout = setTimeout(() => {
-        isZoomingOrResizing = false;
-      }, 1000);
-
       clearTimeout(resizeLogTimeout);
       resizeLogTimeout = setTimeout(() => {
         console.info("Anti-cheat: resize/orientation ignored", {
@@ -939,8 +865,6 @@ const SiswaDashboard = () => {
           height: window.innerHeight,
         });
       }, 300);
-      clearTimeout(resizeCheckTimeout);
-      resizeCheckTimeout = setTimeout(checkViewport, 1000);
     };
 
     const handleVisibilityChange = () => {
@@ -969,11 +893,7 @@ const SiswaDashboard = () => {
 
     const handleBlur = () => {
       if (!activeExamRef.current || zoomedImgRef.current) return;
-      if (isZoomingOrResizing) {
-        console.info("Anti-cheat: window blur ignored after resize/orientation");
-        return;
-      }
-      triggerLock("Layar Hilang Fokus / Klik Overlay Luar");
+      console.info("Anti-cheat: window blur observed; ignored");
     };
 
     const handleBeforeUnload = (e) => {
@@ -1000,17 +920,9 @@ const SiswaDashboard = () => {
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("popstate", handlePopState); // <-- Listener Swipe Aktif
 
-    if (activeExamRef.current) {
-      resizeCheckTimeout = setTimeout(checkViewport, 1200);
-    } else {
-      setIsSplitScreenBlocked(false);
-    }
-
     return () => {
       window.removeEventListener("resize", handleResize);
       clearTimeout(resizeLogTimeout);
-      clearTimeout(resizeCheckTimeout);
-      clearTimeout(resizeGraceTimeout);
       clearTimeout(hiddenTimeout);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
@@ -1029,14 +941,6 @@ const SiswaDashboard = () => {
       try {
         const sesi = await api.getSesi(username, examId);
         if (sesi && sesi.status === "ACTIVE") {
-          const serverPelanggaran = Number(sesi.pelanggaran);
-          if (
-            Number.isSafeInteger(serverPelanggaran) &&
-            serverPelanggaran >= 0
-          ) {
-            pelanggaranRef.current = serverPelanggaran;
-            setPelanggaran(serverPelanggaran);
-          }
           setIsLocked(false);
           isLockedRef.current = false;
 
@@ -1449,7 +1353,18 @@ const SiswaDashboard = () => {
           <ExamTimer
             deadlineAt={examDeadlineAt}
             timeRef={timeLeftRef}
-            onTick={() => {}}
+            onTick={(newTime) => {
+              if (activeExamRef.current && !isSubmittingRef.current) {
+                api.saveSesi(
+                  getVal(user, "Username"),
+                  getVal(activeExamRef.current, "ID"),
+                  answersRef.current,
+                  newTime,
+                  pelanggaranRef.current,
+                  "LOCKED",
+                );
+              }
+            }}
             onTimeUp={() => handleEndExamClick(true)}
           />
         </div>
@@ -1461,19 +1376,13 @@ const SiswaDashboard = () => {
         <p className="text-center text-slate-300 max-w-lg text-sm md:text-base leading-relaxed mb-8">
           Sistem mendeteksi Anda{" "}
           <strong>keluar dari aplikasi / berpindah layar</strong>. Ini adalah
-          pelanggaran kedua. Silakan panggil pengawas untuk membuka kunci agar
-          Anda bisa melanjutkan ujian.
+          pelanggaran. Silakan panggil pengawas untuk membuka kunci agar Anda
+          bisa melanjutkan ujian.
           <br />
           <br />
           <strong className="text-amber-400 font-black tracking-widest text-xs uppercase animate-pulse block mb-4">
             — WAKTU UJIAN ANDA TERUS BERJALAN —
           </strong>
-          <strong className="text-red-400">Peringatan Keras:</strong> Jika Anda
-          mengulanginya lagi, ujian akan langsung dihentikan dan Anda dinyatakan{" "}
-          <strong className="text-red-500 underline uppercase">
-            Diskualifikasi
-          </strong>
-          .
         </p>
         {customAlert.isOpen &&
           customAlert.title === "Pengiriman Belum Berhasil" && (
@@ -2203,32 +2112,6 @@ const SiswaDashboard = () => {
           )}
         </AnimatePresence>
 
-        {isSplitScreenBlocked && (
-          <div
-            role="alert"
-            aria-live="assertive"
-            className="fixed inset-0 z-[1000000] flex items-center justify-center bg-slate-950/95 p-6 text-white"
-          >
-            <div className="w-full max-w-md rounded-3xl border border-amber-500/30 bg-slate-900 p-7 text-center shadow-2xl">
-              <ShieldAlert
-                size={56}
-                className="mx-auto mb-5 text-amber-400"
-              />
-              <h2 className="text-xl font-black tracking-tight">
-                LAYAR UJIAN DIBLOKIR SEMENTARA
-              </h2>
-              <p className="mt-4 text-sm leading-relaxed text-slate-300">
-                Ukuran layar terdeteksi seperti mode layar terbagi. Keluar dari
-                split-screen atau kembalikan aplikasi ke tampilan penuh. Soal
-                akan muncul kembali otomatis setelah ukuran layar normal.
-              </p>
-              <p className="mt-4 text-xs font-bold uppercase tracking-wider text-amber-300">
-                Rotasi layar tidak dihitung sebagai pelanggaran. Waktu ujian
-                tetap berjalan.
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     );
   }

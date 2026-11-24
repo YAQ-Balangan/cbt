@@ -911,7 +911,7 @@ const UjianDashboard = () => {
 
   const handleUnlockStudent = async (username, examId) => {
     try {
-      await api.updateSesiStatus(username, examId, "ACTIVE", 2);
+      await api.updateSesiStatus(username, examId, "ACTIVE", 1);
       setStudentsData((prev) =>
         prev.map((s) =>
           s.username === username ? { ...s, status: "WORKING" } : s,
