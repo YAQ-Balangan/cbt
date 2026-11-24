@@ -62,7 +62,14 @@ BEGIN
       s.username_siswa,
       s.id_ujian,
       s.status AS session_status,
-      COALESCE(s.jawaban_sementara, '{}'::jsonb) AS answers,
+      CASE jsonb_typeof(s.jawaban_sementara)
+        WHEN 'object' THEN s.jawaban_sementara
+        WHEN 'string' THEN COALESCE(
+          NULLIF(s.jawaban_sementara #>> '{}', '')::jsonb,
+          '{}'::jsonb
+        )
+        ELSE '{}'::jsonb
+      END AS answers,
       j.mapel,
       u.nama,
       u.kelas
@@ -78,11 +85,6 @@ BEGIN
     ) AS u ON true
     WHERE s.deadline_at IS NOT NULL
       AND s.deadline_at <= statement_timestamp()
-      AND NOT EXISTS (
-        SELECT 1
-        FROM public.nilai AS existing_result
-        WHERE existing_result.id_sesi = s.id_sesi
-      )
   ),
   question_results AS (
     SELECT
@@ -160,7 +162,7 @@ BEGIN
       e.mapel
   ),
   saved_results AS (
-    INSERT INTO public.nilai (
+    INSERT INTO public.nilai AS stored_result (
       nama_siswa,
       kelas,
       mapel,
@@ -192,7 +194,30 @@ BEGIN
       s.username_siswa,
       s.id_ujian
     FROM scored_sessions AS s
-    ON CONFLICT (id_sesi) DO NOTHING
+    ON CONFLICT (id_sesi) DO UPDATE
+    SET nama_siswa = EXCLUDED.nama_siswa,
+        kelas = EXCLUDED.kelas,
+        mapel = EXCLUDED.mapel,
+        skor = EXCLUDED.skor,
+        benar = EXCLUDED.benar,
+        salah = EXCLUDED.salah,
+        total_soal = EXCLUDED.total_soal,
+        status = EXCLUDED.status,
+        detail_jawaban = EXCLUDED.detail_jawaban,
+        username_siswa = EXCLUDED.username_siswa,
+        id_ujian = EXCLUDED.id_ujian
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(
+        COALESCE(NULLIF(stored_result.detail_jawaban, '')::jsonb, '[]'::jsonb)
+      ) AS previous_answer(item)
+      WHERE btrim(COALESCE(previous_answer.item ->> 'jawab_siswa', '')) <> ''
+    )
+      AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(EXCLUDED.detail_jawaban::jsonb) AS current_answer(item)
+        WHERE btrim(COALESCE(current_answer.item ->> 'jawab_siswa', '')) <> ''
+      )
     RETURNING id_sesi
   )
   SELECT count(*)::integer

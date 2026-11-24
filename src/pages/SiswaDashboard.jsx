@@ -85,6 +85,116 @@ const getVal = (obj, keyName) => {
   return foundKey ? obj[foundKey] : "";
 };
 
+const getPendingResultsKey = (username) =>
+  `cbt-pending-results:${encodeURIComponent(username)}`;
+
+const getExamAnswersKey = (username, examId) =>
+  `cbt-exam-answers:${encodeURIComponent(username)}:${encodeURIComponent(examId)}`;
+
+const readPendingSubmissions = (username) => {
+  if (!username) return [];
+  try {
+    const stored = window.localStorage.getItem(getPendingResultsKey(username));
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      throw new Error("Format antrean nilai lokal tidak valid.");
+    }
+    return parsed
+      .filter(
+        (submission) =>
+          submission?.username_siswa &&
+          submission?.id_ujian &&
+          submission?.payloadData,
+      )
+      .map((submission) => ({ ...submission, local_saved: true }));
+  } catch (error) {
+    console.error("Gagal membaca antrean nilai lokal:", error);
+    return [];
+  }
+};
+
+const writePendingSubmissions = (username, submissions) => {
+  if (!username) return false;
+  try {
+    const key = getPendingResultsKey(username);
+    if (submissions.length > 0) {
+      window.localStorage.setItem(key, JSON.stringify(submissions));
+    } else {
+      window.localStorage.removeItem(key);
+    }
+    return true;
+  } catch (error) {
+    console.error("Gagal menyimpan antrean nilai di perangkat:", error);
+    return false;
+  }
+};
+
+const createPendingResultRow = (
+  submission,
+  locallyPersisted = submission.local_saved !== false,
+) => ({
+  ...submission.payloadData,
+  id_sesi: `${submission.username_siswa}_${submission.id_ujian}`,
+  username_siswa: submission.username_siswa,
+  id_ujian: submission.id_ujian,
+  _syncPending: true,
+  _localPersisted: locallyPersisted,
+});
+
+const mergeResultRows = (serverResults, pendingSubmissions) => {
+  const rows = new Map();
+  (serverResults || []).forEach((result, index) => {
+    const idSesi = String(
+      getVal(result, "id_sesi") || getVal(result, "id") || `server-${index}`,
+    );
+    rows.set(idSesi, { ...result, _syncPending: false });
+  });
+  (pendingSubmissions || []).forEach((submission) => {
+    const pendingResult = createPendingResultRow(submission);
+    rows.set(pendingResult.id_sesi, pendingResult);
+  });
+  return Array.from(rows.values());
+};
+
+const readExamAnswerCache = (username, examId) => {
+  if (!username || !examId) return {};
+  try {
+    const stored = window.localStorage.getItem(getExamAnswersKey(username, examId));
+    if (!stored) return {};
+    const parsed = JSON.parse(stored);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  } catch (error) {
+    console.error("Gagal membaca jawaban ujian dari perangkat:", error);
+    return {};
+  }
+};
+
+const writeExamAnswerCache = (username, examId, answers) => {
+  if (!username || !examId) return false;
+  try {
+    window.localStorage.setItem(
+      getExamAnswersKey(username, examId),
+      JSON.stringify(answers),
+    );
+    return true;
+  } catch (error) {
+    console.error("Gagal menyimpan jawaban ujian di perangkat:", error);
+    return false;
+  }
+};
+
+const clearExamAnswerCache = (username, examId) => {
+  if (!username || !examId) return;
+  try {
+    window.localStorage.removeItem(getExamAnswersKey(username, examId));
+  } catch (error) {
+    console.error("Gagal membersihkan jawaban lokal ujian:", error);
+  }
+};
+
 const DEFAULT_SUBMIT_DELAY_MINUTES = 40;
 
 const parseSubmitDelayMinutes = (value) => {
@@ -357,6 +467,7 @@ const SubmitExamButton = ({
 
 const SiswaDashboard = () => {
   const { user } = useContext(AuthContext);
+  const pendingUsername = String(getVal(user, "Username") || "").trim();
   const [activeTab, setActiveTab] = useState("home");
   const [loading, setLoading] = useState(true);
   const [isAppBlocked, setIsAppBlocked] = useState(false);
@@ -373,7 +484,15 @@ const SiswaDashboard = () => {
 
   const [exams, setExams] = useState([]);
   const [examSearch, setExamSearch] = useState("");
-  const [myResults, setMyResults] = useState([]);
+  const [pendingSubmissions, setPendingSubmissions] = useState(() =>
+    readPendingSubmissions(pendingUsername),
+  );
+  const pendingSubmissionsRef = useRef(pendingSubmissions);
+  const pendingSyncInProgressRef = useRef(false);
+  const [localStorageError, setLocalStorageError] = useState(false);
+  const [myResults, setMyResults] = useState(() =>
+    mergeResultRows([], pendingSubmissions),
+  );
   const [tokens, setTokens] = useState({});
   const [activeExam, setActiveExam] = useState(null);
 
@@ -385,7 +504,6 @@ const SiswaDashboard = () => {
   const [raguRagu, setRaguRagu] = useState({});
   const [examDeadlineAt, setExamDeadlineAt] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const autoSubmitRetryRef = useRef(null);
 
   const [appSettings, setAppSettings] = useState({
     title: "TADBIRA",
@@ -549,14 +667,86 @@ const SiswaDashboard = () => {
   const timeLeftRef = useRef(0);
   const saveTimeoutRef = useRef(null);
 
-  useEffect(
-    () => () => {
-      if (autoSubmitRetryRef.current) {
-        clearTimeout(autoSubmitRetryRef.current);
-      }
+  const updatePendingSubmissions = useCallback(
+    (nextSubmissions) => {
+      const locallyPersisted = writePendingSubmissions(
+        pendingUsername,
+        nextSubmissions,
+      );
+      const savedSubmissions = nextSubmissions.map((submission) => ({
+        ...submission,
+        local_saved: locallyPersisted,
+      }));
+      pendingSubmissionsRef.current = savedSubmissions;
+      setPendingSubmissions(savedSubmissions);
+      setLocalStorageError(!locallyPersisted);
     },
-    [],
+    [pendingUsername],
   );
+
+  const syncPendingSubmissions = useCallback(async () => {
+    if (!navigator.onLine || pendingSyncInProgressRef.current) return;
+    pendingSyncInProgressRef.current = true;
+
+    try {
+      for (const submission of [...pendingSubmissionsRef.current]) {
+        const idSesi = `${submission.username_siswa}_${submission.id_ujian}`;
+        try {
+          await api.submitNilaiUjian(
+            submission.username_siswa,
+            submission.id_ujian,
+            submission.payloadData,
+          );
+        } catch (error) {
+          console.warn("Nilai masih menunggu koneksi untuk disinkronkan:", error);
+          break;
+        }
+
+        const remaining = pendingSubmissionsRef.current.filter(
+          (item) => `${item.username_siswa}_${item.id_ujian}` !== idSesi,
+        );
+        updatePendingSubmissions(remaining);
+        setMyResults((previous) =>
+          previous.map((result) =>
+            String(getVal(result, "id_sesi")) === idSesi
+              ? { ...result, _syncPending: false }
+              : result,
+          ),
+        );
+        clearExamAnswerCache(submission.username_siswa, submission.id_ujian);
+
+        try {
+          await api.deleteSesi(
+            submission.username_siswa,
+            submission.id_ujian,
+          );
+        } catch (error) {
+          console.warn("Gagal membersihkan sesi ujian tersinkron:", error);
+        }
+      }
+    } finally {
+      pendingSyncInProgressRef.current = false;
+    }
+  }, [updatePendingSubmissions]);
+
+  useEffect(() => {
+    const savedSubmissions = readPendingSubmissions(pendingUsername);
+    pendingSubmissionsRef.current = savedSubmissions;
+    setPendingSubmissions(savedSubmissions);
+    setMyResults(mergeResultRows([], savedSubmissions));
+    setLocalStorageError(false);
+  }, [pendingUsername]);
+
+  useEffect(() => {
+    const sync = () => void syncPendingSubmissions();
+    sync();
+    window.addEventListener("online", sync);
+    const intervalId = window.setInterval(sync, 30000);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.clearInterval(intervalId);
+    };
+  }, [syncPendingSubmissions]);
 
   useEffect(() => {
     activeExamRef.current = activeExam;
@@ -725,9 +915,13 @@ const SiswaDashboard = () => {
             ? finalJadwal
             : prev,
         );
+        const mergedResults = mergeResultRows(
+          finalNilai,
+          pendingSubmissionsRef.current,
+        );
         setMyResults((prev) =>
-          JSON.stringify(prev) !== JSON.stringify(finalNilai)
-            ? finalNilai
+          JSON.stringify(prev) !== JSON.stringify(mergedResults)
+            ? mergedResults
             : prev,
         );
       } catch {
@@ -745,7 +939,11 @@ const SiswaDashboard = () => {
       () => {
         api
           .getNilaiSiswa(String(getVal(user, "Nama") || ""))
-          .then(setMyResults)
+          .then((serverResults) =>
+            setMyResults(
+              mergeResultRows(serverResults, pendingSubmissionsRef.current),
+            ),
+          )
           .catch((error) =>
             console.error("Gagal memperbarui nilai siswa:", error),
           );
@@ -959,7 +1157,9 @@ const SiswaDashboard = () => {
     let latestResults;
     try {
       latestResults = await api.getNilaiSiswa(getVal(user, "Nama"));
-      setMyResults(latestResults);
+      setMyResults(
+        mergeResultRows(latestResults, pendingSubmissionsRef.current),
+      );
     } catch (error) {
       showAlert(
         "danger",
@@ -972,6 +1172,10 @@ const SiswaDashboard = () => {
     const sudahMengerjakan = latestResults.some(
       (res) =>
         String(getVal(res, "Mapel")).toUpperCase() ===
+        String(examMapel).toUpperCase(),
+    ) || pendingSubmissionsRef.current.some(
+      (submission) =>
+        String(getVal(submission.payloadData, "Mapel")).toUpperCase() ===
         String(examMapel).toUpperCase(),
     );
     if (sudahMengerjakan)
@@ -1023,6 +1227,10 @@ const SiswaDashboard = () => {
           console.warn("Gagal membaca history jawaban", e);
         }
       }
+      finalAnswers = {
+        ...finalAnswers,
+        ...readExamAnswerCache(usernameSiswa, examId),
+      };
 
       const savedTime = serverSession
         ? Number(serverSession.sisa_waktu)
@@ -1125,13 +1333,9 @@ const SiswaDashboard = () => {
   };
 
   // 5. KALKULASI SKOR & SUBMIT (FINAL FIX)
-  const executeEndExam = async (isForced, forcedStatus = "Selesai") => {
+  const executeEndExam = (isForced, forcedStatus = "Selesai") => {
     if (isSubmittingRef.current) return;
     if (!isForced && blockManualSubmitIfNeeded()) return;
-    if (autoSubmitRetryRef.current) {
-      clearTimeout(autoSubmitRetryRef.current);
-      autoSubmitRetryRef.current = null;
-    }
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
@@ -1176,116 +1380,71 @@ const SiswaDashboard = () => {
     let finalScore = Number(skorSiswa.toFixed(2));
     let salahCount = totalSoal - benarCount;
 
-    try {
-      const dataNilai = {
-        nama_siswa: getVal(user, "Nama"),
-        kelas: getVal(user, "Kelas"),
-        mapel: getVal(activeExamRef.current, "Mapel"),
-        skor: finalScore,
-        benar: benarCount,
-        salah: salahCount,
-        total_soal: totalSoal,
-        status: forcedStatus,
-        detail_jawaban: JSON.stringify(detailJawabanArray),
-      };
-
-      // 1. Simpan nilai ke Supabase
-      await api.submitNilaiUjian(
-        getVal(user, "Username"),
-        getVal(activeExamRef.current, "ID"),
-        dataNilai,
-      );
-
-      // TAMBAHAN 2: Tarik ulang data nilai terbaru secara instan agar langsung muncul di halaman Hasil Ujian
-      try {
-        const finalNilai = await api.getNilaiSiswa(getVal(user, "Nama"));
-        setMyResults(finalNilai);
-      } catch (e) {
-        console.warn("Gagal tarik nilai instan", e);
-      }
-
-      const usernameSiswa = getVal(user, "Username");
-      const examIdSelesai = getVal(activeExamRef.current, "ID");
-      const syncSesiSelesai = async () => {
-        for (const delayMs of [0, 1000, 3000]) {
-          if (delayMs) {
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
-          }
-          try {
-            await api.deleteSesi(usernameSiswa, examIdSelesai);
-            return;
-          } catch (error) {
-            if (delayMs === 3000) {
-              console.error("Gagal membersihkan sesi ujian selesai:", error);
-            }
-          }
-        }
-      };
-      void syncSesiSelesai();
-
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-      exitExamFullscreen();
-      setActiveExam(null);
-      setExamDeadlineAt(null);
-      setAnswers({});
-      setRaguRagu({});
-      setCurrentSoalIndex(0);
-      setIsMobileDrawerOpen(false);
-      setActiveTab("nilai");
-
-      if (forcedStatus === "Diskualifikasi") {
-        showAlert(
-          "danger",
-          "Diskualifikasi!",
-          "Ujian Anda dihentikan dan hasilnya telah dikirim.",
-        );
-      } else if (isForced) {
-        showAlert(
-          "info",
-          "Waktu Habis!",
-          "Waktu ujian habis dan jawaban Anda telah dikirim.",
-        );
-      } else {
-        showAlert(
-          "success",
-          "Ujian Selesai",
-          "Berhasil disubmit! Silahkan periksa halaman nilai Anda.",
-        );
-      }
-    } catch (err) {
-      console.error("Gagal menyimpan nilai ujian:", err);
-      showAlert(
-        "warning",
-        "Pengiriman Belum Berhasil",
-        isForced
-          ? "Nilai akan dicoba kirim kembali secara otomatis. Jangan tutup halaman ujian sampai pengiriman berhasil."
-          : "Jawaban belum dapat dikirim. Periksa koneksi internet, lalu coba lagi tanpa menutup halaman ini.",
-      );
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
-      if (isForced && activeExamRef.current) {
-        autoSubmitRetryRef.current = window.setTimeout(() => {
-          autoSubmitRetryRef.current = null;
-          if (activeExamRef.current && !isSubmittingRef.current) {
-            void executeEndExam(true, forcedStatus);
-          }
-        }, 15000);
-      }
+    const usernameSiswa = String(getVal(user, "Username") || "").trim();
+    const examIdSelesai = String(
+      getVal(activeExamRef.current, "ID") || "",
+    ).trim();
+    const dataNilai = {
+      nama_siswa: getVal(user, "Nama"),
+      kelas: getVal(user, "Kelas"),
+      mapel: getVal(activeExamRef.current, "Mapel"),
+      skor: finalScore,
+      benar: benarCount,
+      salah: salahCount,
+      total_soal: totalSoal,
+      status: forcedStatus,
+      detail_jawaban: JSON.stringify(detailJawabanArray),
+    };
+    const submission = {
+      username_siswa: usernameSiswa,
+      id_ujian: examIdSelesai,
+      payloadData: dataNilai,
+      local_saved: true,
+    };
+    const idSesi = `${usernameSiswa}_${examIdSelesai}`;
+    const nextSubmissions = [
+      ...pendingSubmissionsRef.current.filter(
+        (item) =>
+          `${item.username_siswa}_${item.id_ujian}` !== idSesi,
+      ),
+      submission,
+    ];
+    const locallyPersisted = writePendingSubmissions(
+      pendingUsername,
+      nextSubmissions,
+    );
+    if (!locallyPersisted) submission.local_saved = false;
+    pendingSubmissionsRef.current = nextSubmissions;
+    setPendingSubmissions(nextSubmissions);
+    setLocalStorageError(!locallyPersisted);
+    if (locallyPersisted) {
+      clearExamAnswerCache(usernameSiswa, examIdSelesai);
     }
+
+    setMyResults((previous) =>
+      mergeResultRows(
+        previous.filter(
+          (result) => String(getVal(result, "id_sesi")) !== idSesi,
+        ),
+        nextSubmissions,
+      ),
+    );
+    exitExamFullscreen();
+    setActiveExam(null);
+    setExamDeadlineAt(null);
+    setAnswers({});
+    setRaguRagu({});
+    setCurrentSoalIndex(0);
+    setIsMobileDrawerOpen(false);
+    setActiveTab("nilai");
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
+    void syncPendingSubmissions();
   };
 
   const handleEndExamClick = (isForced = false, forcedStatus = "Selesai") => {
     if (isSubmittingRef.current) return;
     if (!isForced && blockManualSubmitIfNeeded()) return;
-    if (isOffline && !isForced) {
-      showAlert(
-        "danger",
-        "Koneksi Terputus",
-        "Tidak dapat mengumpulkan ujian. Pastikan data seluler atau WiFi terhubung kembali, lalu coba lagi. Jangan keluar dari aplikasi!",
-      );
-      return;
-    }
     if (!isForced) {
       showAlert(
         "confirm",
@@ -1574,16 +1733,13 @@ const SiswaDashboard = () => {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="bg-red-500 text-white text-xs md:text-sm font-bold text-center py-2 px-4 shadow-md z-40 flex items-center justify-center gap-2"
+              className={`text-xs md:text-sm font-bold text-center py-2 px-4 shadow-md z-40 flex items-center justify-center gap-2 ${localStorageError ? "bg-red-500 text-white" : "bg-amber-100 text-amber-900"}`}
             >
               <ShieldAlert size={16} className="animate-pulse" />
               <br />
-              KONEKSI TERPUTUS!
-              <br />
-              Jangan tutup aplikasi. Jangan panik!, Jawaban tetap tersimpan.
-              <br />
-              Anda TETAP BISA melanjutkan ujian sambil menunggu internet stabil
-              kembali!.
+              {localStorageError
+                ? "Koneksi terputus dan penyimpanan perangkat tidak tersedia. Hasil hanya aman selama halaman ini terbuka."
+                : "Koneksi terputus. Pilihan yang sudah dibuat disimpan di perangkat dan akan dikirim saat jaringan kembali."}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1670,6 +1826,13 @@ const SiswaDashboard = () => {
                                 [currentSoalId]: opt,
                               };
                               setAnswers(newAnswers);
+                              setLocalStorageError(
+                                !writeExamAnswerCache(
+                                  userUsername,
+                                  getVal(activeExam, "ID"),
+                                  newAnswers,
+                                ),
+                              );
 
                               // 2. Hapus hitung mundur yang lama jika siswa klik ganti opsi dengan cepat
                               if (saveTimeoutRef.current) {
@@ -2345,7 +2508,28 @@ const SiswaDashboard = () => {
             </div>
           </motion.div>
 
-          {loading ? (
+          {pendingSubmissions.length > 0 && (
+            <div
+              role="status"
+              className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800"
+            >
+              Nilai langsung tampil di perangkat.{" "}
+              {localStorageError
+                ? "Penyimpanan perangkat gagal; hasil hanya tersedia selama halaman ini terbuka. Jangan tutup atau segarkan halaman."
+                : "Tersimpan di perangkat dan menunggu sinkronisasi ke server. Pengiriman akan dicoba otomatis saat koneksi tersedia."}
+            </div>
+          )}
+          {localStorageError && (
+            <div
+              role="status"
+              className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+            >
+              Nilai ini hanya tersedia selama halaman ini terbuka. Jangan tutup
+              atau segarkan halaman sebelum tersinkron.
+            </div>
+          )}
+
+          {loading && myResults.length === 0 ? (
             <motion.div
               variants={fadeUp}
               className="py-16 text-center bg-white rounded-[2rem] shadow-sm border border-slate-100"
@@ -2431,6 +2615,13 @@ const SiswaDashboard = () => {
                         </div>
                       </div>
                     </div>
+                    {res._syncPending && (
+                      <p className="mt-4 text-xs font-semibold text-amber-700">
+                        {res._localPersisted
+                          ? "Tersimpan di perangkat; menunggu koneksi untuk sinkronisasi."
+                          : "Belum tersimpan di perangkat; hasil hanya aman selama halaman ini terbuka."}
+                      </p>
+                    )}
                   </Card>
                 );
               })}
