@@ -160,7 +160,9 @@ const mergeResultRows = (serverResults, pendingSubmissions) => {
 const readExamAnswerCache = (username, examId) => {
   if (!username || !examId) return {};
   try {
-    const stored = window.localStorage.getItem(getExamAnswersKey(username, examId));
+    const stored = window.localStorage.getItem(
+      getExamAnswersKey(username, examId),
+    );
     if (!stored) return {};
     const parsed = JSON.parse(stored);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
@@ -221,6 +223,12 @@ const formatCountdown = (seconds) =>
 const MIN_PAGE_ZOOM = 0.8;
 const MAX_PAGE_ZOOM = 1.4;
 const MIN_BLUR_VIOLATION_MS = 500;
+const isFullscreenActive = () =>
+  Boolean(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.msFullscreenElement,
+  );
 const clampPageZoom = (value) =>
   Math.min(MAX_PAGE_ZOOM, Math.max(MIN_PAGE_ZOOM, Number(value.toFixed(1))));
 
@@ -375,7 +383,11 @@ const ExamTimer = React.memo(({ deadlineAt, onTick, onTimeUp, timeRef }) => {
 
     if (timeLeft > 0 && timeLeft % 60 === 0) {
       onTick(timeLeft);
-    } else if (timeLeft <= 0 && Date.now() >= deadline && !hasFinished.current) {
+    } else if (
+      timeLeft <= 0 &&
+      Date.now() >= deadline &&
+      !hasFinished.current
+    ) {
       hasFinished.current = true;
       onTimeUp();
     }
@@ -515,6 +527,8 @@ const SiswaDashboard = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [pelanggaran, setPelanggaran] = useState(0);
   const [isBlurred, setIsBlurred] = useState(false);
+  const [isFullscreenRecoveryRequired, setIsFullscreenRecoveryRequired] =
+    useState(false);
   const [isAntiCheatActive, setIsAntiCheatActive] = useState(true);
   const isAntiCheatActiveRef = useRef(true);
   const [isSubmitDelayActive, setIsSubmitDelayActive] = useState(false);
@@ -594,15 +608,9 @@ const SiswaDashboard = () => {
     [],
   );
 
-  const enterExamFullscreen = () => {
+  const enterExamFullscreen = useCallback(async () => {
     const examScreen = document.documentElement;
-    if (
-      document.fullscreenElement ||
-      document.webkitFullscreenElement ||
-      document.msFullscreenElement
-    ) {
-      return;
-    }
+    if (isFullscreenActive()) return true;
 
     const requestFullscreen =
       examScreen.requestFullscreen ||
@@ -615,7 +623,7 @@ const SiswaDashboard = () => {
         "Mode Layar Penuh",
         "Browser ini tidak mendukung mode layar penuh otomatis. Silakan aktifkan layar penuh secara manual jika tersedia.",
       );
-      return;
+      return false;
     }
 
     const handleRequestError = (error) => {
@@ -628,11 +636,19 @@ const SiswaDashboard = () => {
     };
 
     try {
-      requestFullscreen.call(examScreen)?.catch(handleRequestError);
+      await requestFullscreen.call(examScreen);
+      return isFullscreenActive();
     } catch (error) {
       handleRequestError(error);
+      return false;
     }
-  };
+  }, [showAlert]);
+
+  const recoverExamFullscreenFromAction = useCallback(async () => {
+    closeAlert();
+    setIsFullscreenRecoveryRequired(true);
+    if (await enterExamFullscreen()) setIsFullscreenRecoveryRequired(false);
+  }, [closeAlert, enterExamFullscreen]);
 
   const exitExamFullscreen = () => {
     if (
@@ -703,7 +719,10 @@ const SiswaDashboard = () => {
             submission.payloadData,
           );
         } catch (error) {
-          console.warn("Nilai masih menunggu koneksi untuk disinkronkan:", error);
+          console.warn(
+            "Nilai masih menunggu koneksi untuk disinkronkan:",
+            error,
+          );
           break;
         }
 
@@ -721,10 +740,7 @@ const SiswaDashboard = () => {
         clearExamAnswerCache(submission.username_siswa, submission.id_ujian);
 
         try {
-          await api.deleteSesi(
-            submission.username_siswa,
-            submission.id_ujian,
-          );
+          await api.deleteSesi(submission.username_siswa, submission.id_ujian);
         } catch (error) {
           console.warn("Gagal membersihkan sesi ujian tersinkron:", error);
         }
@@ -824,8 +840,7 @@ const SiswaDashboard = () => {
             );
 
             const submitDelaySetting = settingsRes.find(
-              (s) =>
-                String(s.kunci).toUpperCase() === "KUNCI_KUMPUL_40_MENIT",
+              (s) => String(s.kunci).toUpperCase() === "KUNCI_KUMPUL_40_MENIT",
             );
             const submitDelayActive =
               String(submitDelaySetting?.nilai).toUpperCase() === "ON";
@@ -833,8 +848,7 @@ const SiswaDashboard = () => {
             setIsSubmitDelayActive(submitDelayActive);
 
             const submitDelayMinutesSetting = settingsRes.find(
-              (s) =>
-                String(s.kunci).toUpperCase() === "BATAS_KUMPUL_MENIT",
+              (s) => String(s.kunci).toUpperCase() === "BATAS_KUMPUL_MENIT",
             );
             setSubmitDelayMinutes(
               parseSubmitDelayMinutes(submitDelayMinutesSetting?.nilai),
@@ -955,7 +969,10 @@ const SiswaDashboard = () => {
       },
       (status, error) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.error("Realtime nilai siswa tidak tersedia:", error || status);
+          console.error(
+            "Realtime nilai siswa tidak tersedia:",
+            error || status,
+          );
         }
       },
     );
@@ -1018,10 +1035,16 @@ const SiswaDashboard = () => {
           isLockedRef.current = true;
           setIsLocked(true);
         } else {
+          if (!isFullscreenActive()) {
+            setIsFullscreenRecoveryRequired(true);
+          }
           showAlert(
             "warning",
             "Peringatan",
-            "Ujian mendeteksi Anda berpindah dari halaman ujian. Jika terdeteksi kembali, sesi akan dikunci dan perlu dibuka oleh pengawas.",
+            "Ujian mendeteksi Anda berpindah dari halaman ujian. Klik Mengerti untuk melanjutkan dalam mode layar penuh. Jika terdeteksi kembali, sesi akan dikunci dan perlu dibuka oleh pengawas.",
+            () => {
+              void recoverExamFullscreenFromAction();
+            },
           );
         }
       } catch (error) {
@@ -1118,7 +1141,7 @@ const SiswaDashboard = () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [user, showAlert]);
+  }, [user, showAlert, recoverExamFullscreenFromAction]);
 
   // 4. MEMULAI UJIAN
   const handleStartExam = async (exam) => {
@@ -1158,15 +1181,17 @@ const SiswaDashboard = () => {
       return;
     }
 
-    const sudahMengerjakan = latestResults.some(
-      (res) =>
-        String(getVal(res, "Mapel")).toUpperCase() ===
-        String(examMapel).toUpperCase(),
-    ) || pendingSubmissionsRef.current.some(
-      (submission) =>
-        String(getVal(submission.payloadData, "Mapel")).toUpperCase() ===
-        String(examMapel).toUpperCase(),
-    );
+    const sudahMengerjakan =
+      latestResults.some(
+        (res) =>
+          String(getVal(res, "Mapel")).toUpperCase() ===
+          String(examMapel).toUpperCase(),
+      ) ||
+      pendingSubmissionsRef.current.some(
+        (submission) =>
+          String(getVal(submission.payloadData, "Mapel")).toUpperCase() ===
+          String(examMapel).toUpperCase(),
+      );
     if (sudahMengerjakan)
       return showAlert(
         "danger",
@@ -1178,6 +1203,7 @@ const SiswaDashboard = () => {
     isLockedRef.current = false;
     setIsLocked(false);
     setIsBlurred(false);
+    setIsFullscreenRecoveryRequired(false);
     enterExamFullscreen();
     setActiveExam(exam);
     setLoadingSoal(true);
@@ -1312,8 +1338,7 @@ const SiswaDashboard = () => {
 
   const getManualSubmitWait = () => {
     const exam = activeExamRef.current;
-    const durationSeconds =
-      (parseInt(getVal(exam, "Durasi_Menit")) || 90) * 60;
+    const durationSeconds = (parseInt(getVal(exam, "Durasi_Menit")) || 90) * 60;
     return getSubmitDelayRemaining(
       durationSeconds,
       timeLeftRef.current,
@@ -1406,8 +1431,7 @@ const SiswaDashboard = () => {
     const idSesi = `${usernameSiswa}_${examIdSelesai}`;
     const nextSubmissions = [
       ...pendingSubmissionsRef.current.filter(
-        (item) =>
-          `${item.username_siswa}_${item.id_ujian}` !== idSesi,
+        (item) => `${item.username_siswa}_${item.id_ujian}` !== idSesi,
       ),
       submission,
     ];
@@ -1438,6 +1462,7 @@ const SiswaDashboard = () => {
     isLockedRef.current = false;
     setIsLocked(false);
     setIsBlurred(false);
+    setIsFullscreenRecoveryRequired(false);
     setAnswers({});
     setRaguRagu({});
     setCurrentSoalIndex(0);
@@ -1511,10 +1536,14 @@ const SiswaDashboard = () => {
           sessionStatusRef.current = "ACTIVE_AFTER_UNLOCK";
           isLockedRef.current = false;
           setIsLocked(false);
+          setIsFullscreenRecoveryRequired(true);
           showAlert(
             "success",
             "Kunci Dibuka",
-            "Pengawas telah membuka kunci ujian Anda. Anda dapat melanjutkan mengerjakan.",
+            "Pengawas telah membuka kunci ujian. Klik Mengerti untuk kembali ke layar penuh dan melanjutkan ujian.",
+            () => {
+              void recoverExamFullscreenFromAction();
+            },
           );
           return;
         }
@@ -1528,7 +1557,7 @@ const SiswaDashboard = () => {
     checkSessionStatus();
     const intervalId = window.setInterval(checkSessionStatus, 5000);
     return () => window.clearInterval(intervalId);
-  }, [activeExam, user, showAlert]);
+  }, [activeExam, user, showAlert, recoverExamFullscreenFromAction]);
 
   const toggleRaguRagu = () => {
     const currentSoal = soalData[currentSoalIndex];
@@ -1602,7 +1631,8 @@ const SiswaDashboard = () => {
             — WAKTU UJIAN ANDA TERUS BERJALAN —
           </strong>
           Jika layar kembali tidak aktif setelah kunci dibuka, sesi dapat
-          dikunci lagi. <strong>Diskualifikasi hanya dapat diputuskan oleh pengawas.</strong>
+          dikunci lagi.{" "}
+          <strong>Diskualifikasi hanya dapat diputuskan oleh pengawas.</strong>
         </p>
         <div className="flex gap-3 text-slate-400 font-bold text-xs uppercase tracking-widest items-center bg-slate-800 border border-slate-700 px-6 py-3.5 rounded-2xl shadow-lg">
           <RefreshCw className="animate-spin text-amber-500" size={18} />{" "}
@@ -1650,19 +1680,30 @@ const SiswaDashboard = () => {
     const isCurrentRagu = !!raguRagu[currentSoalId];
 
     return (
-      <div
-        className="relative flex h-screen h-dvh min-h-0 flex-col overflow-hidden bg-slate-100 font-sans transition-all duration-300"
-      >
+      <div className="relative flex h-screen h-dvh min-h-0 flex-col overflow-hidden bg-slate-100 font-sans transition-all duration-300">
         <div className="absolute inset-0 bg-slate-50 z-0 pointer-events-none"></div>
-        {isBlurred && (
+        {(isBlurred || isFullscreenRecoveryRequired) && (
           <div className="fixed inset-0 z-[99998] flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
             <ShieldAlert size={64} className="mb-5 text-amber-400" />
-            <h2 className="text-2xl font-black">Layar Ujian Disembunyikan</h2>
+            <h2 className="text-2xl font-black">
+              {isFullscreenRecoveryRequired
+                ? "Kembali ke Mode Layar Penuh"
+                : "Layar Ujian Disembunyikan"}
+            </h2>
             <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
-              Kembali ke halaman ujian untuk melanjutkan. Perpindahan singkat
-              tetap dicatat sebagai pelanggaran jika berlangsung minimal
-              setengah detik.
+              {isFullscreenRecoveryRequired
+                ? "Ujian belum dapat dilanjutkan sebelum layar penuh aktif kembali."
+                : "Kembali ke halaman ujian untuk melanjutkan. Perpindahan singkat tetap dicatat sebagai pelanggaran jika berlangsung minimal setengah detik."}
             </p>
+            {isFullscreenRecoveryRequired && (
+              <button
+                type="button"
+                onClick={() => void recoverExamFullscreenFromAction()}
+                className="mt-6 rounded-xl bg-amber-400 px-5 py-3 text-sm font-black text-slate-950 transition-colors hover:bg-amber-300"
+              >
+                Kembali ke Layar Penuh
+              </button>
+            )}
           </div>
         )}
 
@@ -2335,7 +2376,7 @@ const SiswaDashboard = () => {
                   )}
                   {customAlert.type !== "confirm" && (
                     <button
-                      onClick={closeAlert}
+                      onClick={customAlert.onConfirm || closeAlert}
                       className="mt-8 h-14 w-full rounded-2xl bg-emerald-600 text-[clamp(0.7rem,2.7vw,1rem)] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:bg-emerald-700"
                     >
                       Mengerti
@@ -2748,7 +2789,7 @@ const SiswaDashboard = () => {
                 )}
                 {customAlert.type !== "confirm" && (
                   <button
-                    onClick={closeAlert}
+                    onClick={customAlert.onConfirm || closeAlert}
                     className="mt-8 h-14 w-full rounded-2xl bg-emerald-600 text-[clamp(0.7rem,2.7vw,1rem)] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:bg-emerald-700"
                   >
                     Mengerti
