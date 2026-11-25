@@ -220,7 +220,7 @@ const formatCountdown = (seconds) =>
 
 const MIN_PAGE_ZOOM = 0.8;
 const MAX_PAGE_ZOOM = 1.4;
-const BLUR_TOLERANCE_MS = 3000;
+const MIN_BLUR_VIOLATION_MS = 500;
 const clampPageZoom = (value) =>
   Math.min(MAX_PAGE_ZOOM, Math.max(MIN_PAGE_ZOOM, Number(value.toFixed(1))));
 
@@ -971,7 +971,7 @@ const SiswaDashboard = () => {
   useEffect(() => {
     let pendingBlurRecords = Promise.resolve();
 
-    const recordBlurEpisode = async (durationMs) => {
+    const recordBlurEpisode = async () => {
       if (
         !isAntiCheatActiveRef.current ||
         !activeExamRef.current ||
@@ -985,12 +985,7 @@ const SiswaDashboard = () => {
       const examId = getVal(activeExamRef.current, "ID");
       const nextCount = (Number(pelanggaranRef.current) || 0) + 1;
       const currentStatus = sessionStatusRef.current;
-      const isLongBlur = durationMs >= BLUR_TOLERANCE_MS;
-      const nextStatus = isLongBlur
-        ? currentStatus === "ACTIVE"
-          ? "WARNING"
-          : "LOCKED"
-        : currentStatus;
+      const nextStatus = currentStatus === "ACTIVE" ? "WARNING" : "LOCKED";
 
       pelanggaranRef.current = nextCount;
       setPelanggaran(nextCount);
@@ -1008,7 +1003,7 @@ const SiswaDashboard = () => {
           throw new Error("Hitungan deteksi belum berhasil tersimpan.");
         }
 
-        if (!isLongBlur || nextStatus === currentStatus) return;
+        if (nextStatus === currentStatus) return;
 
         const transitioned = await api.transitionSesiStatus(
           username,
@@ -1026,7 +1021,7 @@ const SiswaDashboard = () => {
           showAlert(
             "warning",
             "Peringatan",
-            "Ujian mendeteksi layar tidak aktif selama lebih dari 3 detik. Jika kembali terjadi, sesi akan dikunci dan perlu dibuka oleh pengawas.",
+            "Ujian mendeteksi Anda berpindah dari halaman ujian. Jika terdeteksi kembali, sesi akan dikunci dan perlu dibuka oleh pengawas.",
           );
         }
       } catch (error) {
@@ -1039,10 +1034,8 @@ const SiswaDashboard = () => {
       }
     };
 
-    const enqueueBlurRecord = (durationMs) => {
-      pendingBlurRecords = pendingBlurRecords.then(() =>
-        recordBlurEpisode(durationMs),
-      );
+    const enqueueBlurRecord = () => {
+      pendingBlurRecords = pendingBlurRecords.then(recordBlurEpisode);
     };
 
     const startBlurEpisode = () => {
@@ -1066,8 +1059,8 @@ const SiswaDashboard = () => {
       episode.timeoutId = window.setTimeout(() => {
         if (blurEpisodeRef.current !== episode || episode.counted) return;
         episode.counted = true;
-        enqueueBlurRecord(BLUR_TOLERANCE_MS);
-      }, BLUR_TOLERANCE_MS);
+        enqueueBlurRecord();
+      }, MIN_BLUR_VIOLATION_MS);
     };
 
     const finishBlurEpisode = () => {
@@ -1080,7 +1073,9 @@ const SiswaDashboard = () => {
 
       if (!episode.counted) {
         episode.counted = true;
-        enqueueBlurRecord(Date.now() - episode.startedAt);
+        if (Date.now() - episode.startedAt >= MIN_BLUR_VIOLATION_MS) {
+          enqueueBlurRecord();
+        }
       }
     };
 
@@ -1598,9 +1593,9 @@ const SiswaDashboard = () => {
           UJIAN TERKUNCI
         </h1>
         <p className="text-center text-slate-300 max-w-lg text-sm md:text-base leading-relaxed mb-8">
-          Sesi ujian dikunci karena layar tidak aktif cukup lama atau pengawas
-          menguncinya. Silakan panggil pengawas untuk membuka kunci agar Anda
-          bisa melanjutkan ujian.
+          Sesi ujian dikunci karena terdeteksi berpindah dari halaman ujian atau
+          pengawas menguncinya. Silakan panggil pengawas untuk membuka kunci
+          agar Anda bisa melanjutkan ujian.
           <br />
           <br />
           <strong className="text-amber-400 font-black tracking-widest text-xs uppercase animate-pulse block mb-4">
@@ -1665,7 +1660,8 @@ const SiswaDashboard = () => {
             <h2 className="text-2xl font-black">Layar Ujian Disembunyikan</h2>
             <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
               Kembali ke halaman ujian untuk melanjutkan. Perpindahan singkat
-              hanya dicatat sebagai hitungan dan tidak langsung mengunci ujian.
+              tetap dicatat sebagai pelanggaran jika berlangsung minimal
+              setengah detik.
             </p>
           </div>
         )}
