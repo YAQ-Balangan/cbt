@@ -213,17 +213,20 @@ const UjianDashboard = () => {
 
     if (!Number.isFinite(nextExpiry)) return undefined;
 
-    const timeoutId = setTimeout(() => {
-      const currentTime = Date.now();
-      setStudentsData((current) =>
-        current.filter(
-          (student) =>
-            !["SELESAI", "DISKUALIFIKASI"].includes(student.status) ||
-            !student.completedAt ||
-            currentTime - student.completedAt < DONE_TIMEOUT_MS,
-        ),
-      );
-    }, Math.max(0, nextExpiry - Date.now()));
+    const timeoutId = setTimeout(
+      () => {
+        const currentTime = Date.now();
+        setStudentsData((current) =>
+          current.filter(
+            (student) =>
+              !["SELESAI", "DISKUALIFIKASI"].includes(student.status) ||
+              !student.completedAt ||
+              currentTime - student.completedAt < DONE_TIMEOUT_MS,
+          ),
+        );
+      },
+      Math.max(0, nextExpiry - Date.now()),
+    );
 
     return () => clearTimeout(timeoutId);
   }, [studentsData]);
@@ -379,9 +382,7 @@ const UjianDashboard = () => {
 
       const fetchNilai = supabase
         .from("nilai")
-        .select(
-          "id, nama_siswa, mapel, total_soal, status",
-        )
+        .select("id, id_sesi, nama_siswa, mapel, total_soal, status")
         .gte("id", nilaiCutoff)
         .then(({ data, error }) => {
           if (error) throw error;
@@ -397,9 +398,30 @@ const UjianDashboard = () => {
         soal: resSoal,
         jadwalMap,
       } = baseDataRef.current;
+      const sessionIds = [
+        ...new Set(
+          (resSesiUjian || [])
+            .map((sesi) => String(sesi.id_sesi || ""))
+            .filter(Boolean),
+        ),
+      ];
+      const linkedResults =
+        sessionIds.length > 0
+          ? await supabase
+              .from("nilai")
+              .select("id_sesi")
+              .in("id_sesi", sessionIds)
+              .then(({ data, error }) => {
+                if (error) throw error;
+                return data || [];
+              })
+          : [];
+      const savedSessionIds = new Set([
+        ...(resNilai || []).map((nilai) => String(nilai.id_sesi || "")),
+        ...linkedResults.map((nilai) => String(nilai.id_sesi || "")),
+      ]);
       const allEvents = [];
       const currentTime = Date.now();
-
       const safeGetTime = (dateVal) => {
         if (!dateVal) return 0;
         let cleanDate = String(dateVal).replace(" ", "T");
@@ -488,6 +510,8 @@ const UjianDashboard = () => {
       });
 
       (resSesiUjian || []).forEach((sesi) => {
+        if (savedSessionIds.has(String(sesi.id_sesi || ""))) return;
+
         const usernameSesiNormal = normalizeText(sesi.username_siswa);
         const idUjian = String(sesi.id_ujian);
         const finishedKey = `${usernameSesiNormal}_${idUjian}`;
@@ -524,9 +548,7 @@ const UjianDashboard = () => {
               totalSoal: 0,
               progress: 100,
               status:
-                sessionStatus === "DISQUALIFIED"
-                  ? "DISKUALIFIKASI"
-                  : "SELESAI",
+                sessionStatus === "DISQUALIFIED" ? "DISKUALIFIKASI" : "SELESAI",
               completedAt: eventTime,
             },
           });
@@ -909,10 +931,40 @@ const UjianDashboard = () => {
   };
 
   const handleStudentSessionAction = async (student, status) => {
+    const idSesi = `${student.username}_${student.id_ujian}`;
+    const removeStudentFromMonitoring = () => {
+      setStudentsData((prev) =>
+        prev.filter(
+          (s) =>
+            s.username !== student.username || s.id_ujian !== student.id_ujian,
+        ),
+      );
+    };
+
     try {
-      const nextStatus =
-        status === "ACTIVE_AFTER_UNLOCK" ? "ACTIVE" : status;
-      await api.updateSesiStatus(student.username, student.id_ujian, nextStatus);
+      const { data: existingResult, error: resultLookupError } = await supabase
+        .from("nilai")
+        .select("id_sesi")
+        .eq("id_sesi", idSesi)
+        .maybeSingle();
+
+      if (resultLookupError) throw new Error(resultLookupError.message);
+      if (existingResult) {
+        removeStudentFromMonitoring();
+        showAlert(
+          "info",
+          "Nilai Sudah Tersimpan",
+          `Nilai ujian ${student.nama} sudah tersimpan. Kontrol sesi tidak lagi tersedia.`,
+        );
+        return;
+      }
+
+      const nextStatus = status === "ACTIVE_AFTER_UNLOCK" ? "ACTIVE" : status;
+      await api.updateSesiStatus(
+        student.username,
+        student.id_ujian,
+        nextStatus,
+      );
       const displayedStatus =
         status === "DISQUALIFIED"
           ? "DISKUALIFIKASI"
@@ -927,14 +979,16 @@ const UjianDashboard = () => {
                 status: displayedStatus,
                 completedAt:
                   status === "DISQUALIFIED" ? Date.now() : s.completedAt,
-                progress:
-                  status === "DISQUALIFIED" ? 100 : s.progress,
+                progress: status === "DISQUALIFIED" ? 100 : s.progress,
               }
             : s,
         ),
       );
       const messages = {
-        LOCKED: ["Sesi Dikunci", `Sesi ujian ${student.nama} berhasil dikunci.`],
+        LOCKED: [
+          "Sesi Dikunci",
+          `Sesi ujian ${student.nama} berhasil dikunci.`,
+        ],
         ACTIVE_AFTER_UNLOCK: [
           "Kunci Dibuka",
           `Akses ujian ${student.nama} berhasil dipulihkan.`,
@@ -947,6 +1001,19 @@ const UjianDashboard = () => {
       const [title, message] = messages[status];
       showAlert("success", title, message);
     } catch (err) {
+      if (
+        String(err.message || "").includes(
+          "Sesi ujian ini sudah memiliki nilai.",
+        )
+      ) {
+        removeStudentFromMonitoring();
+        showAlert(
+          "info",
+          "Nilai Sudah Tersimpan",
+          `Nilai ujian ${student.nama} sudah tersimpan. Kontrol sesi tidak lagi tersedia.`,
+        );
+        return;
+      }
       showAlert(
         "danger",
         "Tindakan Gagal",
@@ -978,10 +1045,17 @@ const UjianDashboard = () => {
       },
     };
     const action = actions[status];
-    showAlert("confirm", action.title, action.message, () => {
-      closeAlert();
-      void handleStudentSessionAction(student, status);
-    }, "", action.confirmLabel);
+    showAlert(
+      "confirm",
+      action.title,
+      action.message,
+      () => {
+        closeAlert();
+        void handleStudentSessionAction(student, status);
+      },
+      "",
+      action.confirmLabel,
+    );
   };
 
   // =================================================================================
@@ -1111,8 +1185,7 @@ const UjianDashboard = () => {
                       });
                       if (!liveStudent) {
                         liveStudent = studentsData.find(
-                          (s) =>
-                            normalizeText(s.nama) === assignedNamaNormal,
+                          (s) => normalizeText(s.nama) === assignedNamaNormal,
                         );
                       }
                     }
@@ -1547,8 +1620,8 @@ const UjianDashboard = () => {
             >
               <div className="bg-orange-500 text-white p-3 flex justify-between items-center">
                 <div className="flex items-center gap-2 font-black text-sm">
-                  <ShieldAlert size={18} className="animate-pulse" />{" "}
-                  TINDAKAN PENGAWAS
+                  <ShieldAlert size={18} className="animate-pulse" /> TINDAKAN
+                  PENGAWAS
                 </div>
                 <span className="bg-white text-orange-600 px-2 py-0.5 rounded-full text-xs font-bold">
                   {lockedStudents.length} Terkunci
