@@ -223,12 +223,6 @@ const formatCountdown = (seconds) =>
 const MIN_PAGE_ZOOM = 0.8;
 const MAX_PAGE_ZOOM = 1.4;
 const MIN_BLUR_VIOLATION_MS = 500;
-const isFullscreenActive = () =>
-  Boolean(
-    document.fullscreenElement ||
-    document.webkitFullscreenElement ||
-    document.msFullscreenElement,
-  );
 const clampPageZoom = (value) =>
   Math.min(MAX_PAGE_ZOOM, Math.max(MIN_PAGE_ZOOM, Number(value.toFixed(1))));
 
@@ -527,8 +521,6 @@ const SiswaDashboard = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [pelanggaran, setPelanggaran] = useState(0);
   const [isBlurred, setIsBlurred] = useState(false);
-  const [isFullscreenRecoveryRequired, setIsFullscreenRecoveryRequired] =
-    useState(false);
   const [isAntiCheatActive, setIsAntiCheatActive] = useState(true);
   const isAntiCheatActiveRef = useRef(true);
   const [isSubmitDelayActive, setIsSubmitDelayActive] = useState(false);
@@ -608,47 +600,24 @@ const SiswaDashboard = () => {
     [],
   );
 
-  const enterExamFullscreen = useCallback(async () => {
+  const enterExamFullscreen = useCallback(() => {
     const examScreen = document.documentElement;
-    if (isFullscreenActive()) return true;
 
     const requestFullscreen =
       examScreen.requestFullscreen ||
       examScreen.webkitRequestFullscreen ||
       examScreen.msRequestFullscreen;
 
-    if (!requestFullscreen) {
-      showAlert(
-        "warning",
-        "Mode Layar Penuh",
-        "Browser ini tidak mendukung mode layar penuh otomatis. Silakan aktifkan layar penuh secara manual jika tersedia.",
-      );
-      return false;
-    }
-
-    const handleRequestError = (error) => {
-      console.warn("Gagal masuk mode layar penuh:", error);
-      showAlert(
-        "warning",
-        "Mode Layar Penuh",
-        "Browser menolak mode layar penuh otomatis. Silakan aktifkan layar penuh secara manual jika tersedia.",
-      );
-    };
+    if (!requestFullscreen) return;
 
     try {
-      await requestFullscreen.call(examScreen);
-      return isFullscreenActive();
+      requestFullscreen.call(examScreen)?.catch((error) => {
+        console.warn("Gagal masuk mode layar penuh:", error);
+      });
     } catch (error) {
-      handleRequestError(error);
-      return false;
+      console.warn("Gagal masuk mode layar penuh:", error);
     }
-  }, [showAlert]);
-
-  const recoverExamFullscreenFromAction = useCallback(async () => {
-    closeAlert();
-    setIsFullscreenRecoveryRequired(true);
-    if (await enterExamFullscreen()) setIsFullscreenRecoveryRequired(false);
-  }, [closeAlert, enterExamFullscreen]);
+  }, []);
 
   const exitExamFullscreen = () => {
     if (
@@ -1035,16 +1004,10 @@ const SiswaDashboard = () => {
           isLockedRef.current = true;
           setIsLocked(true);
         } else {
-          if (!isFullscreenActive()) {
-            setIsFullscreenRecoveryRequired(true);
-          }
           showAlert(
             "warning",
             "Peringatan",
-            "Ujian mendeteksi Anda berpindah dari halaman ujian. Klik Mengerti untuk melanjutkan dalam mode layar penuh. Jika terdeteksi kembali, sesi akan dikunci dan perlu dibuka oleh pengawas.",
-            () => {
-              void recoverExamFullscreenFromAction();
-            },
+            "Ujian mendeteksi Anda berpindah dari halaman ujian. Klik Mengerti untuk melanjutkan. Jika terdeteksi kembali, sesi akan dikunci dan perlu dibuka oleh pengawas.",
           );
         }
       } catch (error) {
@@ -1141,7 +1104,7 @@ const SiswaDashboard = () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [user, showAlert, recoverExamFullscreenFromAction]);
+  }, [user, showAlert]);
 
   // 4. MEMULAI UJIAN
   const handleStartExam = async (exam) => {
@@ -1203,7 +1166,6 @@ const SiswaDashboard = () => {
     isLockedRef.current = false;
     setIsLocked(false);
     setIsBlurred(false);
-    setIsFullscreenRecoveryRequired(false);
     enterExamFullscreen();
     setActiveExam(exam);
     setLoadingSoal(true);
@@ -1462,7 +1424,6 @@ const SiswaDashboard = () => {
     isLockedRef.current = false;
     setIsLocked(false);
     setIsBlurred(false);
-    setIsFullscreenRecoveryRequired(false);
     setAnswers({});
     setRaguRagu({});
     setCurrentSoalIndex(0);
@@ -1536,14 +1497,10 @@ const SiswaDashboard = () => {
           sessionStatusRef.current = "ACTIVE_AFTER_UNLOCK";
           isLockedRef.current = false;
           setIsLocked(false);
-          setIsFullscreenRecoveryRequired(true);
           showAlert(
             "success",
             "Kunci Dibuka",
-            "Pengawas telah membuka kunci ujian. Klik Mengerti untuk kembali ke layar penuh dan melanjutkan ujian.",
-            () => {
-              void recoverExamFullscreenFromAction();
-            },
+            "Pengawas telah membuka kunci ujian. Klik Mengerti untuk melanjutkan ujian.",
           );
           return;
         }
@@ -1557,7 +1514,7 @@ const SiswaDashboard = () => {
     checkSessionStatus();
     const intervalId = window.setInterval(checkSessionStatus, 5000);
     return () => window.clearInterval(intervalId);
-  }, [activeExam, user, showAlert, recoverExamFullscreenFromAction]);
+  }, [activeExam, user, showAlert]);
 
   const toggleRaguRagu = () => {
     const currentSoal = soalData[currentSoalIndex];
@@ -1682,28 +1639,17 @@ const SiswaDashboard = () => {
     return (
       <div className="relative flex h-screen h-dvh min-h-0 flex-col overflow-hidden bg-slate-100 font-sans transition-all duration-300">
         <div className="absolute inset-0 bg-slate-50 z-0 pointer-events-none"></div>
-        {(isBlurred || isFullscreenRecoveryRequired) && (
+        {isBlurred && (
           <div className="fixed inset-0 z-[99998] flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
             <ShieldAlert size={64} className="mb-5 text-amber-400" />
             <h2 className="text-2xl font-black">
-              {isFullscreenRecoveryRequired
-                ? "Kembali ke Mode Layar Penuh"
-                : "Layar Ujian Disembunyikan"}
+              Layar Ujian Disembunyikan
             </h2>
             <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
-              {isFullscreenRecoveryRequired
-                ? "Ujian belum dapat dilanjutkan sebelum layar penuh aktif kembali."
-                : "Kembali ke halaman ujian untuk melanjutkan. Perpindahan singkat tetap dicatat sebagai pelanggaran jika berlangsung minimal setengah detik."}
+              Kembali ke halaman ujian untuk melanjutkan. Perpindahan singkat
+              tetap dicatat sebagai pelanggaran jika berlangsung minimal
+              setengah detik.
             </p>
-            {isFullscreenRecoveryRequired && (
-              <button
-                type="button"
-                onClick={() => void recoverExamFullscreenFromAction()}
-                className="mt-6 rounded-xl bg-amber-400 px-5 py-3 text-sm font-black text-slate-950 transition-colors hover:bg-amber-300"
-              >
-                Kembali ke Layar Penuh
-              </button>
-            )}
           </div>
         )}
 
